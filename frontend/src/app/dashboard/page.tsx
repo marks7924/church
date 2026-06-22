@@ -1307,7 +1307,10 @@ export default function DashboardPage() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'صورة الكاهن (اختياري)' : 'Avatar Image (Optional)'}</label>
-                  <input type="file" accept="image/*" onChange={e => handleFileChange(e, setPriestAvatarUrl)} className={styles.formInput} style={{ padding: '6px' }} />
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input type="file" accept="image/*" onChange={e => handleFileChange(e, setPriestAvatarUrl)} className={styles.formInput} style={{ padding: '6px', flex: 1 }} />
+                    <button type="button" onClick={() => setPriestAvatarUrl('')} style={{ padding: '6px 10px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
+                  </div>
                   {priestAvatarUrl && <img src={priestAvatarUrl} alt="Avatar Preview" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '50%', marginTop: '4px' }} />}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -1392,25 +1395,37 @@ export default function DashboardPage() {
           <form onSubmit={handleSaveImages} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'صورة الخلفية الرئيسية (Hero Background)' : 'Hero Header Background Image'}</label>
-              <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHeroBg)} className={styles.formInput} style={{ padding: '8px' }} />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHeroBg)} className={styles.formInput} style={{ padding: '8px', flex: 1 }} />
+                <button type="button" onClick={() => setImgHeroBg('')} style={{ padding: '8px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
+              </div>
               {imgHeroBg && <img src={imgHeroBg} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الصورة التاريخية الأولى' : 'Historic Gallery Image 1'}</label>
-              <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric1)} className={styles.formInput} style={{ padding: '8px' }} />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric1)} className={styles.formInput} style={{ padding: '8px', flex: 1 }} />
+                <button type="button" onClick={() => setImgHistoric1('')} style={{ padding: '8px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
+              </div>
               {imgHistoric1 && <img src={imgHistoric1} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الصورة التاريخية الثانية' : 'Historic Gallery Image 2'}</label>
-              <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric2)} className={styles.formInput} style={{ padding: '8px' }} />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric2)} className={styles.formInput} style={{ padding: '8px', flex: 1 }} />
+                <button type="button" onClick={() => setImgHistoric2('')} style={{ padding: '8px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
+              </div>
               {imgHistoric2 && <img src={imgHistoric2} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الصورة التاريخية الثالثة' : 'Historic Gallery Image 3'}</label>
-              <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric3)} className={styles.formInput} style={{ padding: '8px' }} />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric3)} className={styles.formInput} style={{ padding: '8px', flex: 1 }} />
+                <button type="button" onClick={() => setImgHistoric3('')} style={{ padding: '8px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
+              </div>
               {imgHistoric3 && <img src={imgHistoric3} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
             </div>
 

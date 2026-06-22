@@ -217,7 +217,7 @@ export default function Home() {
   return (
     <div style={{ paddingBottom: '4rem' }}>
       {/* Hero Banner */}
-      <header className={styles.hero} style={imgHeroBg ? { backgroundImage: `url(${imgHeroBg})` } : {}}>
+      <header className={styles.hero} style={imgHeroBg ? { backgroundImage: `linear-gradient(180deg, rgba(11, 12, 16, 0.4) 0%, rgba(11, 12, 16, 0.95) 100%), url(${imgHeroBg})` } : {}}>
         <div className={styles.heroContent}>
           <h1 className={styles.heroTitle}>{t('hero_title')}</h1>
           <p className={styles.heroSubtitle}>{t('hero_subtitle')}</p>
