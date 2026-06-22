@@ -239,7 +239,18 @@ export default function RegisterMemberPage() {
               ? 'يجب تسجيل الدخول في حسابك لتتمكن من تقديم بيانات العضوية الكنسية للأسرة.'
               : 'You must log in to your account first to register your family membership records.'}
           </p>
-          <button onClick={() => router.push('/login')} className={styles.submitBtn} style={{ maxWidth: '200px', display: 'inline-block' }}>
+          <button onClick={() => router.push('/login')} style={{
+            backgroundColor: 'var(--accent-gold)',
+            color: '#000000',
+            fontWeight: 'bold',
+            border: 'none',
+            padding: '10px 20px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '0.95rem',
+            maxWidth: '200px',
+            display: 'inline-block'
+          }}>
             {t('login')}
           </button>
         </div>
