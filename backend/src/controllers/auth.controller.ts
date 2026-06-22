@@ -164,7 +164,7 @@ router.post('/login', async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      const isSuperAdminEmail = email === (process.env.SUPER_ADMIN_EMAIL || 'superadmin@church.org');
+      const isSuperAdminEmail = email === 'superadmin@church.org' || (process.env.SUPER_ADMIN_EMAIL && email === process.env.SUPER_ADMIN_EMAIL);
       if (isSuperAdminEmail) {
         return res.status(401).json({ error: 'Email not found.' });
       }
