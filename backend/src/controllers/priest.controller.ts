@@ -67,7 +67,10 @@ router.post('/', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req: Auth
     // Check if user exists
     const existingUser = await prisma.user.findFirst({
       where: {
-        OR: [{ email }, { nationalId: nationalId || undefined }]
+        OR: [
+          { email },
+          ...(nationalId ? [{ nationalId }] : [])
+        ]
       }
     });
 
@@ -85,7 +88,7 @@ router.post('/', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req: Auth
           passwordHash,
           fullName,
           phone,
-          nationalId,
+          nationalId: nationalId || null,
           role: Role.PRIEST,
           isVerified: true
         }
@@ -153,7 +156,7 @@ router.patch('/:id', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req: 
           passwordHash: password ? bcrypt.hashSync(password, 10) : undefined,
           fullName,
           phone,
-          nationalId
+          nationalId: nationalId || null
         }
       });
 

@@ -152,8 +152,17 @@ export default function DashboardPage() {
       fetch(`${API_URL}/bookings/my-bookings`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-        .then(res => res.json())
-        .then(data => setMyBookings(data))
+        .then(res => {
+          if (res.status === 401) {
+            localStorage.removeItem('church-token');
+            router.push('/login');
+            throw new Error('Unauthorized');
+          }
+          return res.json();
+        })
+        .then(data => {
+          if (Array.isArray(data)) setMyBookings(data);
+        })
         .catch(err => console.log(err));
     }
 
@@ -162,8 +171,13 @@ export default function DashboardPage() {
       fetch(`${API_URL}/bookings/priest-bookings`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-        .then(res => res.json())
-        .then(data => setPriestBookings(data))
+        .then(res => {
+          if (res.status === 401) throw new Error('Unauthorized');
+          return res.json();
+        })
+        .then(data => {
+          if (Array.isArray(data)) setPriestBookings(data);
+        })
         .catch(err => console.log(err));
     }
 
@@ -172,16 +186,26 @@ export default function DashboardPage() {
       fetch(`${API_URL}/members/pending`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-        .then(res => res.json())
-        .then(data => setPendingMembers(data))
+        .then(res => {
+          if (res.status === 401) throw new Error('Unauthorized');
+          return res.json();
+        })
+        .then(data => {
+          if (Array.isArray(data)) setPendingMembers(data);
+        })
         .catch(err => console.log(err));
 
       // Fetch all members
       fetch(`${API_URL}/members/all`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-        .then(res => res.json())
-        .then(data => setAllMembers(data))
+        .then(res => {
+          if (res.status === 401) throw new Error('Unauthorized');
+          return res.json();
+        })
+        .then(data => {
+          if (Array.isArray(data)) setAllMembers(data);
+        })
         .catch(err => console.log(err));
     }
 
@@ -200,8 +224,13 @@ export default function DashboardPage() {
       fetch(`${API_URL}/priests`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-        .then(res => res.json())
-        .then(data => setAllPriests(data))
+        .then(res => {
+          if (res.status === 401) throw new Error('Unauthorized');
+          return res.json();
+        })
+        .then(data => {
+          if (Array.isArray(data)) setAllPriests(data);
+        })
         .catch(err => console.log(err));
     }
 
