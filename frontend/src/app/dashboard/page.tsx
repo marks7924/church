@@ -88,6 +88,31 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true);
 
+  // Super Admin Priest Management States
+  const [allPriests, setAllPriests] = useState<any[]>([]);
+  const [editingPriest, setEditingPriest] = useState<any | null>(null);
+  const [priestEmail, setPriestEmail] = useState('');
+  const [priestPassword, setPriestPassword] = useState('');
+  const [priestFullName, setPriestFullName] = useState('');
+  const [priestPhone, setPriestPhone] = useState('');
+  const [priestNationalId, setPriestNationalId] = useState('');
+  const [priestNameAr, setPriestNameAr] = useState('');
+  const [priestNameEn, setPriestNameEn] = useState('');
+  const [priestTitleAr, setPriestTitleAr] = useState('أبونا');
+  const [priestTitleEn, setPriestTitleEn] = useState('Father');
+  const [priestAvatarUrl, setPriestAvatarUrl] = useState('');
+  const [priestMaxBookings, setPriestMaxBookings] = useState('5');
+  const [priestBuffer, setPriestBuffer] = useState('15');
+  const [priestAvailability, setPriestAvailability] = useState('{"Monday": ["17:00-17:30", "17:30-18:00"], "Wednesday": ["18:00-18:30"], "Friday": ["16:00-16:30"]}');
+  const [priestMsg, setPriestMsg] = useState<string | null>(null);
+
+  // Super Admin Site Images States
+  const [imgHeroBg, setImgHeroBg] = useState('');
+  const [imgHistoric1, setImgHistoric1] = useState('');
+  const [imgHistoric2, setImgHistoric2] = useState('');
+  const [imgHistoric3, setImgHistoric3] = useState('');
+  const [imagesMsg, setImagesMsg] = useState<string | null>(null);
+
   // Load Auth data
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -167,6 +192,27 @@ export default function DashboardPage() {
         .then(data => {
           setIsLiveActive(data.isActive);
           setYoutubeLiveId(data.youtubeLiveId);
+        })
+        .catch(err => console.log(err));
+    }
+
+    if (activeTab === 'manage-priests') {
+      fetch(`${API_URL}/priests`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => setAllPriests(data))
+        .catch(err => console.log(err));
+    }
+
+    if (activeTab === 'manage-images') {
+      fetch(`${API_URL}/settings`)
+        .then(res => res.json())
+        .then(data => {
+          setImgHeroBg(data.img_hero_bg || '');
+          setImgHistoric1(data.img_historic_1 || '');
+          setImgHistoric2(data.img_historic_2 || '');
+          setImgHistoric3(data.img_historic_3 || '');
         })
         .catch(err => console.log(err));
     }
@@ -263,6 +309,160 @@ export default function DashboardPage() {
     setAlertMsg(language === 'ar' ? 'تم إرسال إشعار البث العام لجميع الهواتف!' : 'Firebase push broadcast sent to all users!');
     setAlertTitle('');
     setAlertBody('');
+  };
+
+  // Save Priest handler
+  const handleSavePriest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPriestMsg(null);
+    if (!token) return;
+
+    const payload = {
+      email: priestEmail,
+      password: priestPassword || undefined,
+      fullName: priestFullName,
+      phone: priestPhone,
+      nationalId: priestNationalId,
+      nameAr: priestNameAr,
+      nameEn: priestNameEn,
+      titleAr: priestTitleAr,
+      titleEn: priestTitleEn,
+      avatarUrl: priestAvatarUrl,
+      maxBookingsPerDay: priestMaxBookings,
+      bufferMinutes: priestBuffer,
+      availabilityJson: priestAvailability
+    };
+
+    try {
+      let res;
+      if (editingPriest) {
+        res = await fetch(`${API_URL}/priests/${editingPriest.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        if (!priestPassword) {
+          setPriestMsg('Password is required for new priest.');
+          return;
+        }
+        res = await fetch(`${API_URL}/priests`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      const result = await res.json();
+      if (res.ok) {
+        setPriestMsg(language === 'ar' ? 'تم حفظ بيانات الكاهن بنجاح!' : 'Priest saved successfully!');
+        // Refresh
+        fetch(`${API_URL}/priests`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => setAllPriests(data));
+        handleResetPriestForm();
+      } else {
+        setPriestMsg(result.error || 'Failed to save.');
+      }
+    } catch (err) {
+      setPriestMsg('Connection error.');
+    }
+  };
+
+  const handleEditPriestClick = (priest: any) => {
+    setEditingPriest(priest);
+    setPriestEmail(priest.email || '');
+    setPriestPassword('');
+    setPriestFullName(priest.fullName || '');
+    setPriestPhone(priest.phone || '');
+    setPriestNationalId(priest.nationalId || '');
+    setPriestNameAr(priest.nameAr || '');
+    setPriestNameEn(priest.nameEn || '');
+    setPriestTitleAr(priest.titleAr || 'أبونا');
+    setPriestTitleEn(priest.titleEn || 'Father');
+    setPriestAvatarUrl(priest.avatarUrl || '');
+    setPriestMaxBookings(String(priest.maxBookingsPerDay || 5));
+    setPriestBuffer(String(priest.bufferMinutes || 15));
+    setPriestAvailability(typeof priest.availabilityJson === 'string' ? priest.availabilityJson : JSON.stringify(priest.availabilityJson));
+  };
+
+  const handleDeletePriest = async (id: string) => {
+    if (!confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا الكاهن نهائياً؟' : 'Are you sure you want to delete this priest permanently?')) return;
+    setPriestMsg(null);
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/priests/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setPriestMsg(language === 'ar' ? 'تم الحذف بنجاح.' : 'Priest deleted successfully.');
+        setAllPriests(prev => prev.filter(p => p.id !== id));
+        if (editingPriest?.id === id) {
+          handleResetPriestForm();
+        }
+      } else {
+        setPriestMsg('Failed to delete.');
+      }
+    } catch (err) {
+      setPriestMsg('Error connecting.');
+    }
+  };
+
+  const handleResetPriestForm = () => {
+    setEditingPriest(null);
+    setPriestEmail('');
+    setPriestPassword('');
+    setPriestFullName('');
+    setPriestPhone('');
+    setPriestNationalId('');
+    setPriestNameAr('');
+    setPriestNameEn('');
+    setPriestTitleAr('أبونا');
+    setPriestTitleEn('Father');
+    setPriestAvatarUrl('');
+    setPriestMaxBookings('5');
+    setPriestBuffer('15');
+    setPriestAvailability('{"Monday": ["17:00-17:30", "17:30-18:00"], "Wednesday": ["18:00-18:30"], "Friday": ["16:00-16:30"]}');
+  };
+
+  const handleSaveImages = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setImagesMsg(null);
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          img_hero_bg: imgHeroBg,
+          img_historic_1: imgHistoric1,
+          img_historic_2: imgHistoric2,
+          img_historic_3: imgHistoric3
+        })
+      });
+
+      if (res.ok) {
+        setImagesMsg(language === 'ar' ? 'تم تحديث صور الموقع بنجاح!' : 'Site images updated successfully!');
+      } else {
+        setImagesMsg('Failed to update images.');
+      }
+    } catch (err) {
+      setImagesMsg('Connection error.');
+    }
   };
 
   if (loading) {
@@ -409,6 +609,40 @@ export default function DashboardPage() {
               <Bell size={16} style={{ verticalAlign: 'middle', marginInlineEnd: '6px' }} />
               {language === 'ar' ? 'إرسال إشعار جماعي' : 'Broadcast Push Alerts'}
             </button>
+            {user?.role === 'SUPER_ADMIN' && (
+              <>
+                <button 
+                  onClick={() => setActiveTab('manage-priests')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    background: activeTab === 'manage-priests' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+                    color: activeTab === 'manage-priests' ? '#000000' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  {language === 'ar' ? 'إدارة الكهنة' : 'Manage Priests'}
+                </button>
+                <button 
+                  onClick={() => setActiveTab('manage-images')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    background: activeTab === 'manage-images' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+                    color: activeTab === 'manage-images' ? '#000000' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  {language === 'ar' ? 'إدارة صور الموقع' : 'Manage Site Images'}
+                </button>
+              </>
+            )}
           </>
         )}
 
@@ -930,6 +1164,182 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Tab: Super Admin Priest Management */}
+      {activeTab === 'manage-priests' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+              👤 {editingPriest ? (language === 'ar' ? 'تعديل بيانات كاهن' : 'Edit Priest') : (language === 'ar' ? 'إضافة كاهن جديد' : 'Add New Priest')}
+            </h3>
+
+            {priestMsg && (
+              <div style={{
+                backgroundColor: 'rgba(226, 183, 20, 0.05)',
+                border: '1px solid var(--accent-gold)',
+                color: 'var(--accent-gold)',
+                padding: '10px',
+                borderRadius: '4px',
+                marginBottom: '1.5rem',
+                fontSize: '0.85rem'
+              }}>
+                {priestMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleSavePriest} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.2rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Email *</label>
+                  <input type="email" required value={priestEmail} onChange={e => setPriestEmail(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Password {editingPriest ? '(leave empty to keep same)' : '*'}</label>
+                  <input type="password" required={!editingPriest} value={priestPassword} onChange={e => setPriestPassword(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Account Full Name *</label>
+                  <input type="text" required value={priestFullName} onChange={e => setPriestFullName(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Phone</label>
+                  <input type="text" value={priestPhone} onChange={e => setPriestPhone(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>National ID</label>
+                  <input type="text" maxLength={14} value={priestNationalId} onChange={e => setPriestNationalId(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Name (Arabic) *</label>
+                  <input type="text" required value={priestNameAr} onChange={e => setPriestNameAr(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Name (English) *</label>
+                  <input type="text" required value={priestNameEn} onChange={e => setPriestNameEn(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Title (Arabic) *</label>
+                  <select value={priestTitleAr} onChange={e => setPriestTitleAr(e.target.value)} className={styles.formInput}>
+                    <option value="أبونا">أبونا</option>
+                    <option value="سيدنا">سيدنا</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Title (English) *</label>
+                  <select value={priestTitleEn} onChange={e => setPriestTitleEn(e.target.value)} className={styles.formInput}>
+                    <option value="Father">Father</option>
+                    <option value="Bishop">Bishop</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Avatar Image URL</label>
+                  <input type="text" value={priestAvatarUrl} onChange={e => setPriestAvatarUrl(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Max Bookings/Day *</label>
+                  <input type="number" required value={priestMaxBookings} onChange={e => setPriestMaxBookings(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Buffer Minutes *</label>
+                  <input type="number" required value={priestBuffer} onChange={e => setPriestBuffer(e.target.value)} className={styles.formInput} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Weekly Availability (JSON format) *</label>
+                <textarea required value={priestAvailability} onChange={e => setPriestAvailability(e.target.value)} className={styles.formInput} style={{ height: '80px', fontFamily: 'monospace' }} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
+                {editingPriest && (
+                  <button type="button" onClick={handleResetPriestForm} style={{ backgroundColor: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border-color)', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer' }}>
+                    {language === 'ar' ? 'إلغاء التعديل' : 'Cancel'}
+                  </button>
+                )}
+                <button type="submit" className={styles.bookBtn} style={{ width: 'auto', padding: '10px 30px' }}>
+                  {language === 'ar' ? 'حفظ الكاهن' : 'Save Priest'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
+              ⛪ {language === 'ar' ? 'الآباء الكهنة الحاليين' : 'Current Priests & Bishops'}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              {allPriests.map(p => (
+                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '15px', borderBottom: '1px solid var(--border-color)', alignItems: 'center', backgroundColor: 'var(--bg-card)', borderRadius: '6px' }}>
+                  <div>
+                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                      {language === 'ar' ? `${p.titleAr} ${p.nameAr}` : `${p.titleEn} ${p.nameEn}`}
+                    </span>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                      ✉️ {p.email} • 📞 {p.phone || 'N/A'} • 🪪 {p.nationalId || 'N/A'}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button onClick={() => handleEditPriestClick(p)} style={{ backgroundColor: 'var(--accent-gold)', color: '#000', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                      {language === 'ar' ? 'تعديل' : 'Edit'}
+                    </button>
+                    <button onClick={() => handleDeletePriest(p.id)} style={{ backgroundColor: '#ff4d4d', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                      {language === 'ar' ? 'حذف' : 'Delete'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Super Admin Site Images Management */}
+      {activeTab === 'manage-images' && (
+        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem', maxWidth: '700px', margin: '0 auto' }}>
+          <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+            🖼️ {language === 'ar' ? 'تعديل صور الموقع العامة' : 'Manage Global Site Images'}
+          </h3>
+
+          {imagesMsg && (
+            <div style={{
+              backgroundColor: 'rgba(46, 204, 113, 0.1)',
+              border: '1px solid var(--accent-green)',
+              color: '#2ecc71',
+              padding: '10px',
+              borderRadius: '4px',
+              marginBottom: '1.5rem',
+              fontSize: '0.85rem'
+            }}>
+              {imagesMsg}
+            </div>
+          )}
+
+          <form onSubmit={handleSaveImages} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رابط صورة الخلفية الرئيسية (Hero Background)' : 'Hero Header Background Image URL'}</label>
+              <input type="text" value={imgHeroBg} onChange={e => setImgHeroBg(e.target.value)} className={styles.formInput} placeholder="https://images.unsplash.com..." />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رابط الصورة التاريخية الأولى' : 'Historic Gallery Image 1 URL'}</label>
+              <input type="text" value={imgHistoric1} onChange={e => setImgHistoric1(e.target.value)} className={styles.formInput} placeholder="https://images.unsplash.com..." />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رابط الصورة التاريخية الثانية' : 'Historic Gallery Image 2 URL'}</label>
+              <input type="text" value={imgHistoric2} onChange={e => setImgHistoric2(e.target.value)} className={styles.formInput} placeholder="https://images.unsplash.com..." />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رابط الصورة التاريخية الثالثة' : 'Historic Gallery Image 3 URL'}</label>
+              <input type="text" value={imgHistoric3} onChange={e => setImgHistoric3(e.target.value)} className={styles.formInput} placeholder="https://images.unsplash.com..." />
+            </div>
+
+            <button type="submit" className={styles.bookBtn} style={{ marginTop: '10px' }}>
+              {language === 'ar' ? 'حفظ صور الموقع' : 'Save Images'}
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

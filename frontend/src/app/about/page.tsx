@@ -1,11 +1,37 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../components/ThemeContext';
 import styles from '../page.module.css';
+import { API_URL } from '../../config';
 
 export default function AboutPage() {
   const { language, t } = useTheme();
+
+  const [historicPhotos, setHistoricPhotos] = useState<string[]>([
+    'https://images.unsplash.com/photo-1548625361-155deee223cb?q=80&w=400',
+    'https://images.unsplash.com/photo-1438032005730-c779502df39b?q=80&w=400',
+    'https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=400',
+  ]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/settings`)
+      .then(res => res.json())
+      .then(data => {
+        const photos = [];
+        if (data.img_historic_1) photos.push(data.img_historic_1);
+        else photos.push('https://images.unsplash.com/photo-1548625361-155deee223cb?q=80&w=400');
+
+        if (data.img_historic_2) photos.push(data.img_historic_2);
+        else photos.push('https://images.unsplash.com/photo-1438032005730-c779502df39b?q=80&w=400');
+
+        if (data.img_historic_3) photos.push(data.img_historic_3);
+        else photos.push('https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=400');
+
+        setHistoricPhotos(photos);
+      })
+      .catch(err => console.log('Error fetching settings:', err));
+  }, []);
 
   return (
     <div className="container" style={{ padding: '3rem 1rem' }}>
@@ -74,9 +100,13 @@ export default function AboutPage() {
         📸 {language === 'ar' ? 'أرشيف الصور التاريخية للكنيسة' : 'Historic Photos & Archives'}
       </h2>
       <div className={styles.netflixGrid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
-        <div className={styles.sermonCard} style={{ height: '170px', backgroundImage: "url('https://images.unsplash.com/photo-1548625361-155deee223cb?q=80&w=400')", backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
-        <div className={styles.sermonCard} style={{ height: '170px', backgroundImage: "url('https://images.unsplash.com/photo-1438032005730-c779502df39b?q=80&w=400')", backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
-        <div className={styles.sermonCard} style={{ height: '170px', backgroundImage: "url('https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=400')", backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+        {historicPhotos.map((url, i) => (
+          <div 
+            key={i} 
+            className={styles.sermonCard} 
+            style={{ height: '170px', backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center', cursor: 'default' }}
+          ></div>
+        ))}
       </div>
     </div>
   );

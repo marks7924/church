@@ -108,7 +108,15 @@ export default function LoginPage() {
       }
 
     } catch (err: any) {
-      setErrorMsg(err.message || 'Server connection failed.');
+      let msg = err.message || 'Server connection failed.';
+      if (msg === 'Email not found.') {
+        msg = language === 'ar' ? 'البريد الإلكتروني لمدير النظام غير موجود.' : 'Super Admin email not found.';
+      } else if (msg === 'Incorrect password.') {
+        msg = language === 'ar' ? 'كلمة المرور لمدير النظام غير صحيحة.' : 'Super Admin password incorrect.';
+      } else if (msg === 'Invalid email or password.') {
+        msg = language === 'ar' ? 'البريد الإلكتروني أو كلمة المرور غير صالحة.' : 'Invalid email or password.';
+      }
+      setErrorMsg(msg);
     } finally {
       setLoading(false);
     }

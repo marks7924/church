@@ -164,11 +164,18 @@ router.post('/login', async (req: Request, res: Response) => {
     });
 
     if (!user) {
+      const isSuperAdminEmail = email === (process.env.SUPER_ADMIN_EMAIL || 'superadmin@church.org');
+      if (isSuperAdminEmail) {
+        return res.status(401).json({ error: 'Email not found.' });
+      }
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
     const isValidPassword = bcrypt.compareSync(password, user.passwordHash);
     if (!isValidPassword) {
+      if (user.role === 'SUPER_ADMIN') {
+        return res.status(401).json({ error: 'Incorrect password.' });
+      }
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 

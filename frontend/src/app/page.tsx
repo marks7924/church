@@ -53,6 +53,14 @@ export default function Home() {
   const [events, setEvents] = useState<ChurchEvent[]>([]);
   const [liveStream, setLiveStream] = useState<{ isActive: boolean; youtubeLiveId: string }>({ isActive: false, youtubeLiveId: '' });
   
+  // Dynamic Image States
+  const [imgHeroBg, setImgHeroBg] = useState<string>('');
+  const [historicPhotos, setHistoricPhotos] = useState<string[]>([
+    'https://images.unsplash.com/photo-1548625361-155deee223cb?q=80&w=400',
+    'https://images.unsplash.com/photo-1438032005730-c779502df39b?q=80&w=400',
+    'https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=400',
+  ]);
+
   // Booking Modal States
   const [selectedPriest, setSelectedPriest] = useState<Priest | null>(null);
   const [bookingDate, setBookingDate] = useState<string>('');
@@ -86,6 +94,27 @@ export default function Home() {
       .then(res => res.json())
       .then(data => setEvents(data.filter((e: any) => e.type === 'TRIP' || e.type === 'CONFERENCE').slice(0, 3)))
       .catch(err => console.log('Error fetching events:', err));
+
+    // 5. Fetch Global Settings
+    fetch(`${API_URL}/settings`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.img_hero_bg) {
+          setImgHeroBg(data.img_hero_bg);
+        }
+        const photos = [];
+        if (data.img_historic_1) photos.push(data.img_historic_1);
+        else photos.push('https://images.unsplash.com/photo-1548625361-155deee223cb?q=80&w=400');
+
+        if (data.img_historic_2) photos.push(data.img_historic_2);
+        else photos.push('https://images.unsplash.com/photo-1438032005730-c779502df39b?q=80&w=400');
+
+        if (data.img_historic_3) photos.push(data.img_historic_3);
+        else photos.push('https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=400');
+
+        setHistoricPhotos(photos);
+      })
+      .catch(err => console.log('Error fetching settings:', err));
   }, []);
 
   // Fetch available slots when priest or date changes
@@ -185,17 +214,10 @@ export default function Home() {
     }
   };
 
-  // Mock list of historic photos
-  const historicPhotos = [
-    'https://images.unsplash.com/photo-1548625361-155deee223cb?q=80&w=400',
-    'https://images.unsplash.com/photo-1438032005730-c779502df39b?q=80&w=400',
-    'https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=400',
-  ];
-
   return (
     <div style={{ paddingBottom: '4rem' }}>
       {/* Hero Banner */}
-      <header className={styles.hero}>
+      <header className={styles.hero} style={imgHeroBg ? { backgroundImage: `url(${imgHeroBg})` } : {}}>
         <div className={styles.heroContent}>
           <h1 className={styles.heroTitle}>{t('hero_title')}</h1>
           <p className={styles.heroSubtitle}>{t('hero_subtitle')}</p>
