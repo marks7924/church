@@ -40,6 +40,8 @@
   height: 42px;
   object-fit: contain;
   border-radius: 50%;
+  background-color: #ffffff;
+  padding: 4px;
   box-shadow: 0 0 10px rgba(var(--accent-gold-rgb), 0.3);
 }
 

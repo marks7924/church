@@ -69,6 +69,31 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Update a news post (protected: non-MEMBER)
+router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { content, imageUrl } = req.body;
+    const role = req.user?.role;
+
+    if (role === 'MEMBER') {
+      return res.status(403).json({ error: 'Members cannot update news' });
+    }
+
+    const updated = await prisma.news.update({
+      where: { id },
+      data: {
+        content: content !== undefined ? content : undefined,
+        imageUrl: imageUrl !== undefined ? imageUrl : undefined
+      }
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating news:', error);
+    res.status(500).json({ error: 'Failed to update news' });
+  }
+});
+
 // Delete a news post (protected: non-MEMBER)
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {

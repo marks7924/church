@@ -141,6 +141,7 @@ export default function DashboardPage() {
   const [newsContent, setNewsContent] = useState('');
   const [newsImageUrl, setNewsImageUrl] = useState('');
   const [newsMsg, setNewsMsg] = useState<string | null>(null);
+  const [editingNewsId, setEditingNewsId] = useState<string | null>(null);
 
   // Load Auth data
   useEffect(() => {
@@ -689,9 +690,12 @@ export default function DashboardPage() {
       return;
     }
 
+    const method = editingNewsId ? 'PATCH' : 'POST';
+    const url = editingNewsId ? `${API_URL}/news/${editingNewsId}` : `${API_URL}/news`;
+
     try {
-      const res = await fetch(`${API_URL}/news`, {
-        method: 'POST',
+      const res = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -700,9 +704,13 @@ export default function DashboardPage() {
       });
 
       if (res.ok) {
-        setNewsMsg(language === 'ar' ? 'تم نشر الخبر بنجاح!' : 'News published successfully!');
+        setNewsMsg(editingNewsId 
+          ? (language === 'ar' ? 'تم تعديل الخبر بنجاح!' : 'News updated successfully!')
+          : (language === 'ar' ? 'تم نشر الخبر بنجاح!' : 'News published successfully!')
+        );
         setNewsContent('');
         setNewsImageUrl('');
+        setEditingNewsId(null);
         // refresh news
         fetch(`${API_URL}/news`)
           .then(res => res.json())
@@ -1846,7 +1854,9 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
           <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
             <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-              📰 {language === 'ar' ? 'نشر خبر جديد' : 'Post New News'}
+              📰 {editingNewsId 
+                ? (language === 'ar' ? 'تعديل الخبر المحدد' : 'Edit Selected News') 
+                : (language === 'ar' ? 'نشر خبر جديد' : 'Post New News')}
             </h3>
 
             {newsMsg && (
@@ -1884,9 +1894,24 @@ export default function DashboardPage() {
                 {newsImageUrl && <img src={newsImageUrl} alt="Preview" style={{ height: '120px', objectFit: 'contain', borderRadius: '4px', marginTop: '4px', alignSelf: 'flex-start' }} />}
               </div>
 
-              <button type="submit" className={styles.bookBtn} style={{ marginTop: '10px', width: '200px' }}>
-                {language === 'ar' ? 'نشر الخبر' : 'Publish News'}
-              </button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="submit" className={styles.bookBtn} style={{ marginTop: '10px', width: '200px' }}>
+                  {editingNewsId ? (language === 'ar' ? 'حفظ التعديل' : 'Save Changes') : (language === 'ar' ? 'نشر الخبر' : 'Publish News')}
+                </button>
+                {editingNewsId && (
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setEditingNewsId(null);
+                      setNewsContent('');
+                      setNewsImageUrl('');
+                    }}
+                    style={{ marginTop: '10px', padding: '10px 20px', backgroundColor: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer' }}
+                  >
+                    {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                  </button>
+                )}
+              </div>
             </form>
           </div>
 
@@ -1906,9 +1931,19 @@ export default function DashboardPage() {
                         📅 {new Date(n.createdAt).toLocaleDateString()}
                       </div>
                     </div>
-                    <button onClick={() => handleDeleteNews(n.id)} style={{ backgroundColor: '#ff4d4d', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>
-                      {language === 'ar' ? 'حذف' : 'Delete'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => {
+                        setEditingNewsId(n.id);
+                        setNewsContent(n.content || '');
+                        setNewsImageUrl(n.imageUrl || '');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }} style={{ backgroundColor: 'var(--accent-gold)', color: '#000', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>
+                        {language === 'ar' ? 'تعديل' : 'Edit'}
+                      </button>
+                      <button onClick={() => handleDeleteNews(n.id)} style={{ backgroundColor: '#ff4d4d', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>
+                        {language === 'ar' ? 'حذف' : 'Delete'}
+                      </button>
+                    </div>
                   </div>
                   {n.content && <p style={{ fontSize: '0.9rem', whiteSpace: 'pre-wrap', marginBottom: n.imageUrl ? '10px' : '0' }}>{n.content}</p>}
                   {n.imageUrl && <img src={n.imageUrl} alt="News" style={{ maxHeight: '200px', objectFit: 'contain', alignSelf: 'flex-start', borderRadius: '4px' }} />}

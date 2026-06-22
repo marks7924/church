@@ -74,6 +74,7 @@ export default function Home() {
     };
   }
   const [news, setNews] = useState<NewsItem[]>([]);
+  const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
   // Booking Modal States
   const [selectedPriest, setSelectedPriest] = useState<Priest | null>(null);
@@ -338,7 +339,7 @@ export default function Home() {
             <h2 className={styles.rowTitle}>{language === 'ar' ? 'أخبار الكنيسة' : 'Church News'}</h2>
             <div className={styles.netflixGrid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
               {news.map(item => (
-                <div key={item.id} className={styles.priestCard} style={{ textAlign: 'start', alignItems: 'stretch', gap: '0.8rem' }}>
+                <div key={item.id} className={`${styles.priestCard} netflix-card`} onClick={() => setSelectedNews(item)} style={{ textAlign: 'start', alignItems: 'stretch', gap: '0.8rem', cursor: 'pointer' }}>
                   {item.imageUrl && (
                     <div 
                       style={{ 
@@ -353,9 +354,16 @@ export default function Home() {
                     ></div>
                   )}
                   <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
-                    <p style={{ fontSize: '1rem', lineHeight: '1.6', color: 'var(--text-primary)', whiteSpace: 'pre-line', marginBottom: '1rem' }}>
-                      {item.content}
+                    <p style={{ fontSize: '1rem', lineHeight: '1.6', color: 'var(--text-primary)', marginBottom: '1rem' }}>
+                      {item.content && item.content.length > 140 
+                        ? `${item.content.substring(0, 140)}...` 
+                        : item.content}
                     </p>
+                    {item.content && item.content.length > 140 && (
+                      <span style={{ fontSize: '0.85rem', color: 'var(--accent-gold)', fontWeight: 'bold', marginBottom: '10px' }}>
+                        {language === 'ar' ? 'إقرأ المزيد ←' : 'Read More →'}
+                      </span>
+                    )}
                     <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                       <span>👤 {item.author.fullName}</span>
                       <span>📅 {new Date(item.createdAt).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}</span>
@@ -595,6 +603,35 @@ export default function Home() {
                 </Link>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* News Detail Modal */}
+      {selectedNews && (
+        <div className={styles.modalOverlay} onClick={() => setSelectedNews(null)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <button className={styles.closeBtn} onClick={() => setSelectedNews(null)}>
+              <X size={20} />
+            </button>
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', fontSize: '1.4rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+              📰 {language === 'ar' ? 'تفاصيل الخبر' : 'News Details'}
+            </h3>
+            
+            {selectedNews.imageUrl && (
+              <div style={{ width: '100%', maxHeight: '400px', overflow: 'hidden', borderRadius: '8px', marginBottom: '1.5rem', display: 'flex', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.2)' }}>
+                <img src={selectedNews.imageUrl} alt="News Image" style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain' }} />
+              </div>
+            )}
+            
+            <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              <span>👤 {selectedNews.author?.fullName}</span>
+              <span>📅 {new Date(selectedNews.createdAt).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}</span>
+            </div>
+            
+            <p style={{ fontSize: '1.1rem', lineHeight: '1.7', color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
+              {selectedNews.content}
+            </p>
           </div>
         </div>
       )}
