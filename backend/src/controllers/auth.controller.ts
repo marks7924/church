@@ -23,7 +23,7 @@ function generateTokens(user: { id: string; email: string; role: string; fullNam
     fullName: user.fullName,
     isVerified: user.isVerified
   };
-  const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '15m' });
+  const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
   const refreshToken = jwt.sign({ userId: user.id }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
   return { accessToken, refreshToken };
 }
