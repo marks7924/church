@@ -31,8 +31,9 @@ export default function SermonsPage() {
   const [priestFilter, setPriestFilter] = useState('');
   const [topicFilter, setTopicFilter] = useState('');
 
-  // Form State for upload popup
+  // Form State for upload/edit popup
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [editingSermon, setEditingSermon] = useState<Sermon | null>(null);
   const [titleAr, setTitleAr] = useState('');
   const [titleEn, setTitleEn] = useState('');
   const [priestNameAr, setPriestNameAr] = useState('القمص يوحنا كمال');
@@ -78,15 +79,18 @@ export default function SermonsPage() {
     }
   }, []);
 
-  const handleAddSermon = async (e: React.FormEvent) => {
+  const handleSaveSermon = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
 
     if (!token) return;
 
+    const method = editingSermon ? 'PATCH' : 'POST';
+    const url = editingSermon ? `${API_URL}/sermons/${editingSermon.id}` : `${API_URL}/sermons`;
+
     try {
-      const res = await fetch(`${API_URL}/sermons`, {
-        method: 'POST',
+      const res = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -104,13 +108,14 @@ export default function SermonsPage() {
       });
 
       if (res.ok) {
-        setMessage(language === 'ar' ? 'تم إضافة العظة ونشر الإشعارات بنجاح!' : 'Sermon created and push notifications sent!');
+        setMessage(editingSermon 
+          ? (language === 'ar' ? 'تم تعديل العظة بنجاح!' : 'Sermon updated successfully!')
+          : (language === 'ar' ? 'تم إضافة العظة ونشر الإشعارات بنجاح!' : 'Sermon created and push notifications sent!')
+        );
         fetchSermons();
-        // Clear fields
-        setTitleAr('');
-        setTitleEn('');
-        setYoutubeUrl('');
-        setIsUploadOpen(false);
+        setTimeout(() => {
+          handleCloseModal();
+        }, 1500);
       } else {
         const data = await res.json();
         setMessage(data.error || 'Error saving sermon.');
@@ -118,6 +123,55 @@ export default function SermonsPage() {
     } catch (err) {
       setMessage('Failed to connect to server.');
     }
+  };
+
+  const handleEditClick = (sermon: Sermon) => {
+    setEditingSermon(sermon);
+    setTitleAr(sermon.titleAr);
+    setTitleEn(sermon.titleEn);
+    setPriestNameAr(sermon.priestNameAr);
+    setPriestNameEn(sermon.priestNameEn);
+    setTopicAr(sermon.topicAr);
+    setTopicEn(sermon.topicEn);
+    setYoutubeUrl(sermon.youtubeUrl);
+    setSermonDate(sermon.date ? new Date(sermon.date).toISOString().split('T')[0] : '');
+    setIsUploadOpen(true);
+  };
+
+  const handleDeleteClick = async (id: string) => {
+    if (!confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذه العظة نهائياً؟' : 'Are you sure you want to delete this sermon permanently?')) return;
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/sermons/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (res.ok) {
+        fetchSermons();
+      } else {
+        alert(language === 'ar' ? 'فشل حذف العظة.' : 'Failed to delete sermon.');
+      }
+    } catch (err) {
+      console.log('Error deleting sermon:', err);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setIsUploadOpen(false);
+    setEditingSermon(null);
+    setTitleAr('');
+    setTitleEn('');
+    setPriestNameAr('القمص يوحنا كمال');
+    setPriestNameEn('Fr. John Kamal');
+    setTopicAr('روحيات');
+    setTopicEn('Spiritual');
+    setYoutubeUrl('');
+    setSermonDate('');
+    setMessage(null);
   };
 
   // Filter logic
@@ -233,6 +287,22 @@ export default function SermonsPage() {
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
                   📅 {new Date(s.date).toLocaleDateString()}
                 </div>
+                {isAdmin && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }} onClick={(e) => e.stopPropagation()}>
+                    <button 
+                      onClick={() => handleEditClick(s)}
+                      style={{ flex: 1, backgroundColor: 'var(--accent-gold)', color: '#000000', border: 'none', padding: '6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}
+                    >
+                      {language === 'ar' ? 'تعديل' : 'Edit'}
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteClick(s.id)}
+                      style={{ flex: 1, backgroundColor: '#ff4d4d', color: '#ffffff', border: 'none', padding: '6px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}
+                    >
+                      {language === 'ar' ? 'حذف' : 'Delete'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))
@@ -266,17 +336,21 @@ export default function SermonsPage() {
       {isUploadOpen && (
         <div className={styles.modalOverlay}>
           <div className={styles.modalContent}>
-            <button className={styles.closeBtn} onClick={() => setIsUploadOpen(false)}>
+            <button className={styles.closeBtn} onClick={handleCloseModal}>
               <X size={20} />
             </button>
             <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Video size={18} />
-              <span>{language === 'ar' ? 'نشر عظة تعليمية جديدة' : 'Publish New Sermon'}</span>
+              <span>
+                {editingSermon 
+                  ? (language === 'ar' ? 'تعديل العظة التعليمية' : 'Edit Sermon') 
+                  : (language === 'ar' ? 'نشر عظة تعليمية جديدة' : 'Publish New Sermon')}
+              </span>
             </h3>
 
             {message && <div style={{ padding: '8px', border: '1px solid var(--accent-gold)', fontSize: '0.8rem', color: 'var(--accent-gold)', marginBottom: '1rem', borderRadius: '4px' }}>{message}</div>}
 
-            <form onSubmit={handleAddSermon}>
+            <form onSubmit={handleSaveSermon}>
               <div className={styles.formGroup}>
                 <label>العنوان (عربي) *</label>
                 <input type="text" required value={titleAr} onChange={e => setTitleAr(e.target.value)} className={styles.formInput} />

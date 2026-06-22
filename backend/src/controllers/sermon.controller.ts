@@ -94,4 +94,62 @@ router.post('/', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, R
   }
 });
 
+// 3. Edit Sermon (Admins, Secretaries)
+router.patch('/:id', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: Request, res: Response) => {
+  const sermonId = req.params.id;
+  const { titleAr, titleEn, priestNameAr, priestNameEn, topicAr, topicEn, date, youtubeUrl } = req.body;
+
+  try {
+    const sermon = await prisma.sermon.findUnique({ where: { id: sermonId } });
+    if (!sermon) {
+      return res.status(404).json({ error: 'Sermon not found.' });
+    }
+
+    let updateData: any = {
+      titleAr,
+      titleEn,
+      priestNameAr,
+      priestNameEn,
+      topicAr,
+      topicEn,
+      date: date ? new Date(date) : undefined,
+    };
+
+    if (youtubeUrl) {
+      const videoId = getYoutubeId(youtubeUrl);
+      updateData.youtubeUrl = `https://www.youtube.com/embed/${videoId}`;
+      updateData.thumbnailUrl = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+    }
+
+    const updated = await prisma.sermon.update({
+      where: { id: sermonId },
+      data: updateData
+    });
+
+    return res.status(200).json({ message: 'Sermon updated successfully.', sermon: updated });
+  } catch (error) {
+    console.error('Error updating sermon:', error);
+    return res.status(500).json({ error: 'Server error updating sermon.' });
+  }
+});
+
+// 4. Delete Sermon (Admins, Secretaries)
+router.delete('/:id', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: Request, res: Response) => {
+  const sermonId = req.params.id;
+
+  try {
+    const sermon = await prisma.sermon.findUnique({ where: { id: sermonId } });
+    if (!sermon) {
+      return res.status(404).json({ error: 'Sermon not found.' });
+    }
+
+    await prisma.sermon.delete({ where: { id: sermonId } });
+
+    return res.status(200).json({ message: 'Sermon deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting sermon:', error);
+    return res.status(500).json({ error: 'Server error deleting sermon.' });
+  }
+});
+
 export default router;
