@@ -27,7 +27,7 @@ export const dictionary: TranslationDictionary = {
   nav_dashboard: { ar: 'لوحة التحكم', en: 'Dashboard' },
   
   // Hero
-  hero_title: { ar: 'كنيسة قبطية أرثوذكسية واحدة مقدسة جامعة رسولية', en: 'One Holy Catholic Apostolic Coptic Orthodox Church' },
+  hero_title: { ar: 'كنيسه الشهيد العظيم ابو سيفين بحدائق القبه', en: 'One Holy Apostolic Coptic Orthodox Church' },
   hero_subtitle: { ar: 'مرحبًا بكم في البيت الروحي لصلواتنا وخدمتنا وتجمعنا المبارك', en: 'Welcome to the spiritual home of our prayers, services, and blessed assembly' },
   quick_nav: { ar: 'روابط سريعة', en: 'Quick Navigation' },
   book_confession: { ar: 'حجز اعتراف', en: 'Book Confession' },

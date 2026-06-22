@@ -113,6 +113,35 @@ export default function DashboardPage() {
   const [imgHistoric3, setImgHistoric3] = useState('');
   const [imagesMsg, setImagesMsg] = useState<string | null>(null);
 
+  // Hero Backgrounds Array
+  const [heroBgs, setHeroBgs] = useState<string[]>([]);
+  
+  // About the Church
+  const [aboutHistoryAr, setAboutHistoryAr] = useState('');
+  const [aboutHistoryEn, setAboutHistoryEn] = useState('');
+  const [aboutMissionAr, setAboutMissionAr] = useState('');
+  const [aboutMissionEn, setAboutMissionEn] = useState('');
+  const [aboutVisionAr, setAboutVisionAr] = useState('');
+  const [aboutVisionEn, setAboutVisionEn] = useState('');
+
+  // Church Services (Ministries)
+  const [churchServices, setChurchServices] = useState<any[]>([]);
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [serviceSlug, setServiceSlug] = useState('');
+  const [serviceNameAr, setServiceNameAr] = useState('');
+  const [serviceNameEn, setServiceNameEn] = useState('');
+  const [serviceGoalAr, setServiceGoalAr] = useState('');
+  const [serviceGoalEn, setServiceGoalEn] = useState('');
+  const [serviceScheduleAr, setServiceScheduleAr] = useState('');
+  const [serviceScheduleEn, setServiceScheduleEn] = useState('');
+  const [serviceImage, setServiceImage] = useState('');
+
+  // News Management States
+  const [allNews, setAllNews] = useState<any[]>([]);
+  const [newsContent, setNewsContent] = useState('');
+  const [newsImageUrl, setNewsImageUrl] = useState('');
+  const [newsMsg, setNewsMsg] = useState<string | null>(null);
+
   // Load Auth data
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -234,7 +263,7 @@ export default function DashboardPage() {
         .catch(err => console.log(err));
     }
 
-    if (activeTab === 'manage-images') {
+    if (activeTab === 'manage-site-info') {
       fetch(`${API_URL}/settings`)
         .then(res => res.json())
         .then(data => {
@@ -242,6 +271,46 @@ export default function DashboardPage() {
           setImgHistoric1(data.img_historic_1 || '');
           setImgHistoric2(data.img_historic_2 || '');
           setImgHistoric3(data.img_historic_3 || '');
+
+          if (data.img_hero_bgs) {
+            try {
+              const parsed = JSON.parse(data.img_hero_bgs);
+              if (Array.isArray(parsed)) setHeroBgs(parsed);
+            } catch (e) {
+              setHeroBgs(data.img_hero_bgs.split(',').filter(Boolean));
+            }
+          } else if (data.img_hero_bg) {
+            setHeroBgs([data.img_hero_bg]);
+          } else {
+            setHeroBgs([]);
+          }
+
+          setAboutHistoryAr(data.about_history_ar || '');
+          setAboutHistoryEn(data.about_history_en || '');
+          setAboutMissionAr(data.about_mission_ar || '');
+          setAboutMissionEn(data.about_mission_en || '');
+          setAboutVisionAr(data.about_vision_ar || '');
+          setAboutVisionEn(data.about_vision_en || '');
+
+          if (data.church_services) {
+            try {
+              const parsed = JSON.parse(data.church_services);
+              if (Array.isArray(parsed)) setChurchServices(parsed);
+            } catch (e) {
+              setChurchServices([]);
+            }
+          } else {
+            setChurchServices([]);
+          }
+        })
+        .catch(err => console.log(err));
+    }
+
+    if (activeTab === 'manage-news') {
+      fetch(`${API_URL}/news`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setAllNews(data);
         })
         .catch(err => console.log(err));
     }
@@ -505,7 +574,7 @@ export default function DashboardPage() {
     setPriestAvailability('{"Monday": ["17:00-17:30", "17:30-18:00"], "Wednesday": ["18:00-18:30"], "Friday": ["16:00-16:30"]}');
   };
 
-  const handleSaveImages = async (e: React.FormEvent) => {
+  const handleSaveSiteInfo = async (e: React.FormEvent) => {
     e.preventDefault();
     setImagesMsg(null);
     if (!token) return;
@@ -518,20 +587,149 @@ export default function DashboardPage() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          img_hero_bg: imgHeroBg,
+          img_hero_bg: heroBgs[0] || imgHeroBg,
+          img_hero_bgs: JSON.stringify(heroBgs),
           img_historic_1: imgHistoric1,
           img_historic_2: imgHistoric2,
-          img_historic_3: imgHistoric3
+          img_historic_3: imgHistoric3,
+          about_history_ar: aboutHistoryAr,
+          about_history_en: aboutHistoryEn,
+          about_mission_ar: aboutMissionAr,
+          about_mission_en: aboutMissionEn,
+          about_vision_ar: aboutVisionAr,
+          about_vision_en: aboutVisionEn,
+          church_services: JSON.stringify(churchServices)
         })
       });
 
       if (res.ok) {
-        setImagesMsg(language === 'ar' ? 'تم تحديث صور الموقع بنجاح!' : 'Site images updated successfully!');
+        setImagesMsg(language === 'ar' ? 'تم تحديث بيانات ومحتوى الموقع والخدمات بنجاح!' : 'Site content, services and configurations saved successfully!');
       } else {
-        setImagesMsg('Failed to update images.');
+        setImagesMsg('Failed to update settings.');
       }
     } catch (err) {
       setImagesMsg('Connection error.');
+    }
+  };
+
+  const handleAddHeroBg = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        alert(language === 'ar' ? 'حجم الصورة يجب أن لا يتجاوز 2 ميجابايت' : 'Image size must not exceed 2MB');
+        e.target.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setHeroBgs(prev => [...prev, reader.result as string]);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAddOrUpdateService = () => {
+    if (!serviceSlug || !serviceNameAr || !serviceNameEn) {
+      alert(language === 'ar' ? 'يرجى إدخال Slug واسم الخدمة ثنائي اللغة.' : 'Please enter Slug and bilingual service name.');
+      return;
+    }
+
+    const payload = {
+      id: editingServiceId || Math.random().toString(36).substr(2, 9),
+      slug: serviceSlug,
+      nameAr: serviceNameAr,
+      nameEn: serviceNameEn,
+      goalAr: serviceGoalAr,
+      goalEn: serviceGoalEn,
+      scheduleAr: serviceScheduleAr,
+      scheduleEn: serviceScheduleEn,
+      image: serviceImage || 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=400'
+    };
+
+    if (editingServiceId) {
+      setChurchServices(prev => prev.map(s => s.id === editingServiceId ? payload : s));
+    } else {
+      setChurchServices(prev => [...prev, payload]);
+    }
+
+    setEditingServiceId(null);
+    setServiceSlug('');
+    setServiceNameAr('');
+    setServiceNameEn('');
+    setServiceGoalAr('');
+    setServiceGoalEn('');
+    setServiceScheduleAr('');
+    setServiceScheduleEn('');
+    setServiceImage('');
+  };
+
+  const handleEditServiceClick = (service: any) => {
+    setEditingServiceId(service.id);
+    setServiceSlug(service.slug);
+    setServiceNameAr(service.nameAr);
+    setServiceNameEn(service.nameEn);
+    setServiceGoalAr(service.goalAr);
+    setServiceGoalEn(service.goalEn);
+    setServiceScheduleAr(service.scheduleAr);
+    setServiceScheduleEn(service.scheduleEn);
+    setServiceImage(service.image || '');
+  };
+
+  const handleDeleteServiceClick = (id: string) => {
+    if (!confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذه الخدمة؟' : 'Are you sure you want to delete this service?')) return;
+    setChurchServices(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleSaveNews = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setNewsMsg(null);
+    if (!token) return;
+    if (!newsContent && !newsImageUrl) {
+      setNewsMsg(language === 'ar' ? 'يجب إدخال نص الخبر أو صورة على الأقل.' : 'Must provide text or image.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/news`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ content: newsContent, imageUrl: newsImageUrl })
+      });
+
+      if (res.ok) {
+        setNewsMsg(language === 'ar' ? 'تم نشر الخبر بنجاح!' : 'News published successfully!');
+        setNewsContent('');
+        setNewsImageUrl('');
+        // refresh news
+        fetch(`${API_URL}/news`)
+          .then(res => res.json())
+          .then(data => { if (Array.isArray(data)) setAllNews(data); });
+      } else {
+        const result = await res.json();
+        setNewsMsg(result.error || 'Failed to publish.');
+      }
+    } catch (err) {
+      setNewsMsg('Connection error.');
+    }
+  };
+
+  const handleDeleteNews = async (id: string) => {
+    if (!confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا الخبر؟' : 'Are you sure you want to delete this news?')) return;
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/news/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setAllNews(prev => prev.filter(n => n.id !== id));
+      }
+    } catch (err) {
+      console.log(err);
     }
   };
 
@@ -606,6 +804,26 @@ export default function DashboardPage() {
             }}
           >
             {language === 'ar' ? 'حسابي وعضويتي' : 'My Profile & Status'}
+          </button>
+        )}
+
+        {/* NON-MEMBER Shared tab options */}
+        {user?.role && user.role !== 'MEMBER' && (
+          <button 
+            onClick={() => setActiveTab('manage-news')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '4px',
+              border: '1px solid var(--border-color)',
+              background: activeTab === 'manage-news' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+              color: activeTab === 'manage-news' ? '#000000' : 'var(--text-primary)',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              fontSize: '0.9rem'
+            }}
+          >
+            <FileText size={16} style={{ verticalAlign: 'middle', marginInlineEnd: '6px' }} />
+            {language === 'ar' ? 'إدارة الأخبار' : 'Manage News'}
           </button>
         )}
 
@@ -697,19 +915,19 @@ export default function DashboardPage() {
                   {language === 'ar' ? 'إدارة الكهنة' : 'Manage Priests'}
                 </button>
                 <button 
-                  onClick={() => setActiveTab('manage-images')}
+                  onClick={() => setActiveTab('manage-site-info')}
                   style={{
                     padding: '8px 16px',
                     borderRadius: '4px',
                     border: '1px solid var(--border-color)',
-                    background: activeTab === 'manage-images' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                    color: activeTab === 'manage-images' ? '#000000' : 'var(--text-primary)',
+                    background: activeTab === 'manage-site-info' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+                    color: activeTab === 'manage-site-info' ? '#000000' : 'var(--text-primary)',
                     cursor: 'pointer',
                     fontWeight: 'bold',
                     fontSize: '0.9rem'
                   }}
                 >
-                  {language === 'ar' ? 'إدارة صور الموقع' : 'Manage Site Images'}
+                  {language === 'ar' ? 'محتوى وإعدادات الموقع' : 'Manage Site & Services'}
                 </button>
               </>
             )}
@@ -1371,68 +1589,336 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Tab: Super Admin Site Images Management */}
-      {activeTab === 'manage-images' && (
-        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem', maxWidth: '700px', margin: '0 auto' }}>
-          <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-            🖼️ {language === 'ar' ? 'تعديل صور الموقع العامة' : 'Manage Global Site Images'}
-          </h3>
-
+      {/* Tab: Super Admin Site Content, Images & Services Management */}
+      {activeTab === 'manage-site-info' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+          {/* Main Save Status Banner */}
           {imagesMsg && (
             <div style={{
               backgroundColor: 'rgba(46, 204, 113, 0.1)',
               border: '1px solid var(--accent-green)',
               color: '#2ecc71',
-              padding: '10px',
-              borderRadius: '4px',
-              marginBottom: '1.5rem',
-              fontSize: '0.85rem'
+              padding: '12px',
+              borderRadius: '6px',
+              fontSize: '0.9rem',
+              fontWeight: 'bold'
             }}>
               {imagesMsg}
             </div>
           )}
 
-          <form onSubmit={handleSaveImages} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'صورة الخلفية الرئيسية (Hero Background)' : 'Hero Header Background Image'}</label>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHeroBg)} className={styles.formInput} style={{ padding: '8px', flex: 1 }} />
-                <button type="button" onClick={() => setImgHeroBg('')} style={{ padding: '8px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
+          <form onSubmit={handleSaveSiteInfo} style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+            
+            {/* PANEL 1: HERO & GALLERY IMAGES */}
+            <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+              <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+                🖼️ {language === 'ar' ? 'إدارة صور الموقع وخلفيات العرض المتغيرة' : 'Manage Global Site Images & Hero Backgrounds'}
+              </h3>
+              
+              {/* Multi Hero BG section */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '2rem' }}>
+                <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+                  {language === 'ar' ? 'صور الخلفية الدوارة للهيرو (Hero Background Slider)' : 'Hero Slider Background Images'}
+                </label>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                  {heroBgs.map((url, idx) => (
+                    <div key={idx} style={{ position: 'relative', width: '120px', height: '80px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                      <img src={url} alt="Hero BG" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <button 
+                        type="button" 
+                        onClick={() => setHeroBgs(prev => prev.filter((_, i) => i !== idx))}
+                        style={{ position: 'absolute', top: '4px', right: '4px', backgroundColor: 'rgba(255, 77, 77, 0.9)', color: '#fff', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  {heroBgs.length === 0 && (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                      {language === 'ar' ? 'لا توجد صور مخصصة حالياً، سيتم استخدام الخلفية الافتراضية.' : 'No custom images added. Falling back to default.'}
+                    </p>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <input type="file" accept="image/*" onChange={handleAddHeroBg} className={styles.formInput} style={{ padding: '8px', flex: 1 }} />
+                  <button type="button" onClick={() => setHeroBgs([])} style={{ padding: '8px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>
+                    {language === 'ar' ? 'مسح الكل' : 'Clear All'}
+                  </button>
+                </div>
               </div>
-              {imgHeroBg && <img src={imgHeroBg} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
+
+              {/* Historic Images */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الصورة التاريخية الأولى' : 'Historic Gallery Image 1'}</label>
+                  <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric1)} className={styles.formInput} style={{ padding: '8px' }} />
+                  {imgHistoric1 && <img src={imgHistoric1} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الصورة التاريخية الثانية' : 'Historic Gallery Image 2'}</label>
+                  <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric2)} className={styles.formInput} style={{ padding: '8px' }} />
+                  {imgHistoric2 && <img src={imgHistoric2} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الصورة التاريخية الثالثة' : 'Historic Gallery Image 3'}</label>
+                  <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric3)} className={styles.formInput} style={{ padding: '8px' }} />
+                  {imgHistoric3 && <img src={imgHistoric3} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
+                </div>
+              </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الصورة التاريخية الأولى' : 'Historic Gallery Image 1'}</label>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric1)} className={styles.formInput} style={{ padding: '8px', flex: 1 }} />
-                <button type="button" onClick={() => setImgHistoric1('')} style={{ padding: '8px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
+            {/* PANEL 2: ABOUT THE CHURCH CONTENT */}
+            <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+              <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+                ⛪ {language === 'ar' ? 'إدارة نصوص صفحة عن الكنيسة' : 'Manage "About the Church" Texts'}
+              </h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'تاريخ الكنيسة (عربي)' : 'Church History (Arabic)'}</label>
+                    <textarea value={aboutHistoryAr} onChange={e => setAboutHistoryAr(e.target.value)} className={styles.formInput} style={{ height: '100px', resize: 'vertical' }} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'تاريخ الكنيسة (إنجليزي)' : 'Church History (English)'}</label>
+                    <textarea value={aboutHistoryEn} onChange={e => setAboutHistoryEn(e.target.value)} className={styles.formInput} style={{ height: '100px', resize: 'vertical' }} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رؤيتنا الروحية (عربي)' : 'Our Vision (Arabic)'}</label>
+                    <textarea value={aboutVisionAr} onChange={e => setAboutVisionAr(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رؤيتنا الروحية (إنجليزي)' : 'Our Vision (English)'}</label>
+                    <textarea value={aboutVisionEn} onChange={e => setAboutVisionEn(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رسالتنا الرعوية (عربي)' : 'Our Mission (Arabic)'}</label>
+                    <textarea value={aboutMissionAr} onChange={e => setAboutMissionAr(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رسالتنا الرعوية (إنجليزي)' : 'Our Mission (English)'}</label>
+                    <textarea value={aboutMissionEn} onChange={e => setAboutMissionEn(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
+                  </div>
+                </div>
               </div>
-              {imgHistoric1 && <img src={imgHistoric1} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الصورة التاريخية الثانية' : 'Historic Gallery Image 2'}</label>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric2)} className={styles.formInput} style={{ padding: '8px', flex: 1 }} />
-                <button type="button" onClick={() => setImgHistoric2('')} style={{ padding: '8px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
+            {/* PANEL 3: CHURCH SERVICES (MINISTRIES) */}
+            <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+              <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+                🤝 {language === 'ar' ? 'إدارة الخدمات الكنسية والاجتماعات' : 'Manage Church Services & Ministries'}
+              </h3>
+
+              {/* Sub-form to Add/Edit a Service */}
+              <div style={{ border: '1px solid var(--border-color)', borderRadius: '6px', padding: '1.5rem', marginBottom: '2rem', backgroundColor: 'var(--bg-card)' }}>
+                <h4 style={{ color: 'var(--accent-gold)', marginBottom: '1rem', fontSize: '1rem' }}>
+                  {editingServiceId ? (language === 'ar' ? '📝 تعديل الخدمة المحددة' : '📝 Edit Selected Service') : (language === 'ar' ? '➕ إضافة خدمة جديدة' : '➕ Add New Service')}
+                </h4>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Slug (Unique ID, e.g. youth, choir)</label>
+                    <input type="text" value={serviceSlug} onChange={e => setServiceSlug(e.target.value)} className={styles.formInput} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Name (Arabic) *</label>
+                    <input type="text" value={serviceNameAr} onChange={e => setServiceNameAr(e.target.value)} className={styles.formInput} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Name (English) *</label>
+                    <input type="text" value={serviceNameEn} onChange={e => setServiceNameEn(e.target.value)} className={styles.formInput} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Schedule (Arabic)</label>
+                    <input type="text" value={serviceScheduleAr} onChange={e => setServiceScheduleAr(e.target.value)} className={styles.formInput} placeholder="خميس 7:00 م" />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Schedule (English)</label>
+                    <input type="text" value={serviceScheduleEn} onChange={e => setServiceScheduleEn(e.target.value)} className={styles.formInput} placeholder="Thursday 7:00 PM" />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Service Image</label>
+                    <input type="file" accept="image/*" onChange={e => handleFileChange(e, setServiceImage)} className={styles.formInput} style={{ padding: '6px' }} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Description/Goal (Arabic)</label>
+                    <textarea value={serviceGoalAr} onChange={e => setServiceGoalAr(e.target.value)} className={styles.formInput} style={{ height: '60px', resize: 'vertical' }} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Description/Goal (English)</label>
+                    <textarea value={serviceGoalEn} onChange={e => setServiceGoalEn(e.target.value)} className={styles.formInput} style={{ height: '60px', resize: 'vertical' }} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  {editingServiceId && (
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setEditingServiceId(null);
+                        setServiceSlug('');
+                        setServiceNameAr('');
+                        setServiceNameEn('');
+                        setServiceGoalAr('');
+                        setServiceGoalEn('');
+                        setServiceScheduleAr('');
+                        setServiceScheduleEn('');
+                        setServiceImage('');
+                      }} 
+                      style={{ backgroundColor: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border-color)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}
+                    >
+                      {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </button>
+                  )}
+                  <button 
+                    type="button" 
+                    onClick={handleAddOrUpdateService} 
+                    className={styles.bookBtn} 
+                    style={{ width: 'auto', padding: '6px 20px', fontSize: '0.85rem' }}
+                  >
+                    {editingServiceId ? (language === 'ar' ? 'تحديث الخدمة في القائمة' : 'Update in List') : (language === 'ar' ? 'إضافة للقائمة مؤقتاً' : 'Add to List')}
+                  </button>
+                </div>
               </div>
-              {imgHistoric2 && <img src={imgHistoric2} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
+
+              {/* Current Services List */}
+              <label style={{ fontSize: '0.9rem', fontWeight: 'bold', display: 'block', marginBottom: '10px' }}>
+                {language === 'ar' ? 'قائمة الخدمات المضافة حالياً (يجب الضغط على زر الحفظ بالأسفل لتثبيت التغييرات)' : 'List of Services (Click Save Site Info below to apply changes)'}
+              </label>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {churchServices.map(s => (
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', border: '1px solid var(--border-color)', alignItems: 'center', backgroundColor: 'var(--bg-card)', borderRadius: '6px' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      {s.image && <img src={s.image} alt="Service" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />}
+                      <div>
+                        <span style={{ fontWeight: 'bold', fontSize: '1rem' }}>
+                          {language === 'ar' ? s.nameAr : s.nameEn}
+                        </span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', marginInlineStart: '10px' }}>
+                          ({s.slug})
+                        </span>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                          🕒 {language === 'ar' ? s.scheduleAr : s.scheduleEn}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button type="button" onClick={() => handleEditServiceClick(s)} style={{ backgroundColor: 'var(--accent-gold)', color: '#000', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                        {language === 'ar' ? 'تعديل' : 'Edit'}
+                      </button>
+                      <button type="button" onClick={() => handleDeleteServiceClick(s.id)} style={{ backgroundColor: '#ff4d4d', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                        {language === 'ar' ? 'حذف' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {churchServices.length === 0 && (
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                    {language === 'ar' ? 'لا توجد خدمات كنسية مضافة.' : 'No church services added.'}
+                  </p>
+                )}
+              </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الصورة التاريخية الثالثة' : 'Historic Gallery Image 3'}</label>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric3)} className={styles.formInput} style={{ padding: '8px', flex: 1 }} />
-                <button type="button" onClick={() => setImgHistoric3('')} style={{ padding: '8px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
-              </div>
-              {imgHistoric3 && <img src={imgHistoric3} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
-            </div>
-
-            <button type="submit" className={styles.bookBtn} style={{ marginTop: '10px' }}>
-              {language === 'ar' ? 'حفظ صور الموقع' : 'Save Images'}
+            {/* Bottom main save button */}
+            <button type="submit" className={styles.bookBtn} style={{ padding: '14px 40px', fontSize: '1.1rem', fontWeight: 'bold', boxShadow: '0 4px 15px rgba(226,183,20,0.3)', width: 'auto', alignSelf: 'center' }}>
+              💾 {language === 'ar' ? 'حفظ إعدادات ومحتوى الموقع بالكامل' : 'Save All Site Content'}
             </button>
+
           </form>
+        </div>
+      )}
+
+      {/* Tab: Manage News */}
+      {activeTab === 'manage-news' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+              📰 {language === 'ar' ? 'نشر خبر جديد' : 'Post New News'}
+            </h3>
+
+            {newsMsg && (
+              <div style={{
+                backgroundColor: 'rgba(226, 183, 20, 0.05)',
+                border: '1px solid var(--accent-gold)',
+                color: 'var(--accent-gold)',
+                padding: '10px',
+                borderRadius: '4px',
+                marginBottom: '1.5rem',
+                fontSize: '0.85rem'
+              }}>
+                {newsMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveNews} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'محتوى الخبر' : 'News Content'}</label>
+                <textarea
+                  value={newsContent}
+                  onChange={e => setNewsContent(e.target.value)}
+                  className={styles.formInput}
+                  style={{ height: '100px', resize: 'vertical' }}
+                  placeholder={language === 'ar' ? 'اكتب تفاصيل الخبر هنا...' : 'Write news details here...'}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'صورة مرفقة (اختياري)' : 'Attached Image (Optional)'}</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input type="file" accept="image/*" onChange={e => handleFileChange(e, setNewsImageUrl)} className={styles.formInput} style={{ padding: '8px', flex: 1 }} />
+                  <button type="button" onClick={() => setNewsImageUrl('')} style={{ padding: '8px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
+                </div>
+                {newsImageUrl && <img src={newsImageUrl} alt="Preview" style={{ height: '120px', objectFit: 'contain', borderRadius: '4px', marginTop: '4px', alignSelf: 'flex-start' }} />}
+              </div>
+
+              <button type="submit" className={styles.bookBtn} style={{ marginTop: '10px', width: '200px' }}>
+                {language === 'ar' ? 'نشر الخبر' : 'Publish News'}
+              </button>
+            </form>
+          </div>
+
+          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
+              📰 {language === 'ar' ? 'أخبار الكنيسة الحالية' : 'Current Church News'}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              {allNews.map(n => (
+                <div key={n.id} style={{ display: 'flex', flexDirection: 'column', padding: '15px', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', borderRadius: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                    <div>
+                      <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: 'var(--accent-gold)' }}>
+                        {n.author?.fullName} ({n.author?.role})
+                      </span>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        📅 {new Date(n.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <button onClick={() => handleDeleteNews(n.id)} style={{ backgroundColor: '#ff4d4d', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>
+                      {language === 'ar' ? 'حذف' : 'Delete'}
+                    </button>
+                  </div>
+                  {n.content && <p style={{ fontSize: '0.9rem', whiteSpace: 'pre-wrap', marginBottom: n.imageUrl ? '10px' : '0' }}>{n.content}</p>}
+                  {n.imageUrl && <img src={n.imageUrl} alt="News" style={{ maxHeight: '200px', objectFit: 'contain', alignSelf: 'flex-start', borderRadius: '4px' }} />}
+                </div>
+              ))}
+              {allNews.length === 0 && (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{language === 'ar' ? 'لا توجد أخبار حالياً.' : 'No news posted currently.'}</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

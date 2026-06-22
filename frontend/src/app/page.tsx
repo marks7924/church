@@ -55,11 +55,25 @@ export default function Home() {
   
   // Dynamic Image States
   const [imgHeroBg, setImgHeroBg] = useState<string>('');
+  const [heroBgs, setHeroBgs] = useState<string[]>([]);
+  const [currentBgIndex, setCurrentBgIndex] = useState(0);
   const [historicPhotos, setHistoricPhotos] = useState<string[]>([
     'https://images.unsplash.com/photo-1548625361-155deee223cb?q=80&w=400',
     'https://images.unsplash.com/photo-1438032005730-c779502df39b?q=80&w=400',
     'https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=400',
   ]);
+
+  interface NewsItem {
+    id: string;
+    content: string | null;
+    imageUrl: string | null;
+    createdAt: string;
+    author: {
+      fullName: string;
+      role: string;
+    };
+  }
+  const [news, setNews] = useState<NewsItem[]>([]);
 
   // Booking Modal States
   const [selectedPriest, setSelectedPriest] = useState<Priest | null>(null);
@@ -99,8 +113,22 @@ export default function Home() {
     fetch(`${API_URL}/settings`)
       .then(res => res.json())
       .then(data => {
+        if (data.img_hero_bgs) {
+          try {
+            const parsed = JSON.parse(data.img_hero_bgs);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setHeroBgs(parsed);
+            }
+          } catch (e) {
+            const split = data.img_hero_bgs.split(',');
+            if (split.length > 0 && split[0]) {
+              setHeroBgs(split);
+            }
+          }
+        }
         if (data.img_hero_bg) {
           setImgHeroBg(data.img_hero_bg);
+          setHeroBgs(prev => prev.length === 0 ? [data.img_hero_bg] : prev);
         }
         const photos = [];
         if (data.img_historic_1) photos.push(data.img_historic_1);
@@ -115,7 +143,24 @@ export default function Home() {
         setHistoricPhotos(photos);
       })
       .catch(err => console.log('Error fetching settings:', err));
+
+    // 6. Fetch news
+    fetch(`${API_URL}/news`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setNews(data);
+      })
+      .catch(err => console.log('Error fetching news:', err));
   }, []);
+
+  // Cycle Hero backgrounds
+  useEffect(() => {
+    if (heroBgs.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentBgIndex(prev => (prev + 1) % heroBgs.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [heroBgs]);
 
   // Fetch available slots when priest or date changes
   useEffect(() => {
@@ -217,8 +262,28 @@ export default function Home() {
   return (
     <div style={{ paddingBottom: '4rem' }}>
       {/* Hero Banner */}
-      <header className={styles.hero} style={imgHeroBg ? { backgroundImage: `linear-gradient(180deg, rgba(11, 12, 16, 0.4) 0%, rgba(11, 12, 16, 0.95) 100%), url(${imgHeroBg})` } : {}}>
-        <div className={styles.heroContent}>
+      <header className={styles.hero}>
+        {heroBgs.length > 0 ? (
+          heroBgs.map((bg, idx) => (
+            <div
+              key={bg + idx}
+              className={styles.heroBgSlide}
+              style={{
+                backgroundImage: `linear-gradient(180deg, rgba(11, 12, 16, 0.4) 0%, rgba(11, 12, 16, 0.95) 100%), url(${bg})`,
+                opacity: idx === currentBgIndex ? 1 : 0,
+              }}
+            ></div>
+          ))
+        ) : (
+          <div
+            className={styles.heroBgSlide}
+            style={{
+              backgroundImage: imgHeroBg ? `linear-gradient(180deg, rgba(11, 12, 16, 0.4) 0%, rgba(11, 12, 16, 0.95) 100%), url(${imgHeroBg})` : undefined,
+              opacity: 1,
+            }}
+          ></div>
+        )}
+        <div className={styles.heroContent} style={{ zIndex: 2 }}>
           <h1 className={styles.heroTitle}>{t('hero_title')}</h1>
           <p className={styles.heroSubtitle}>{t('hero_subtitle')}</p>
         </div>
@@ -263,6 +328,41 @@ export default function Home() {
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               ></iframe>
+            </div>
+          </section>
+        )}
+
+        {/* Church News Section */}
+        {news.length > 0 && (
+          <section className={styles.rowSection}>
+            <h2 className={styles.rowTitle}>{language === 'ar' ? 'أخبار الكنيسة' : 'Church News'}</h2>
+            <div className={styles.netflixGrid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+              {news.map(item => (
+                <div key={item.id} className={styles.priestCard} style={{ textAlign: 'start', alignItems: 'stretch', gap: '0.8rem' }}>
+                  {item.imageUrl && (
+                    <div 
+                      style={{ 
+                        height: '180px', 
+                        width: '100%', 
+                        backgroundImage: `url(${item.imageUrl})`, 
+                        backgroundSize: 'cover', 
+                        backgroundPosition: 'center',
+                        borderRadius: '6px',
+                        marginBottom: '10px'
+                      }}
+                    ></div>
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
+                    <p style={{ fontSize: '1rem', lineHeight: '1.6', color: 'var(--text-primary)', whiteSpace: 'pre-line', marginBottom: '1rem' }}>
+                      {item.content}
+                    </p>
+                    <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      <span>👤 {item.author.fullName}</span>
+                      <span>📅 {new Date(item.createdAt).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
         )}

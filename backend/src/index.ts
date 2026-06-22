@@ -13,6 +13,7 @@ import eventRouter from './controllers/event.controller';
 import liveRouter from './controllers/live.controller';
 import priestRouter from './controllers/priest.controller';
 import settingsRouter from './controllers/settings.controller';
+import newsRouter from './controllers/news.controller';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -51,6 +52,7 @@ app.use('/api/events', eventRouter);
 app.use('/api/live', liveRouter);
 app.use('/api/priests', priestRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/news', newsRouter);
 
 // Error Handling Middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

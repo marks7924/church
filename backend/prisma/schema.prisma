@@ -56,6 +56,7 @@ model User {
   familyProfile    FamilyHead?
   priestProfile    PriestProfile?
   appointments     Appointment[]     @relation("MemberAppointments")
+  newsPosts        News[]            @relation("UserNews")
 }
 
 model PriestProfile {
@@ -175,4 +176,14 @@ model Event {
 model SystemConfig {
   key   String @id
   value String
+}
+
+model News {
+  id        String   @id @default(uuid())
+  content   String?  // the text content (can be rich text or plain)
+  imageUrl  String?  // optional uploaded image (base64 or link)
+  authorId  String
+  author    User     @relation("UserNews", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -14,10 +14,24 @@ export default function AboutPage() {
     'https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=400',
   ]);
 
+  const [aboutHistoryAr, setAboutHistoryAr] = useState('');
+  const [aboutHistoryEn, setAboutHistoryEn] = useState('');
+  const [aboutMissionAr, setAboutMissionAr] = useState('');
+  const [aboutMissionEn, setAboutMissionEn] = useState('');
+  const [aboutVisionAr, setAboutVisionAr] = useState('');
+  const [aboutVisionEn, setAboutVisionEn] = useState('');
+
   useEffect(() => {
     fetch(`${API_URL}/settings`)
       .then(res => res.json())
       .then(data => {
+        setAboutHistoryAr(data.about_history_ar || '');
+        setAboutHistoryEn(data.about_history_en || '');
+        setAboutMissionAr(data.about_mission_ar || '');
+        setAboutMissionEn(data.about_mission_en || '');
+        setAboutVisionAr(data.about_vision_ar || '');
+        setAboutVisionEn(data.about_vision_en || '');
+
         const photos = [];
         if (data.img_historic_1) photos.push(data.img_historic_1);
         else photos.push('https://images.unsplash.com/photo-1548625361-155deee223cb?q=80&w=400');
@@ -57,10 +71,10 @@ export default function AboutPage() {
         <h2 style={{ color: 'var(--accent-gold)', marginBottom: '1.2rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
           ⛪ {language === 'ar' ? 'تاريخ الكنيسة العريق' : 'Historical Church Foundations'}
         </h2>
-        <p style={{ color: 'var(--text-primary)', fontSize: '1rem', lineHeight: '1.7', marginBottom: '1.5rem' }}>
+        <p style={{ color: 'var(--text-primary)', fontSize: '1rem', lineHeight: '1.7', marginBottom: '1.5rem', whiteSpace: 'pre-line' }}>
           {language === 'ar' 
-            ? 'تأسست هذه الكنيسة المباركة في القرن الماضي لخدمة أبناء الكنيسة القبطية الأرثوذكسية في حي حدائق القبة التاريخي. وقد حظيت الكنيسة بزيارات وتبريكات مباركة من أصحاب القداسة والآباء البطاركة، وتطورت الخدمات عبر السنين لتشمل الكنيسة الكبرى، القاعات الملحقة، ونادي الشباب ومركزا متكاملا لخدمات التنمية والرعاية والرحمة.'
-            : 'Founded in the last century to serve the Coptic Orthodox congregation in the historic Hadayek Al Koba district. The church has received visits and patriarchal blessings from Coptic Popes throughout its rich history. Over the years, the services expanded to encompass a main cathedral, multiple community halls, a youth club, and a social development center.'}
+            ? (aboutHistoryAr || 'تأسست هذه الكنيسة المباركة في القرن الماضي لخدمة أبناء الكنيسة القبطية الأرثوذكسية في حي حدائق القبة التاريخي. وقد حظيت الكنيسة بزيارات وتبريكات مباركة من أصحاب القداسة والآباء البطاركة، وتطورت الخدمات عبر السنين لتشمل الكنيسة الكبرى، القاعات الملحقة، ونادي الشباب ومركزا متكاملا لخدمات التنمية والرعاية والرحمة.')
+            : (aboutHistoryEn || 'Founded in the last century to serve the Coptic Orthodox congregation in the historic Hadayek Al Koba district. The church has received visits and patriarchal blessings from Coptic Popes throughout its rich history. Over the years, the services expanded to encompass a main cathedral, multiple community halls, a youth club, and a social development center.')}
         </p>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6' }}>
           {language === 'ar'
@@ -78,19 +92,19 @@ export default function AboutPage() {
       }}>
         <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.8rem' }}>
           <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1rem' }}>👁️ {language === 'ar' ? 'رؤيتنا الروحية' : 'Our Spiritual Vision'}</h3>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.6' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.6', whiteSpace: 'pre-line' }}>
             {language === 'ar'
-              ? 'أن نكون منارة روحية حية تشهد للمسيح بتقديم الكلمة المستقيمة والتعليم الطاهر وخدمة افتقاد ورعاية تفوق التوقعات لكل إنسان.'
-              : 'To be a living spiritual lighthouse testifying to Christ by delivering sound biblical teaching, pure worship, and compassionate community outreach services.'}
+              ? (aboutVisionAr || 'أن نكون منارة روحية حية تشهد للمسيح بتقديم الكلمة المستقيمة والتعليم الطاهر وخدمة افتقاد ورعاية تفوق التوقعات لكل إنسان.')
+              : (aboutVisionEn || 'To be a living spiritual lighthouse testifying to Christ by delivering sound biblical teaching, pure worship, and compassionate community outreach services.')}
           </p>
         </div>
 
         <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.8rem' }}>
           <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1rem' }}>🎯 {language === 'ar' ? 'رسالتنا الرعوية' : 'Our Pastoral Mission'}</h3>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.6' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.6', whiteSpace: 'pre-line' }}>
             {language === 'ar'
-              ? 'تربية الأجيال وتعميق الحياة الروحية للأسر الكنسية وتوطيد أواصر التعاون والمحبة والافتقاد ومساندة المحتاج بروح كنسية أرثوذكسية.'
-              : 'Raising Coptic generations, deepening the spiritual life of families, strengthening community bounds of love, and supporting underprivileged members.'}
+              ? (aboutMissionAr || 'تربية الأجيال وتعميق الحياة الروحية للأسر الكنسية وتوطيد أواصر التعاون والمحبة والافتقاد ومساندة المحتاج بروح كنسية أرثوذكسية.')
+              : (aboutMissionEn || 'Raising Coptic generations, deepening the spiritual life of families, strengthening community bounds of love, and supporting underprivileged members.')}
           </p>
         </div>
       </div>

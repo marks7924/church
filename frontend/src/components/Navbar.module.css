@@ -35,6 +35,14 @@
   box-shadow: 0 0 10px rgba(var(--accent-gold-rgb), 0.5);
 }
 
+.logoImage {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(var(--accent-gold-rgb), 0.3);
+}
+
 .logoText {
   font-size: 1.1rem;
   font-weight: 700;
@@ -140,10 +148,36 @@
   cursor: pointer;
 }
 
+.desktopControls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.mobileLiveBadge {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  background-color: var(--accent-red);
+  color: #ffffff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.mobileLiveDot {
+  width: 6px;
+  height: 6px;
+  background-color: #ffffff;
+  border-radius: 50%;
+}
+
 /* Mobile responsive breakpoints */
 @media (max-width: 1024px) {
   .fontScalerContainer {
-    display: none; /* Hide font scale slider on small tablets/mobile to avoid layout break */
+    display: none;
   }
 }
 
@@ -153,25 +187,195 @@
   }
   
   .linksList {
-    display: none; /* Controlled by toggle in react code */
+    display: none;
   }
   
   .controlsArea {
     gap: 8px;
   }
+
+  .desktopControls {
+    display: none !important;
+  }
+
+  .mobileLiveBadge {
+    display: flex;
+  }
 }
 
-.mobileDropdown {
+/* Slide drawer styling */
+.mobileDropdownOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 9999;
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mobileDropdownDrawer {
+  width: 320px;
+  max-width: 85%;
+  height: 100%;
+  background-color: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  padding: 2.5rem 1.8rem;
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  padding: 1rem 2rem;
+  gap: 20px;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+  overflow-y: auto;
+  animation: drawerSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* RTL handling for border and shadow */
+[dir="rtl"] .mobileDropdownDrawer {
+  border-left: none;
+  border-right: 1px solid var(--border-color);
+  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+  animation: drawerSlideInRTL 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes drawerSlideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes drawerSlideInRTL {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.drawerHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.drawerTitle {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--accent-gold);
+}
+
+.closeDrawerBtn {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobileLinksList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   list-style: none;
+}
+
+.mobileNavLink {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  padding: 10px 0;
+  display: block;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  transition: color var(--transition-fast);
+}
+
+.mobileNavLink:hover {
+  color: var(--accent-gold);
+}
+
+.mobileActiveLink {
+  color: var(--accent-gold) !important;
+  font-weight: 700;
+}
+
+.drawerDivider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 5px 0;
+}
+
+.drawerControls {
+  display: flex;
+  flex-direction: column;
   gap: 15px;
 }
 
-.mobileDropdown .navLink {
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+.drawerControlBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 10px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.drawerControlBtn:hover {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.drawerFontScaler {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 14px;
+  border-radius: 6px;
+}
+
+.drawerAuthBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--accent-gold);
+  color: #000000;
+  font-weight: 700;
+  width: 100%;
+  padding: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+  text-decoration: none;
+}
+
+.drawerAuthBtn:hover {
+  opacity: 0.9;
+}
+
+.drawerLogoutBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: transparent;
+  border: 1px solid var(--accent-red);
+  color: var(--accent-red);
+  font-weight: 700;
+  width: 100%;
+  padding: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.drawerLogoutBtn:hover {
+  background-color: rgba(229, 9, 20, 0.1);
 }

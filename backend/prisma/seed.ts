@@ -51,7 +51,7 @@ async function main() {
       email: 'bishop@church.org',
       passwordHash,
       role: Role.BISHOP,
-      fullName: 'الأنبا ميخائيل',
+      fullName: 'الأنبا اثناسيوس',
       phone: '+201000000003',
       nationalId: '10000000000003',
       isVerified: true,
@@ -130,8 +130,8 @@ async function main() {
   const bishopProfile = await prisma.priestProfile.create({
     data: {
       userId: bishopUser.id,
-      nameAr: 'الأنبا ميخائيل',
-      nameEn: 'Bishop Michael',
+      nameAr: 'الأنبا اثناسيوس',
+      nameEn: 'Bishop Athanasius',
       titleAr: 'سيدنا',
       titleEn: 'Bishop',
       maxBookingsPerDay: 3,
@@ -236,8 +236,8 @@ async function main() {
       {
         titleAr: 'كيف تبني بيتاً مسيحياً مقدساً؟',
         titleEn: 'How to Build a Holy Christian Home?',
-        priestNameAr: 'الأنبا ميخائيل',
-        priestNameEn: 'Bishop Michael',
+        priestNameAr: 'الأنبا اثناسيوس',
+        priestNameEn: 'Bishop Athanasius',
         topicAr: 'الأسرة المسيحية',
         topicEn: 'Christian Family',
         date: new Date('2026-06-10T19:00:00Z'),
@@ -258,8 +258,8 @@ async function main() {
       {
         titleAr: 'التلمذة الروحية في حياة الشباب',
         titleEn: 'Spiritual Discipleship in Youth Life',
-        priestNameAr: 'الأنبا ميخائيل',
-        priestNameEn: 'Bishop Michael',
+        priestNameAr: 'الأنبا اثناسيوس',
+        priestNameEn: 'Bishop Athanasius',
         topicAr: 'الشباب والتلمذة',
         topicEn: 'Youth & Discipleship',
         date: new Date('2026-05-28T19:00:00Z'),

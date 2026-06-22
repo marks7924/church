@@ -1,10 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../components/ThemeContext';
 import styles from '../page.module.css';
+import { API_URL } from '../../config';
 
 interface Ministry {
+  id?: string;
   slug: string;
   nameAr: string;
   nameEn: string;
@@ -18,7 +20,7 @@ interface Ministry {
 export default function MinistriesPage() {
   const { language, t } = useTheme();
 
-  const ministries: Ministry[] = [
+  const defaultMinistries: Ministry[] = [
     {
       slug: 'youth',
       nameAr: 'اجتماع الشباب والشابات',
@@ -60,6 +62,31 @@ export default function MinistriesPage() {
       image: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?q=80&w=400'
     }
   ];
+
+  const [ministries, setMinistries] = useState<Ministry[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/settings`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.church_services) {
+          try {
+            const parsed = JSON.parse(data.church_services);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setMinistries(parsed);
+              return;
+            }
+          } catch (e) {
+            console.log(e);
+          }
+        }
+        setMinistries(defaultMinistries);
+      })
+      .catch(err => {
+        console.log(err);
+        setMinistries(defaultMinistries);
+      });
+  }, []);
 
   return (
     <div className="container" style={{ padding: '3rem 1rem' }}>

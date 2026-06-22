@@ -241,7 +241,7 @@ export default function SermonsPage() {
           >
             <option value="">{language === 'ar' ? 'جميع الآباء' : 'All Priests'}</option>
             <option value="يوحنا كمال">{language === 'ar' ? 'القمص يوحنا كمال' : 'Fr. John Kamal'}</option>
-            <option value="ميخائيل">{language === 'ar' ? 'الأنبا ميخائيل' : 'Bishop Michael'}</option>
+            <option value="اثناسيوس">{language === 'ar' ? 'الأنبا اثناسيوس' : 'Bishop Athanasius'}</option>
           </select>
         </div>
 
