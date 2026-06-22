@@ -1137,7 +1137,7 @@ export default function DashboardPage() {
               <button type="button" onClick={handleEndLiveStream} style={{ flex: 1, backgroundColor: '#ff4d4d', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
                 {language === 'ar' ? 'إنهاء البث' : 'End Live'}
               </button>
-            </div>>
+            </div>
           </form>
         </div>
       )}
