@@ -1,0 +1,178 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  MEMBER
+  SECRETARY
+  TRIP_MANAGER
+  PRIEST
+  BISHOP
+  CHURCH_ADMIN
+  SUPER_ADMIN
+}
+
+enum AppointmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SocialStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+}
+
+enum MembershipStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  passwordHash     String
+  role             Role              @default(MEMBER)
+  fullName         String
+  phone            String?
+  nationalId       String?           @unique
+  language         String            @default("ar") // "ar" or "en"
+  isVerified       Boolean           @default(false)
+  otpCode          String?
+  otpExpiry        DateTime?
+  refreshToken     String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  // Relations
+  familyProfile    FamilyHead?
+  priestProfile    PriestProfile?
+  appointments     Appointment[]     @relation("MemberAppointments")
+}
+
+model PriestProfile {
+  id                   String        @id @default(uuid())
+  userId               String        @unique
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nameAr               String
+  nameEn               String
+  titleAr              String        // e.g., "أبونا", "سيدنا"
+  titleEn              String        // e.g., "Father", "Bishop"
+  maxBookingsPerDay    Int           @default(5)
+  bufferMinutes        Int           @default(15)
+  avatarUrl            String?
+  // JSON field to store weekly availability: e.g., { "Sunday": ["09:00-10:00", "18:00-20:00"] }
+  availabilityJson     String        @default("{}")
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  appointments         Appointment[] @relation("PriestAppointments")
+}
+
+model Appointment {
+  id             String            @id @default(uuid())
+  memberId       String
+  member         User              @relation("MemberAppointments", fields: [memberId], references: [id], onDelete: Cascade)
+  priestId       String
+  priest         PriestProfile     @relation("PriestAppointments", fields: [priestId], references: [id], onDelete: Cascade)
+  date           DateTime          // The date of confession
+  timeSlot       String            // e.g. "18:00 - 18:30"
+  status         AppointmentStatus @default(PENDING)
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([priestId, date, timeSlot])
+}
+
+model FamilyHead {
+  id               String            @id @default(uuid())
+  userId           String            @unique
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName         String            // 3 parts
+  nationalId       String            @unique
+  street           String
+  buildingNumber   String
+  floor            String
+  apartment        String
+  job              String
+  phoneNumbers     String            // comma-separated list
+  email            String?
+  socialStatus     SocialStatus      @default(SINGLE)
+
+  // Wife Details (if married)
+  wifeName             String?
+  wifeNationalId       String?
+  wifeJob              String?
+  wifePhone            String?
+  wifeEmail            String?
+  wifeConfessionFather String?
+
+  // Dynamic Lists stored as JSON for flexibility:
+  // children: Array of { nationalId: String, name: String, educationOrJob: String, phone?: String }
+  childrenJson     String            @default("[]")
+  // relatives: Array of { name: String, nationalId: String, relationshipType: String }
+  relativesJson    String            @default("[]")
+  // servants: Array of Strings (Name only)
+  servantsJson     String            @default("[]")
+
+  notes            String?
+  status           MembershipStatus  @default(PENDING)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model MassSchedule {
+  id          String   @id @default(uuid())
+  dayAr       String   // e.g., "الأحد"
+  dayEn       String   // e.g., "Sunday"
+  timeAr      String   // e.g., "7:00 ص - 9:00 ص"
+  timeEn      String   // e.g., "7:00 AM - 9:00 AM"
+  eventTypeAr String   // e.g., "القداس الأول"
+  eventTypeEn String   // e.g., "First Liturgy"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Sermon {
+  id           String   @id @default(uuid())
+  titleAr      String
+  titleEn      String
+  priestNameAr String
+  priestNameEn String
+  topicAr      String
+  topicEn      String
+  date         DateTime
+  youtubeUrl   String   // Direct embed URL or youtube ID
+  thumbnailUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Event {
+  id            String   @id @default(uuid())
+  titleAr       String
+  titleEn       String
+  descriptionAr String
+  descriptionEn String
+  type          String   // e.g. "MASS", "CONFERENCE", "TRIP", "PRAYERS"
+  date          DateTime
+  locationAr    String?
+  locationEn    String?
+  price         Float?   // Optional (e.g. for trips)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model SystemConfig {
+  key   String @id
+  value String
+}

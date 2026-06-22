@@ -1,0 +1,177 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  width: 100%;
+  transition: background-color var(--transition-normal);
+}
+
+.navContainer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 70px;
+  padding: 0 2rem;
+}
+
+.logoArea {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.logoCross {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  background-color: var(--accent-gold);
+  color: #000000;
+  font-weight: bold;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  box-shadow: 0 0 10px rgba(var(--accent-gold-rgb), 0.5);
+}
+
+.logoText {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+
+.linksList {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  list-style: none;
+}
+
+.navLink {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: color var(--transition-fast);
+  cursor: pointer;
+}
+
+.navLink:hover {
+  color: var(--accent-gold);
+}
+
+.activeLink {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.controlsArea {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.controlBtn {
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.controlBtn:hover {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.liveBadge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--accent-red);
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.liveDot {
+  width: 8px;
+  height: 8px;
+  background-color: #ffffff;
+  border-radius: 50%;
+}
+
+.fontScalerContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+.sliderLabel {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.sliderInput {
+  width: 70px;
+  cursor: pointer;
+  accent-color: var(--accent-gold);
+}
+
+.mobileMenuBtn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+/* Mobile responsive breakpoints */
+@media (max-width: 1024px) {
+  .fontScalerContainer {
+    display: none; /* Hide font scale slider on small tablets/mobile to avoid layout break */
+  }
+}
+
+@media (max-width: 900px) {
+  .mobileMenuBtn {
+    display: block;
+  }
+  
+  .linksList {
+    display: none; /* Controlled by toggle in react code */
+  }
+  
+  .controlsArea {
+    gap: 8px;
+  }
+}
+
+.mobileDropdown {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 1rem 2rem;
+  list-style: none;
+  gap: 15px;
+}
+
+.mobileDropdown .navLink {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}

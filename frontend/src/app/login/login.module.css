@@ -1,0 +1,179 @@
+.pageContainer {
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.authCard {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  width: 100%;
+  max-width: 450px;
+  padding: 2.5rem;
+  box-shadow: var(--shadow-lg);
+}
+
+.authTitle {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+.authSubtitle {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.formGroup {
+  margin-bottom: 1.2rem;
+}
+
+.formGroup label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+}
+
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.authInput {
+  width: 100%;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 12px;
+  border-radius: 4px;
+  outline: none;
+  font-size: 0.95rem;
+  transition: border-color var(--transition-fast);
+}
+
+.authInput:focus {
+  border-color: var(--accent-gold);
+}
+
+.eyeIcon {
+  position: absolute;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  /* Align to far side based on document direction, but absolute positioning is fine */
+  right: 12px;
+}
+[dir="rtl"] .eyeIcon {
+  right: auto;
+  left: 12px;
+}
+
+.actionRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  margin-bottom: 1.5rem;
+  color: var(--text-secondary);
+}
+
+.forgotLink {
+  color: var(--accent-gold);
+  cursor: pointer;
+}
+.forgotLink:hover {
+  text-decoration: underline;
+}
+
+.submitBtn {
+  background-color: var(--accent-gold);
+  color: #000000;
+  border: none;
+  width: 100%;
+  padding: 12px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.submitBtn:hover {
+  background-color: #ffd84d;
+}
+
+.toggleLink {
+  text-align: center;
+  margin-top: 1.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.toggleLink span {
+  color: var(--accent-gold);
+  cursor: pointer;
+  font-weight: 600;
+}
+.toggleLink span:hover {
+  text-decoration: underline;
+}
+
+.errorBadge {
+  background-color: rgba(229, 9, 20, 0.1);
+  border: 1px solid var(--accent-red);
+  color: #ff4d4d;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.successBadge {
+  background-color: rgba(46, 204, 113, 0.1);
+  border: 1px solid var(--accent-green);
+  color: #2ecc71;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+/* OTP Cell grids */
+.otpGrid {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 1.5rem 0;
+}
+
+.otpInput {
+  width: 45px;
+  height: 45px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 4px;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  outline: none;
+}
+
+.otpInput:focus {
+  border-color: var(--accent-gold);
+}

@@ -1,0 +1,48 @@
+import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
+import * as dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
+
+import authRouter from './controllers/auth.controller';
+import bookingRouter from './controllers/booking.controller';
+import memberRouter from './controllers/member.controller';
+import sermonRouter from './controllers/sermon.controller';
+import eventRouter from './controllers/event.controller';
+import liveRouter from './controllers/live.controller';
+
+const app = express();
+const PORT = process.env.PORT || 4000;
+
+// Global Middleware
+app.use(cors({
+  origin: process.env.APP_URL || 'http://localhost:3000',
+  credentials: true
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Test connection
+app.get('/health', (req: Request, res: Response) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date(), version: '1.0.0' });
+});
+
+// Routing
+app.use('/api/auth', authRouter);
+app.use('/api/bookings', bookingRouter);
+app.use('/api/members', memberRouter);
+app.use('/api/sermons', sermonRouter);
+app.use('/api/events', eventRouter);
+app.use('/api/live', liveRouter);
+
+// Error Handling Middleware
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error('Unhandled server error:', err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
+app.listen(PORT, () => {
+  console.log(`\n🚀 Church Platform backend listening at http://localhost:${PORT}`);
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}\n`);
+});

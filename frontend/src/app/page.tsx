@@ -1,0 +1,481 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useTheme } from '../components/ThemeContext';
+import styles from './page.module.css';
+import { Play, Calendar, User, Heart, ShieldAlert, X, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { API_URL } from '../config';
+
+interface Priest {
+  id: string;
+  nameAr: string;
+  nameEn: string;
+  titleAr: string;
+  titleEn: string;
+  avatarUrl: string;
+  role: string;
+  availability: any;
+}
+
+interface Sermon {
+  id: string;
+  titleAr: string;
+  titleEn: string;
+  priestNameAr: string;
+  priestNameEn: string;
+  topicAr: string;
+  topicEn: string;
+  date: string;
+  youtubeUrl: string;
+  thumbnailUrl: string;
+}
+
+interface ChurchEvent {
+  id: string;
+  titleAr: string;
+  titleEn: string;
+  descriptionAr: string;
+  descriptionEn: string;
+  type: string;
+  date: string;
+  locationAr: string;
+  locationEn: string;
+  price: number;
+}
+
+export default function Home() {
+  const { language, t } = useTheme();
+  
+  // Data States
+  const [priests, setPriests] = useState<Priest[]>([]);
+  const [sermons, setSermons] = useState<Sermon[]>([]);
+  const [events, setEvents] = useState<ChurchEvent[]>([]);
+  const [liveStream, setLiveStream] = useState<{ isActive: boolean; youtubeLiveId: string }>({ isActive: false, youtubeLiveId: '' });
+  
+  // Booking Modal States
+  const [selectedPriest, setSelectedPriest] = useState<Priest | null>(null);
+  const [bookingDate, setBookingDate] = useState<string>('');
+  const [availableSlots, setAvailableSlots] = useState<string[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<string>('');
+  const [bookingNotes, setBookingNotes] = useState<string>('');
+  const [suggestions, setSuggestions] = useState<{ date: string; slots: string[] }[]>([]);
+  const [bookingMessage, setBookingMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    // 1. Fetch live status
+    fetch(`${API_URL}/live`)
+      .then(res => res.json())
+      .then(data => setLiveStream(data))
+      .catch(err => console.log('Error fetching live:', err));
+
+    // 2. Fetch Priests
+    fetch(`${API_URL}/bookings/priests`)
+      .then(res => res.json())
+      .then(data => setPriests(data))
+      .catch(err => console.log('Error fetching priests:', err));
+
+    // 3. Fetch Sermons
+    fetch(`${API_URL}/sermons`)
+      .then(res => res.json())
+      .then(data => setSermons(data.slice(0, 4))) // Get top 4
+      .catch(err => console.log('Error fetching sermons:', err));
+
+    // 4. Fetch Events
+    fetch(`${API_URL}/events`)
+      .then(res => res.json())
+      .then(data => setEvents(data.filter((e: any) => e.type === 'TRIP' || e.type === 'CONFERENCE').slice(0, 3)))
+      .catch(err => console.log('Error fetching events:', err));
+  }, []);
+
+  // Fetch available slots when priest or date changes
+  useEffect(() => {
+    if (selectedPriest && bookingDate) {
+      setAvailableSlots([]);
+      setSuggestions([]);
+      setBookingMessage(null);
+      
+      fetch(`${API_URL}/bookings/available-slots?priestId=${selectedPriest.id}&date=${bookingDate}`)
+        .then(res => res.json())
+        .then(data => {
+          setAvailableSlots(data.slots || []);
+          if (data.suggestions && data.suggestions.length > 0) {
+            setSuggestions(data.suggestions);
+          }
+        })
+        .catch(err => console.log('Error checking slots:', err));
+    }
+  }, [selectedPriest, bookingDate]);
+
+  const openBookingModal = (priest: Priest) => {
+    // Check if user is logged in
+    const token = localStorage.getItem('church-token');
+    if (!token) {
+      setBookingMessage({ type: 'error', text: language === 'ar' ? 'يرجى تسجيل الدخول أولاً لتتمكن من الحجز.' : 'Please login first to book an appointment.' });
+      setSelectedPriest(priest);
+      // Auto-set tomorrow's date
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      setBookingDate(tomorrow.toISOString().split('T')[0]);
+      return;
+    }
+
+    setSelectedPriest(priest);
+    setBookingMessage(null);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    setBookingDate(tomorrow.toISOString().split('T')[0]);
+  };
+
+  const closeBookingModal = () => {
+    setSelectedPriest(null);
+    setBookingDate('');
+    setAvailableSlots([]);
+    setSelectedSlot('');
+    setBookingNotes('');
+    setSuggestions([]);
+    setBookingMessage(null);
+  };
+
+  const handleBookAppointment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSlot) {
+      setBookingMessage({ type: 'error', text: language === 'ar' ? 'يرجى اختيار وقت متاح.' : 'Please select an available timeslot.' });
+      return;
+    }
+
+    const token = localStorage.getItem('church-token');
+    if (!token) {
+      setBookingMessage({ type: 'error', text: language === 'ar' ? 'جلسة منتهية، يرجى إعادة تسجيل الدخول.' : 'Session expired, please login again.' });
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/bookings/book`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          priestId: selectedPriest?.id,
+          date: bookingDate,
+          timeSlot: selectedSlot,
+          notes: bookingNotes
+        })
+      });
+
+      const result = await res.json();
+      if (res.ok) {
+        setBookingMessage({
+          type: 'success',
+          text: language === 'ar' ? 'تم تقديم طلب الحجز بنجاح! سيتم إخطارك بالرد.' : 'Booking request submitted successfully! You will be notified of updates.'
+        });
+        // Clear slots
+        setAvailableSlots(prev => prev.filter(s => s !== selectedSlot));
+        setSelectedSlot('');
+      } else {
+        setBookingMessage({
+          type: 'error',
+          text: result.error || (language === 'ar' ? 'حدث خطأ أثناء تقديم طلب الحجز.' : 'An error occurred during booking.')
+        });
+      }
+    } catch (err) {
+      setBookingMessage({ type: 'error', text: language === 'ar' ? 'تعذر الاتصال بالخادم.' : 'Could not connect to server.' });
+    }
+  };
+
+  // Mock list of historic photos
+  const historicPhotos = [
+    'https://images.unsplash.com/photo-1548625361-155deee223cb?q=80&w=400',
+    'https://images.unsplash.com/photo-1438032005730-c779502df39b?q=80&w=400',
+    'https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=400',
+  ];
+
+  return (
+    <div style={{ paddingBottom: '4rem' }}>
+      {/* Hero Banner */}
+      <header className={styles.hero}>
+        <div className={styles.heroContent}>
+          <h1 className={styles.heroTitle}>{t('hero_title')}</h1>
+          <p className={styles.heroSubtitle}>{t('hero_subtitle')}</p>
+        </div>
+      </header>
+
+      {/* Quick Navigation Cards */}
+      <section className={styles.quickNavSection}>
+        <div className={styles.quickNavGrid}>
+          <Link href="/schedule" className={styles.quickNavCard}>
+            <Calendar size={24} />
+            <span>{t('nav_schedule')}</span>
+          </Link>
+          <a href="#live-section" className={styles.quickNavCard}>
+            <Play size={24} />
+            <span>{t('nav_live')}</span>
+          </a>
+          <Link href="/register-member" className={styles.quickNavCard}>
+            <User size={24} />
+            <span>{t('nav_membership')}</span>
+          </Link>
+          <a href="#priest-section" className={styles.quickNavCard}>
+            <Heart size={24} />
+            <span>{t('quick_nav')}</span>
+          </a>
+        </div>
+      </section>
+
+      <div className="container">
+        {/* Live Stream Section (Only displays when active) */}
+        {liveStream.isActive && (
+          <section id="live-section" className={styles.liveContainer}>
+            <div className={styles.liveHeader}>
+              <h2 style={{ color: 'var(--accent-red)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="pulse-live" style={{ width: '10px', height: '10px', backgroundColor: 'var(--accent-red)', borderRadius: '50%' }}></span>
+                {t('live_now')}
+              </h2>
+            </div>
+            <div className={styles.videoWrapper}>
+              <iframe
+                src={`https://www.youtube.com/embed/${liveStream.youtubeLiveId}?autoplay=1&mute=1`}
+                title="Church Live Stream"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              ></iframe>
+            </div>
+          </section>
+        )}
+
+        {/* Priest Grid (Each has Book Confession button) */}
+        <section id="priest-section" className={styles.rowSection}>
+          <h2 className={styles.rowTitle}>{language === 'ar' ? 'الآباء الكهنة والأجلاء' : 'Reverend Fathers & Bishops'}</h2>
+          <div className={styles.netflixGrid}>
+            {priests.map(p => (
+              <div key={p.id} className={styles.priestCard}>
+                <div 
+                  className={styles.priestAvatar} 
+                  style={{ backgroundImage: `url(${p.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200'})` }}
+                ></div>
+                <h3 className={styles.priestTitle}>
+                  {language === 'ar' ? `${p.titleAr} ${p.nameAr}` : `${p.titleEn} ${p.nameEn}`}
+                </h3>
+                <span className={styles.priestRole}>
+                  {p.role === 'BISHOP' ? (language === 'ar' ? 'شريك الخدمة الرسولية' : 'Bishop') : (language === 'ar' ? 'كاهن الكنيسة' : 'Priest')}
+                </span>
+                <p className={styles.priestDays}>
+                  <b>{language === 'ar' ? 'أيام التواجد:' : 'Available Days:'}</b><br />
+                  {Object.keys(p.availability).join(', ')}
+                </p>
+                <button className={styles.bookBtn} onClick={() => openBookingModal(p)}>
+                  {p.role === 'BISHOP' ? t('meet_bishop') : t('book_confession')}
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Latest Sermons (Netflix Grid) */}
+        <section className={styles.rowSection}>
+          <h2 className={styles.rowTitle}>{t('nav_sermons')}</h2>
+          <div className={styles.netflixGrid}>
+            {sermons.map(s => (
+              <div key={s.id} className={styles.sermonCard} onClick={() => window.open(s.youtubeUrl, '_blank')}>
+                <div 
+                  className={styles.sermonThumbnail} 
+                  style={{ backgroundImage: `url(${s.thumbnailUrl || 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg'})` }}
+                ></div>
+                <div className={styles.sermonInfo}>
+                  <h3 className={styles.sermonTitle}>{language === 'ar' ? s.titleAr : s.titleEn}</h3>
+                  <div className={styles.sermonMeta}>
+                    <span>{language === 'ar' ? s.priestNameAr : s.priestNameEn}</span>
+                    <span>{s.topicAr}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Upcoming events / Activities */}
+        <section className={styles.rowSection}>
+          <h2 className={styles.rowTitle}>{language === 'ar' ? 'الرحلات والمؤتمرات الكنسية' : 'Trips & Church Conferences'}</h2>
+          <div className={styles.netflixGrid}>
+            {events.map(e => (
+              <div key={e.id} className={styles.priestCard} style={{ textAlign: 'start', alignItems: 'stretch' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ 
+                    fontSize: '0.75rem', 
+                    padding: '4px 8px', 
+                    backgroundColor: 'rgba(226, 183, 20, 0.1)', 
+                    color: 'var(--accent-gold)', 
+                    borderRadius: '4px',
+                    fontWeight: 'bold' 
+                  }}>
+                    {e.type}
+                  </span>
+                  {e.price > 0 && (
+                    <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--accent-gold)' }}>
+                      {e.price} {language === 'ar' ? 'ج.م' : 'EGP'}
+                    </span>
+                  )}
+                </div>
+                <h3 style={{ fontSize: '1.2rem', marginBottom: '10px' }}>
+                  {language === 'ar' ? e.titleAr : e.titleEn}
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '15px', lineHeight: '1.4' }}>
+                  {language === 'ar' ? e.descriptionAr : e.descriptionEn}
+                </p>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'auto' }}>
+                  📅 {new Date(e.date).toLocaleDateString()} <br />
+                  📍 {language === 'ar' ? e.locationAr : e.locationEn}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Historic Photos Gallery */}
+        <section className={styles.rowSection}>
+          <h2 className={styles.rowTitle}>{t('photos')}</h2>
+          <div className={styles.netflixGrid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+            {historicPhotos.map((url, i) => (
+              <div 
+                key={i} 
+                className={styles.sermonCard} 
+                style={{ height: '180px', backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center', cursor: 'default' }}
+              ></div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      {/* Booking Modal */}
+      {selectedPriest && (
+        <div className={styles.modalOverlay}>
+          <div className={styles.modalContent}>
+            <button className={styles.closeBtn} onClick={closeBookingModal}>
+              <X size={20} />
+            </button>
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', fontSize: '1.3rem' }}>
+              {t('booking_title')}
+            </h3>
+            
+            <div style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+              <b>{language === 'ar' ? 'حجز مع:' : 'Booking with:'}</b>{' '}
+              {language === 'ar' ? `${selectedPriest.titleAr} ${selectedPriest.nameAr}` : `${selectedPriest.titleEn} ${selectedPriest.nameEn}`}
+            </div>
+
+            {bookingMessage && (
+              <div style={{ 
+                padding: '10px', 
+                borderRadius: '4px', 
+                marginBottom: '1rem', 
+                fontSize: '0.85rem',
+                backgroundColor: bookingMessage.type === 'success' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(229, 9, 20, 0.1)',
+                border: `1px solid ${bookingMessage.type === 'success' ? 'var(--accent-green)' : 'var(--accent-red)'}`,
+                color: bookingMessage.type === 'success' ? '#2ecc71' : '#ff4d4d',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <ShieldAlert size={16} />
+                <span>{bookingMessage.text}</span>
+              </div>
+            )}
+
+            {/* Check if user logged in - only render form if we have token */}
+            {typeof window !== 'undefined' && localStorage.getItem('church-token') ? (
+              <form onSubmit={handleBookAppointment}>
+                {/* Select Date */}
+                <div className={styles.formGroup}>
+                  <label>{t('select_date')}</label>
+                  <input
+                    type="date"
+                    className={styles.formInput}
+                    value={bookingDate}
+                    onChange={(e) => setBookingDate(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* Available Slots */}
+                <div className={styles.formGroup}>
+                  <label>{t('select_slot')}</label>
+                  {availableSlots.length > 0 ? (
+                    <div className={styles.slotsGrid}>
+                      {availableSlots.map(slot => (
+                        <div
+                          key={slot}
+                          className={`${styles.slotItem} ${selectedSlot === slot ? styles.selectedSlot : ''}`}
+                          onClick={() => setSelectedSlot(slot)}
+                        >
+                          {slot}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      {bookingDate ? t('no_slots') : (language === 'ar' ? 'يرجى اختيار تاريخ أولاً' : 'Please select a date first')}
+                    </p>
+                  )}
+                </div>
+
+                {/* Suggestions logic */}
+                {suggestions.length > 0 && (
+                  <div className={styles.suggestionBox}>
+                    <div className={styles.suggestionTitle}>{t('suggest_slots')}</div>
+                    <div className={styles.suggestionList}>
+                      {suggestions.map(sugg => (
+                        <div key={sugg.date} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <span>{sugg.date}</span>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            {sugg.slots.slice(0, 2).map(slot => (
+                              <button
+                                type="button"
+                                key={slot}
+                                onClick={() => {
+                                  setBookingDate(sugg.date);
+                                  setSelectedSlot(slot);
+                                }}
+                                style={{ fontSize: '0.75rem', padding: '2px 6px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', cursor: 'pointer', borderRadius: '2px' }}
+                              >
+                                {slot}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes */}
+                <div className={styles.formGroup} style={{ marginTop: '1rem' }}>
+                  <label>{t('booking_notes')}</label>
+                  <textarea
+                    className={styles.formInput}
+                    style={{ height: '70px', resize: 'none' }}
+                    value={bookingNotes}
+                    onChange={(e) => setBookingNotes(e.target.value)}
+                  />
+                </div>
+
+                <button type="submit" className={styles.bookBtn} disabled={!selectedSlot} style={{ opacity: !selectedSlot ? 0.6 : 1 }}>
+                  {t('confirm_booking')}
+                </button>
+              </form>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
+                  {language === 'ar' ? 'لتسجيل مواعيد سر الاعتراف والإرشاد، يجب إنشاء حساب شخصي أو تسجيل دخولك.' : 'To book confession or counseling sessions, you must create a personal account or login.'}
+                </p>
+                <Link href="/login" onClick={closeBookingModal} className={styles.bookBtn} style={{ display: 'inline-block', width: 'auto', padding: '10px 30px' }}>
+                  {t('login')}
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: church-platform-db
+    environment:
+      POSTGRES_DB: church_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ch222ch222
+    ports:
+      - "5000:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  pgdata:
