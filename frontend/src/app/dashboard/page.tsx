@@ -340,6 +340,47 @@ export default function DashboardPage() {
     setAlertBody('');
   };
 
+  const handleEndLiveStream = async () => {
+    setIsLiveActive(false);
+    setYoutubeLiveId('');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/live`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ isActive: false, youtubeLiveId: '' })
+      });
+
+      if (res.ok) {
+        setLiveMsg(language === 'ar' ? 'تم إنهاء البث المباشر وحذف الرابط!' : 'Live stream ended and link cleared!');
+      } else {
+        setLiveMsg('Failed to end live stream.');
+      }
+    } catch (err) {
+      setLiveMsg('Connection error.');
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<string>>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) { // 2MB limit
+        alert(language === 'ar' ? 'حجم الصورة يجب أن لا يتجاوز 2 ميجابايت' : 'Image size must not exceed 2MB');
+        e.target.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setter(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // Save Priest handler
   const handleSavePriest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1089,9 +1130,14 @@ export default function DashboardPage() {
               </span>
             </div>
 
-            <button type="submit" className={styles.bookBtn}>
-              {t('save')}
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button type="submit" className={styles.bookBtn} style={{ flex: 1 }}>
+                {t('save')}
+              </button>
+              <button type="button" onClick={handleEndLiveStream} style={{ flex: 1, backgroundColor: '#ff4d4d', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
+                {language === 'ar' ? 'إنهاء البث' : 'End Live'}
+              </button>
+            </div>>
           </form>
         </div>
       )}
@@ -1260,8 +1306,9 @@ export default function DashboardPage() {
                   </select>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Avatar Image URL</label>
-                  <input type="text" value={priestAvatarUrl} onChange={e => setPriestAvatarUrl(e.target.value)} className={styles.formInput} />
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'صورة الكاهن (اختياري)' : 'Avatar Image (Optional)'}</label>
+                  <input type="file" accept="image/*" onChange={e => handleFileChange(e, setPriestAvatarUrl)} className={styles.formInput} style={{ padding: '6px' }} />
+                  {priestAvatarUrl && <img src={priestAvatarUrl} alt="Avatar Preview" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '50%', marginTop: '4px' }} />}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Max Bookings/Day *</label>
@@ -1344,23 +1391,27 @@ export default function DashboardPage() {
 
           <form onSubmit={handleSaveImages} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رابط صورة الخلفية الرئيسية (Hero Background)' : 'Hero Header Background Image URL'}</label>
-              <input type="text" value={imgHeroBg} onChange={e => setImgHeroBg(e.target.value)} className={styles.formInput} placeholder="https://images.unsplash.com..." />
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'صورة الخلفية الرئيسية (Hero Background)' : 'Hero Header Background Image'}</label>
+              <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHeroBg)} className={styles.formInput} style={{ padding: '8px' }} />
+              {imgHeroBg && <img src={imgHeroBg} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رابط الصورة التاريخية الأولى' : 'Historic Gallery Image 1 URL'}</label>
-              <input type="text" value={imgHistoric1} onChange={e => setImgHistoric1(e.target.value)} className={styles.formInput} placeholder="https://images.unsplash.com..." />
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الصورة التاريخية الأولى' : 'Historic Gallery Image 1'}</label>
+              <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric1)} className={styles.formInput} style={{ padding: '8px' }} />
+              {imgHistoric1 && <img src={imgHistoric1} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رابط الصورة التاريخية الثانية' : 'Historic Gallery Image 2 URL'}</label>
-              <input type="text" value={imgHistoric2} onChange={e => setImgHistoric2(e.target.value)} className={styles.formInput} placeholder="https://images.unsplash.com..." />
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الصورة التاريخية الثانية' : 'Historic Gallery Image 2'}</label>
+              <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric2)} className={styles.formInput} style={{ padding: '8px' }} />
+              {imgHistoric2 && <img src={imgHistoric2} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رابط الصورة التاريخية الثالثة' : 'Historic Gallery Image 3 URL'}</label>
-              <input type="text" value={imgHistoric3} onChange={e => setImgHistoric3(e.target.value)} className={styles.formInput} placeholder="https://images.unsplash.com..." />
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الصورة التاريخية الثالثة' : 'Historic Gallery Image 3'}</label>
+              <input type="file" accept="image/*" onChange={e => handleFileChange(e, setImgHistoric3)} className={styles.formInput} style={{ padding: '8px' }} />
+              {imgHistoric3 && <img src={imgHistoric3} alt="Preview" style={{ height: '60px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
             </div>
 
             <button type="submit" className={styles.bookBtn} style={{ marginTop: '10px' }}>
