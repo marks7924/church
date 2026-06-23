@@ -4,6 +4,7 @@ import { requireAuth, requireRoles } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types';
 import { sendEmail, sendSMS, sendPushNotification } from '../services/notification.service';
 import { Role, AppointmentStatus, MembershipStatus } from '@prisma/client';
+import { logAction } from '../utils/logger';
 
 const router = Router();
 
@@ -195,15 +196,19 @@ router.post('/book', requireAuth, async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // 4. Verify slot is still free and priest hasn't reached daily capacity
-    const { slots, isFull } = await getAvailableSlots(priestId, dateStr);
+    const isBishop = priest.user.role === Role.BISHOP;
 
-    if (isFull) {
-      return res.status(400).json({ error: 'This priest has reached the maximum appointment limit for this day.' });
-    }
+    if (!isBishop) {
+      // 4. Verify slot is still free and priest hasn't reached daily capacity
+      const { slots, isFull } = await getAvailableSlots(priestId, dateStr);
 
-    if (!slots.includes(timeSlot)) {
-      return res.status(400).json({ error: 'The selected timeslot is already booked or not offered by the priest.' });
+      if (isFull) {
+        return res.status(400).json({ error: 'This priest has reached the maximum appointment limit for this day.' });
+      }
+
+      if (!slots.includes(timeSlot)) {
+        return res.status(400).json({ error: 'The selected timeslot is already booked or not offered by the priest.' });
+      }
     }
 
     // 5. Create appointment
@@ -220,6 +225,15 @@ router.post('/book', requireAuth, async (req: AuthRequest, res: Response) => {
         member: true
       }
     });
+
+    // Log action
+    await logAction(
+      userId,
+      req.user!.email,
+      req.user!.fullName,
+      'CREATE_BOOKING',
+      `Requested booking with ${priest.nameAr} (${priest.user.role}) on ${dateStr} at ${timeSlot}`
+    );
 
     // 6. Trigger notifications (Mocked/Brevo email + SMS)
     const memberName = appointment.member.fullName;
@@ -388,6 +402,15 @@ router.patch('/:id/status', requireAuth, requireRoles([Role.PRIEST, Role.BISHOP,
     const priestName = appointment.priest.nameAr;
     const dateStr = appointment.date.toISOString().split('T')[0];
     const timeSlot = appointment.timeSlot;
+
+    // Log action
+    await logAction(
+      req.user!.userId,
+      req.user!.email,
+      req.user!.fullName,
+      'UPDATE_BOOKING_STATUS',
+      `Updated booking status of ${memberName} with ${priestName} on ${dateStr} at ${timeSlot} to ${status}`
+    );
 
     const emailBody = status === AppointmentStatus.APPROVED 
       ? `<p>Dear <b>${memberName}</b>,</p>

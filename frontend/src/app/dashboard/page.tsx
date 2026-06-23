@@ -143,6 +143,31 @@ export default function DashboardPage() {
   const [newsMsg, setNewsMsg] = useState<string | null>(null);
   const [editingNewsId, setEditingNewsId] = useState<string | null>(null);
 
+  // Role accounts and action log states
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [actionLogs, setActionLogs] = useState<any[]>([]);
+  const [adminUserRole, setAdminUserRole] = useState('PRIEST');
+  const [adminUserEmail, setAdminUserEmail] = useState('');
+  const [adminUserPassword, setAdminUserPassword] = useState('');
+  const [adminUserFullName, setAdminUserFullName] = useState('');
+  const [adminUserPhone, setAdminUserPhone] = useState('');
+  const [adminUserNationalId, setAdminUserNationalId] = useState('');
+  const [adminUserMsg, setAdminUserMsg] = useState<string | null>(null);
+
+  // Trips & Conferences management states
+  const [tripsList, setTripsList] = useState<any[]>([]);
+  const [editingTripId, setEditingTripId] = useState<string | null>(null);
+  const [tripTitleAr, setTripTitleAr] = useState('');
+  const [tripTitleEn, setTripTitleEn] = useState('');
+  const [tripDescAr, setTripDescAr] = useState('');
+  const [tripDescEn, setTripDescEn] = useState('');
+  const [tripLocationAr, setTripLocationAr] = useState('');
+  const [tripLocationEn, setTripLocationEn] = useState('');
+  const [tripDate, setTripDate] = useState('');
+  const [tripPrice, setTripPrice] = useState('0');
+  const [tripType, setTripType] = useState('TRIP');
+  const [tripMsg, setTripMsg] = useState<string | null>(null);
+
   // Load Auth data
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -158,8 +183,7 @@ export default function DashboardPage() {
       const parsedUser = JSON.parse(userStr);
       setUser(parsedUser);
 
-      // Set default tab based on roles
-      if (['SUPER_ADMIN', 'CHURCH_ADMIN', 'SECRETARY'].includes(parsedUser.role)) {
+      if (['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(parsedUser.role)) {
         setActiveTab('members');
       } else if (parsedUser.role === 'TRIP_MANAGER') {
         setActiveTab('trips');
@@ -260,6 +284,45 @@ export default function DashboardPage() {
         })
         .then(data => {
           if (Array.isArray(data)) setAllPriests(data);
+        })
+        .catch(err => console.log(err));
+    }
+
+    if (activeTab === 'manage-roles') {
+      fetch(`${API_URL}/admin-users/list`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => {
+          if (res.status === 401) throw new Error('Unauthorized');
+          return res.json();
+        })
+        .then(data => {
+          if (Array.isArray(data)) setAdminUsers(data);
+        })
+        .catch(err => console.log(err));
+    }
+
+    if (activeTab === 'action-logs') {
+      fetch(`${API_URL}/admin-users/action-logs`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => {
+          if (res.status === 401) throw new Error('Unauthorized');
+          return res.json();
+        })
+        .then(data => {
+          if (Array.isArray(data)) setActionLogs(data);
+        })
+        .catch(err => console.log(err));
+    }
+
+    if (activeTab === 'trips') {
+      fetch(`${API_URL}/events`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setTripsList(data.filter((e: any) => e.type === 'TRIP' || e.type === 'CONFERENCE'));
+          }
         })
         .catch(err => console.log(err));
     }
@@ -681,6 +744,151 @@ export default function DashboardPage() {
     setChurchServices(prev => prev.filter(s => s.id !== id));
   };
 
+  const handleCreateAdminUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminUserMsg(null);
+
+    if (!adminUserEmail || !adminUserPassword || !adminUserFullName || !adminUserRole) {
+      setAdminUserMsg(language === 'ar' ? 'يرجى ملء جميع الحقول المطلوبة.' : 'Please fill in all required fields.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/admin-users/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          email: adminUserEmail,
+          password: adminUserPassword,
+          fullName: adminUserFullName,
+          role: adminUserRole,
+          phone: adminUserPhone || undefined,
+          nationalId: adminUserNationalId || undefined,
+          nameAr: priestNameAr || undefined,
+          nameEn: priestNameEn || undefined,
+          titleAr: priestTitleAr || undefined,
+          titleEn: priestTitleEn || undefined,
+          avatarUrl: priestAvatarUrl || undefined
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setAdminUserMsg(language === 'ar' ? 'تم إنشاء الحساب بنجاح!' : 'Account created successfully!');
+        setAdminUserEmail('');
+        setAdminUserPassword('');
+        setAdminUserFullName('');
+        setAdminUserPhone('');
+        setAdminUserNationalId('');
+        setPriestNameAr('');
+        setPriestNameEn('');
+        setPriestAvatarUrl('');
+        // Refresh list
+        fetch(`${API_URL}/admin-users/list`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (Array.isArray(data)) setAdminUsers(data);
+          });
+      } else {
+        setAdminUserMsg(data.error || 'Failed to create account.');
+      }
+    } catch (err) {
+      setAdminUserMsg('Error connecting to server.');
+    }
+  };
+
+  const handleSaveTrip = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTripMsg(null);
+
+    if (!tripTitleAr || !tripTitleEn || !tripDate) {
+      setTripMsg(language === 'ar' ? 'يرجى ملء جميع الحقول الإلزامية.' : 'Please fill in all required fields.');
+      return;
+    }
+
+    const method = editingTripId ? 'PATCH' : 'POST';
+    const url = editingTripId ? `${API_URL}/events/${editingTripId}` : `${API_URL}/events`;
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          titleAr: tripTitleAr,
+          titleEn: tripTitleEn,
+          descriptionAr: tripDescAr,
+          descriptionEn: tripDescEn,
+          locationAr: tripLocationAr,
+          locationEn: tripLocationEn,
+          date: tripDate,
+          price: tripPrice ? parseFloat(tripPrice) : 0,
+          type: tripType
+        })
+      });
+
+      const result = await res.json();
+      if (res.ok) {
+        setTripMsg(editingTripId 
+          ? (language === 'ar' ? 'تم تعديل الفعالية بنجاح!' : 'Event updated successfully!')
+          : (language === 'ar' ? 'تمت إضافة الفعالية بنجاح!' : 'Event created successfully!')
+        );
+        setEditingTripId(null);
+        setTripTitleAr('');
+        setTripTitleEn('');
+        setTripDescAr('');
+        setTripDescEn('');
+        setTripLocationAr('');
+        setTripLocationEn('');
+        setTripDate('');
+        setTripPrice('0');
+        setTripType('TRIP');
+
+        // Refresh list
+        fetch(`${API_URL}/events`)
+          .then(res => res.json())
+          .then(data => {
+            if (Array.isArray(data)) {
+              setTripsList(data.filter((e: any) => e.type === 'TRIP' || e.type === 'CONFERENCE'));
+            }
+          });
+      } else {
+        setTripMsg(result.error || 'Failed to save event.');
+      }
+    } catch (err) {
+      setTripMsg('Connection error.');
+    }
+  };
+
+  const handleDeleteTrip = async (id: string) => {
+    if (!window.confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذه الرحلة/المؤتمر؟' : 'Are you sure you want to delete this trip/conference?')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/events/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        setTripsList(prev => prev.filter(e => e.id !== id));
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to delete event.');
+      }
+    } catch (err) {
+      alert('Connection error.');
+    }
+  };
+
   const handleSaveNews = async (e: React.FormEvent) => {
     e.preventDefault();
     setNewsMsg(null);
@@ -855,7 +1063,7 @@ export default function DashboardPage() {
         )}
 
         {/* SECRETARY / ADMIN tab options */}
-        {['SUPER_ADMIN', 'CHURCH_ADMIN', 'SECRETARY'].includes(user?.role) && (
+        {['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(user?.role) && (
           <>
             <button 
               onClick={() => setActiveTab('members')}
@@ -905,7 +1113,7 @@ export default function DashboardPage() {
               <Bell size={16} style={{ verticalAlign: 'middle', marginInlineEnd: '6px' }} />
               {language === 'ar' ? 'إرسال إشعار جماعي' : 'Broadcast Push Alerts'}
             </button>
-            {user?.role === 'SUPER_ADMIN' && (
+            {['SUPER_ADMIN', 'DEVELOPER'].includes(user?.role) && (
               <>
                 <button 
                   onClick={() => setActiveTab('manage-priests')}
@@ -921,6 +1129,36 @@ export default function DashboardPage() {
                   }}
                 >
                   {language === 'ar' ? 'إدارة الكهنة' : 'Manage Priests'}
+                </button>
+                <button 
+                  onClick={() => setActiveTab('manage-roles')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    background: activeTab === 'manage-roles' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+                    color: activeTab === 'manage-roles' ? '#000000' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  {language === 'ar' ? 'إدارة الرتب والمستخدمين' : 'Manage Role Accounts'}
+                </button>
+                <button 
+                  onClick={() => setActiveTab('action-logs')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    background: activeTab === 'action-logs' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+                    color: activeTab === 'action-logs' ? '#000000' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  {language === 'ar' ? 'سجل العمليات' : 'Action Logs'}
                 </button>
                 <button 
                   onClick={() => setActiveTab('manage-site-info')}
@@ -969,12 +1207,7 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           
           {/* Membership Status Summary */}
-          <div style={{
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '8px',
-            padding: '2rem'
-          }}>
+          <div className="dashboard-panel">
             <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1rem' }}>
               🎖️ {language === 'ar' ? 'حالة ملف العضوية الكنسية للأسرة' : 'Family Membership status'}
             </h3>
@@ -1005,12 +1238,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Member's booked confession list */}
-          <div style={{
-            backgroundColor: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '8px',
-            padding: '2rem'
-          }}>
+          <div className="dashboard-panel">
             <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
               📅 {language === 'ar' ? 'مواعيد سر الاعتراف المحجوزة' : 'My Confession Sessions'}
             </h3>
@@ -1069,7 +1297,7 @@ export default function DashboardPage() {
 
       {/* Tab: Priest Confession Bookings Review */}
       {activeTab === 'confessions' && (
-        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+        <div className="dashboard-panel">
           <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
             📋 {t('booking_requests')}
           </h3>
@@ -1144,7 +1372,7 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
           
           {/* Pending Applications Box */}
-          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+          <div className="dashboard-panel">
             <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
               📥 {language === 'ar' ? 'طلبات العضوية الكنسية الجديدة المعلقة' : 'Pending Membership Registries'}
             </h3>
@@ -1240,7 +1468,7 @@ export default function DashboardPage() {
                         }}
                       />
                       
-                      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                         <button
                           onClick={() => handleUpdateMemberStatus(m.id, 'APPROVED')}
                           style={{ backgroundColor: 'var(--accent-green)', color: '#ffffff', border: 'none', padding: '8px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}
@@ -1267,13 +1495,13 @@ export default function DashboardPage() {
           </div>
 
           {/* All Registered Families list */}
-          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+          <div className="dashboard-panel">
             <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
               🗂️ {language === 'ar' ? 'جميع العائلات المسجلة بقاعدة البيانات' : 'All Registered Families Database'}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {allMembers.map(m => (
-                <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid var(--border-color)', alignItems: 'center' }}>
+                <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid var(--border-color)', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                   <div>
                     <b>{m.fullName}</b> • <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>🪪 {m.nationalId} • 📞 {m.phoneNumbers.split(',')[0]}</span>
                   </div>
@@ -1297,7 +1525,7 @@ export default function DashboardPage() {
 
       {/* Tab: Admin Live Stream Management */}
       {activeTab === 'live' && (
-        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
+        <div className="dashboard-panel" style={{ maxWidth: '600px', margin: '0 auto' }}>
           <h3 style={{ 
             color: 'var(--accent-gold)', 
             marginBottom: '1.5rem',
@@ -1370,7 +1598,7 @@ export default function DashboardPage() {
 
       {/* Tab: Send Push Notifications */}
       {activeTab === 'push-alerts' && (
-        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
+        <div className="dashboard-panel" style={{ maxWidth: '600px', margin: '0 auto' }}>
           <h3 style={{ 
             color: 'var(--accent-gold)', 
             marginBottom: '1.5rem',
@@ -1446,29 +1674,355 @@ export default function DashboardPage() {
 
       {/* Tab: Trip Manager View */}
       {activeTab === 'trips' && (
-        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
-          <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
-            ✈️ {language === 'ar' ? 'إدارة رحلات الكنيسة والأنشطة الترفيهية' : 'Manage Trips & Leisure Activities'}
-          </h3>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '1.5rem' }}>
-            ℹ️ {language === 'ar' ? 'بصفتك مسؤول رحلات، يمكنك إضافة أو حذف الفعاليات من نوع "TRIP" فقط.' : 'As a Trip Manager, you can create or delete events of type "TRIP" only.'}
-          </p>
-          
-          <div style={{ textAlign: 'center', padding: '2rem', border: '1px dashed var(--border-color)', borderRadius: '6px' }}>
-            <p style={{ color: 'var(--text-secondary)' }}>
-              {language === 'ar' ? 'لوحة تنظيم الرحلات جاهزة، تتوفر إمكانية الحذف المباشر من خلال صفحة المواعيد.' : 'Trips scheduling integrations are active. Manage directly from listings.'}
-            </p>
-            <button onClick={() => router.push('/')} className={styles.bookBtn} style={{ maxWidth: '200px', marginTop: '1.5rem', display: 'inline-block' }}>
-              {language === 'ar' ? 'الذهاب لصفحة الرحلات' : 'Go to Trips Listing'}
-            </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+          {/* Create/Edit Trip/Conference Form */}
+          <div className="dashboard-panel">
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+              ✈️ {editingTripId 
+                ? (language === 'ar' ? 'تعديل الرحلة/المؤتمر' : 'Edit Trip/Conference') 
+                : (language === 'ar' ? 'إضافة رحلة أو مؤتمر جديد' : 'Add New Trip/Conference')}
+            </h3>
+
+            {tripMsg && (
+              <div style={{ padding: '10px', backgroundColor: 'rgba(226, 183, 20, 0.05)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '4px', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
+                {tripMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveTrip} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              <div className="grid-2-col">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'العنوان (عربي) *' : 'Title (Arabic) *'}</label>
+                  <input type="text" required value={tripTitleAr} onChange={e => setTripTitleAr(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'العنوان (إنجليزي) *' : 'Title (English) *'}</label>
+                  <input type="text" required value={tripTitleEn} onChange={e => setTripTitleEn(e.target.value)} className={styles.formInput} />
+                </div>
+              </div>
+
+              <div className="grid-2-col">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الوصف (عربي)' : 'Description (Arabic)'}</label>
+                  <textarea value={tripDescAr} onChange={e => setTripDescAr(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الوصف (إنجليزي)' : 'Description (English)'}</label>
+                  <textarea value={tripDescEn} onChange={e => setTripDescEn(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
+                </div>
+              </div>
+
+              <div className="grid-2-col">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الموقع (عربي)' : 'Location (Arabic)'}</label>
+                  <input type="text" value={tripLocationAr} onChange={e => setTripLocationAr(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الموقع (إنجليزي)' : 'Location (English)'}</label>
+                  <input type="text" value={tripLocationEn} onChange={e => setTripLocationEn(e.target.value)} className={styles.formInput} />
+                </div>
+              </div>
+
+              <div className="grid-2-col" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'التاريخ *' : 'Date *'}</label>
+                  <input type="date" required value={tripDate} onChange={e => setTripDate(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'السعر (ج.م)' : 'Price (EGP)'}</label>
+                  <input type="number" step="any" value={tripPrice} onChange={e => setTripPrice(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'النوع *' : 'Type *'}</label>
+                  <select value={tripType} onChange={e => setTripType(e.target.value)} className={styles.formInput}>
+                    <option value="TRIP">{language === 'ar' ? 'رحلة' : 'Trip'}</option>
+                    <option value="CONFERENCE">{language === 'ar' ? 'مؤتمر كنسي' : 'Conference'}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button type="submit" className={styles.bookBtn} style={{ width: '180px' }}>
+                  {editingTripId ? (language === 'ar' ? 'حفظ التعديلات' : 'Save Changes') : (language === 'ar' ? 'إضافة الفعالية' : 'Add Event')}
+                </button>
+                {editingTripId && (
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setEditingTripId(null);
+                      setTripTitleAr('');
+                      setTripTitleEn('');
+                      setTripDescAr('');
+                      setTripDescEn('');
+                      setTripLocationAr('');
+                      setTripLocationEn('');
+                      setTripDate('');
+                      setTripPrice('0');
+                      setTripType('TRIP');
+                    }}
+                    style={{ padding: '10px 20px', backgroundColor: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer' }}
+                  >
+                    {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                  </button>
+                )}
+              </div>
+            </form>
           </div>
+
+          {/* Trips List Panel */}
+          <div className="dashboard-panel">
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+              📋 {language === 'ar' ? 'قائمة الرحلات والمؤتمرات الحالية' : 'Current Trips & Conferences'}
+            </h3>
+
+            {tripsList.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {tripsList.map(t => (
+                  <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: '1.2rem', borderRadius: '6px', flexWrap: 'wrap', gap: '1rem' }}>
+                    <div style={{ flex: 1, minWidth: '250px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '0.75rem', padding: '2px 6px', backgroundColor: 'rgba(226,183,20,0.1)', color: 'var(--accent-gold)', borderRadius: '4px', fontWeight: 'bold' }}>
+                          {t.type === 'TRIP' ? (language === 'ar' ? 'رحلة' : 'Trip') : (language === 'ar' ? 'مؤتمر' : 'Conference')}
+                        </span>
+                        <span style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>
+                          {language === 'ar' ? t.titleAr : t.titleEn}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                        {language === 'ar' ? t.descriptionAr : t.descriptionEn}
+                      </p>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        📅 {new Date(t.date).toLocaleDateString()} • 📍 {language === 'ar' ? t.locationAr : t.locationEn} • 💰 {t.price} {language === 'ar' ? 'ج.م' : 'EGP'}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        onClick={() => {
+                          setEditingTripId(t.id);
+                          setTripTitleAr(t.titleAr);
+                          setTripTitleEn(t.titleEn);
+                          setTripDescAr(t.descriptionAr || '');
+                          setTripDescEn(t.descriptionEn || '');
+                          setTripLocationAr(t.locationAr || '');
+                          setTripLocationEn(t.locationEn || '');
+                          setTripDate(t.date.split('T')[0]);
+                          setTripPrice(String(t.price));
+                          setTripType(t.type);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        style={{ backgroundColor: 'var(--accent-gold)', color: '#000000', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
+                      >
+                        {language === 'ar' ? 'تعديل' : 'Edit'}
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteTrip(t.id)}
+                        style={{ backgroundColor: '#ff4d4d', color: '#ffffff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
+                      >
+                        {language === 'ar' ? 'حذف' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+                {language === 'ar' ? 'لا توجد رحلات أو مؤتمرات مضافة حالياً.' : 'No trips or conferences added yet.'}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Manage Role Accounts */}
+      {activeTab === 'manage-roles' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+          {/* Create User Form */}
+          <div className="dashboard-panel">
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+              👤 {language === 'ar' ? 'إنشاء حساب جديد وتعيين رتبة' : 'Create Role Account'}
+            </h3>
+
+            {adminUserMsg && (
+              <div style={{ padding: '10px', backgroundColor: 'rgba(226, 183, 20, 0.05)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '4px', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
+                {adminUserMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateAdminUser} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              <div className="grid-2-col">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم بالكامل *' : 'Full Name *'}</label>
+                  <input type="text" required value={adminUserFullName} onChange={e => setAdminUserFullName(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'البريد الإلكتروني (الرتبة) *' : 'Email Address *'}</label>
+                  <input type="text" required value={adminUserEmail} onChange={e => setAdminUserEmail(e.target.value)} className={styles.formInput} placeholder="name@church.org" />
+                </div>
+              </div>
+
+              <div className="grid-2-col">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'كلمة المرور *' : 'Password *'}</label>
+                  <input type="password" required value={adminUserPassword} onChange={e => setAdminUserPassword(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرتبة / الدور *' : 'Role *'}</label>
+                  <select value={adminUserRole} onChange={e => setAdminUserRole(e.target.value)} className={styles.formInput}>
+                    <option value="PRIEST">{language === 'ar' ? 'كاهن' : 'Priest'}</option>
+                    <option value="BISHOP">{language === 'ar' ? 'أسقف (سيدنا)' : 'Bishop'}</option>
+                    <option value="CHURCH_ADMIN">{language === 'ar' ? 'أدمن' : 'Admin'}</option>
+                    <option value="TRIP_MANAGER">{language === 'ar' ? 'مسؤول رحلات' : 'Trip Manager'}</option>
+                    <option value="SECRETARY">{language === 'ar' ? 'سكرتير' : 'Secretary'}</option>
+                    <option value="SUPER_ADMIN">{language === 'ar' ? 'أدمن عام' : 'Super Admin'}</option>
+                    <option value="DEVELOPER">{language === 'ar' ? 'مطور النظام (Developer)' : 'Developer'}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid-2-col">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رقم الهاتف' : 'Phone'}</label>
+                  <input type="text" value={adminUserPhone} onChange={e => setAdminUserPhone(e.target.value)} className={styles.formInput} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرقم القومي (اختياري)' : 'National ID (Optional)'}</label>
+                  <input type="text" maxLength={14} value={adminUserNationalId} onChange={e => setAdminUserNationalId(e.target.value)} className={styles.formInput} />
+                </div>
+              </div>
+
+              {/* If Priest or Bishop, render profile details */}
+              {['PRIEST', 'BISHOP'].includes(adminUserRole) && (
+                <div style={{ border: '1px solid var(--border-color)', padding: '1.2rem', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem', backgroundColor: 'var(--bg-card)' }}>
+                  <h4 style={{ color: 'var(--accent-gold)', fontSize: '0.9rem' }}>ℹ️ {language === 'ar' ? 'تفاصيل ملف الكاهن / الأسقف المساعد' : 'Priest / Bishop Profile Details'}</h4>
+                  <div className="grid-2-col">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم بالطقوس (عربي) *' : 'Ecclesiastical Name (Arabic) *'}</label>
+                      <input type="text" value={priestNameAr} onChange={e => setPriestNameAr(e.target.value)} className={styles.formInput} placeholder="مثال: القمص يوحنا كمال" />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم بالطقوس (إنجليزي) *' : 'Ecclesiastical Name (English) *'}</label>
+                      <input type="text" value={priestNameEn} onChange={e => setPriestNameEn(e.target.value)} className={styles.formInput} placeholder="Fr. John Kamal" />
+                    </div>
+                  </div>
+                  <div className="grid-2-col">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'اللقب (عربي)' : 'Title (Arabic)'}</label>
+                      <input type="text" value={priestTitleAr} onChange={e => setPriestTitleAr(e.target.value)} className={styles.formInput} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'اللقب (إنجليزي)' : 'Title (English)'}</label>
+                      <input type="text" value={priestTitleEn} onChange={e => setPriestTitleEn(e.target.value)} className={styles.formInput} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رابط الصورة الرمزية (اختياري)' : 'Avatar URL (Optional)'}</label>
+                    <input type="text" value={priestAvatarUrl} onChange={e => setPriestAvatarUrl(e.target.value)} className={styles.formInput} />
+                  </div>
+                </div>
+              )}
+
+              <button type="submit" className={styles.bookBtn} style={{ marginTop: '0.8rem', width: '200px' }}>
+                {language === 'ar' ? 'إنشاء الحساب' : 'Create Account'}
+              </button>
+            </form>
+          </div>
+
+          {/* List of current admin roles */}
+          <div className="dashboard-panel">
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+              👥 {language === 'ar' ? 'سجل أصحاب الرتب والمسؤولين' : 'Administrative Roles Directory'}
+            </h3>
+
+            {adminUsers.length > 0 ? (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'start' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--accent-gold)' }}>
+                      <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الاسم بالكامل' : 'Full Name'}</th>
+                      <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'البريد الإلكتروني' : 'Email'}</th>
+                      <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الرتبة' : 'Role'}</th>
+                      <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الهاتف' : 'Phone'}</th>
+                      <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الرقم القومي' : 'National ID'}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminUsers.map(u => (
+                      <tr key={u.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '10px' }}>{u.fullName}</td>
+                        <td style={{ padding: '10px' }}>{u.email}</td>
+                        <td style={{ padding: '10px', fontWeight: 'bold', color: 'var(--accent-gold)' }}>{u.role}</td>
+                        <td style={{ padding: '10px' }}>{u.phone || 'N/A'}</td>
+                        <td style={{ padding: '10px' }}>{u.nationalId || 'N/A'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+                {language === 'ar' ? 'لا يوجد أصحاب رتب مسجلين.' : 'No admin roles registered.'}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Action Logs */}
+      {activeTab === 'action-logs' && (
+        <div className="dashboard-panel">
+          <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
+            📋 {language === 'ar' ? 'سجل العمليات والعمليات الإدارية' : 'System Operations Action Log'}
+          </h3>
+
+          {actionLogs.length > 0 ? (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'start' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--accent-gold)' }}>
+                    <th style={{ padding: '8px', textAlign: 'inherit', width: '160px' }}>{language === 'ar' ? 'التوقيت' : 'Time'}</th>
+                    <th style={{ padding: '8px', textAlign: 'inherit', width: '180px' }}>{language === 'ar' ? 'المسؤول' : 'User'}</th>
+                    <th style={{ padding: '8px', textAlign: 'inherit', width: '160px' }}>{language === 'ar' ? 'العملية' : 'Action'}</th>
+                    <th style={{ padding: '8px', textAlign: 'inherit' }}>{language === 'ar' ? 'التفاصيل' : 'Details'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {actionLogs.map(l => (
+                    <tr key={l.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '8px', color: 'var(--text-secondary)' }}>{new Date(l.createdAt).toLocaleString()}</td>
+                      <td style={{ padding: '8px' }}>
+                        <b>{l.userName}</b> <br />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{l.userEmail}</span>
+                      </td>
+                      <td style={{ padding: '8px', fontWeight: 'bold' }}>
+                        <span style={{ 
+                          fontSize: '0.75rem', 
+                          padding: '2px 6px', 
+                          backgroundColor: l.action.startsWith('AUTO_') ? 'rgba(52, 152, 219, 0.1)' : 'rgba(226, 183, 20, 0.1)', 
+                          color: l.action.startsWith('AUTO_') ? 'var(--accent-blue)' : 'var(--accent-gold)', 
+                          borderRadius: '4px' 
+                        }}>
+                          {l.action}
+                        </span>
+                      </td>
+                      <td style={{ padding: '8px', color: 'var(--text-primary)' }}>{l.details}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+              {language === 'ar' ? 'سجل العمليات فارغ حالياً.' : 'No operations logged yet.'}
+            </p>
+          )}
         </div>
       )}
 
       {/* Tab: Super Admin Priest Management */}
       {activeTab === 'manage-priests' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+          <div className="dashboard-panel">
             <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
               👤 {editingPriest ? (language === 'ar' ? 'تعديل بيانات كاهن' : 'Edit Priest') : (language === 'ar' ? 'إضافة كاهن جديد' : 'Add New Priest')}
             </h3>
@@ -1618,7 +2172,7 @@ export default function DashboardPage() {
           <form onSubmit={handleSaveSiteInfo} style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
             
             {/* PANEL 1: HERO & GALLERY IMAGES */}
-            <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+            <div className="dashboard-panel">
               <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
                 🖼️ {language === 'ar' ? 'إدارة صور الموقع وخلفيات العرض المتغيرة' : 'Manage Global Site Images & Hero Backgrounds'}
               </h3>
@@ -1678,13 +2232,13 @@ export default function DashboardPage() {
             </div>
 
             {/* PANEL 2: ABOUT THE CHURCH CONTENT */}
-            <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+            <div className="dashboard-panel">
               <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
                 ⛪ {language === 'ar' ? 'إدارة نصوص صفحة عن الكنيسة' : 'Manage "About the Church" Texts'}
               </h3>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                <div className="grid-2-col">
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'تاريخ الكنيسة (عربي)' : 'Church History (Arabic)'}</label>
                     <textarea value={aboutHistoryAr} onChange={e => setAboutHistoryAr(e.target.value)} className={styles.formInput} style={{ height: '100px', resize: 'vertical' }} />
@@ -1695,7 +2249,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                <div className="grid-2-col">
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رؤيتنا الروحية (عربي)' : 'Our Vision (Arabic)'}</label>
                     <textarea value={aboutVisionAr} onChange={e => setAboutVisionAr(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
@@ -1706,7 +2260,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                <div className="grid-2-col">
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رسالتنا الرعوية (عربي)' : 'Our Mission (Arabic)'}</label>
                     <textarea value={aboutMissionAr} onChange={e => setAboutMissionAr(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
@@ -1720,7 +2274,7 @@ export default function DashboardPage() {
             </div>
 
             {/* PANEL 3: CHURCH SERVICES (MINISTRIES) */}
-            <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+            <div className="dashboard-panel">
               <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
                 🤝 {language === 'ar' ? 'إدارة الخدمات الكنسية والاجتماعات' : 'Manage Church Services & Ministries'}
               </h3>
@@ -1758,7 +2312,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
+                <div className="grid-2-col" style={{ marginBottom: '1.2rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Description/Goal (Arabic)</label>
                     <textarea value={serviceGoalAr} onChange={e => setServiceGoalAr(e.target.value)} className={styles.formInput} style={{ height: '60px', resize: 'vertical' }} />
@@ -1807,7 +2361,7 @@ export default function DashboardPage() {
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {churchServices.map(s => (
-                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', border: '1px solid var(--border-color)', alignItems: 'center', backgroundColor: 'var(--bg-card)', borderRadius: '6px' }}>
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px', border: '1px solid var(--border-color)', alignItems: 'center', backgroundColor: 'var(--bg-card)', borderRadius: '6px', flexWrap: 'wrap', gap: '10px' }}>
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                       {s.image && <img src={s.image} alt="Service" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }} />}
                       <div>
@@ -1852,7 +2406,7 @@ export default function DashboardPage() {
       {/* Tab: Manage News */}
       {activeTab === 'manage-news' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+          <div className="dashboard-panel">
             <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
               📰 {editingNewsId 
                 ? (language === 'ar' ? 'تعديل الخبر المحدد' : 'Edit Selected News') 
@@ -1915,7 +2469,7 @@ export default function DashboardPage() {
             </form>
           </div>
 
-          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+          <div className="dashboard-panel">
             <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
               📰 {language === 'ar' ? 'أخبار الكنيسة الحالية' : 'Current Church News'}
             </h3>

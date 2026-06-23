@@ -4,6 +4,7 @@ import { requireAuth, requireRoles } from '../middleware/auth.middleware';
 import { Role } from '@prisma/client';
 import { sendPushNotification } from '../services/notification.service';
 import { AuthRequest } from '../types';
+import { logAction } from '../utils/logger';
 
 const router = Router();
 
@@ -25,7 +26,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// 2. Add New Event (Trip Manager can ONLY create TRIP type)
+// 2. Add New Event (Trip Manager can manage TRIP and CONFERENCE types)
 router.post('/', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {
   const { titleAr, titleEn, descriptionAr, descriptionEn, type, date, locationAr, locationEn, price } = req.body;
 
@@ -33,9 +34,9 @@ router.post('/', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETARY, R
     return res.status(400).json({ error: 'Required fields: titleAr, titleEn, type, date.' });
   }
 
-  // RBAC validation: Trip Manager can only handle TRIP type
-  if (req.user!.role === Role.TRIP_MANAGER && type !== 'TRIP') {
-    return res.status(403).json({ error: 'Trip managers can only create and manage events of type "TRIP".' });
+  // RBAC validation: Trip Manager can only handle TRIP and CONFERENCE types
+  if (req.user!.role === Role.TRIP_MANAGER && type !== 'TRIP' && type !== 'CONFERENCE') {
+    return res.status(403).json({ error: 'Trip managers can only create and manage events of type "TRIP" or "CONFERENCE".' });
   }
 
   try {
@@ -53,6 +54,15 @@ router.post('/', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETARY, R
       }
     });
 
+    // Log action
+    await logAction(
+      req.user!.userId,
+      req.user!.email,
+      req.user!.fullName,
+      'CREATE_EVENT',
+      `Created event "${event.titleAr}" (${event.type})`
+    );
+
     // Notify
     await sendPushNotification(
       'حدث جديد مضاف / New Event Added',
@@ -67,7 +77,58 @@ router.post('/', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETARY, R
   }
 });
 
-// 3. Delete Event (Trip Manager can ONLY delete TRIP type)
+// 3. Edit Event (Trip Manager can manage TRIP and CONFERENCE types)
+router.patch('/:id', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {
+  const eventId = req.params.id;
+  const { titleAr, titleEn, descriptionAr, descriptionEn, type, date, locationAr, locationEn, price } = req.body;
+  const user = req.user!;
+
+  try {
+    const event = await prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found.' });
+    }
+
+    if (user.role === Role.TRIP_MANAGER && event.type !== 'TRIP' && event.type !== 'CONFERENCE') {
+      return res.status(403).json({ error: 'Trip managers can only update events of type "TRIP" or "CONFERENCE".' });
+    }
+
+    if (user.role === Role.TRIP_MANAGER && type !== undefined && type !== 'TRIP' && type !== 'CONFERENCE') {
+      return res.status(403).json({ error: 'Trip managers can only set type to "TRIP" or "CONFERENCE".' });
+    }
+
+    const updated = await prisma.event.update({
+      where: { id: eventId },
+      data: {
+        titleAr: titleAr !== undefined ? titleAr : undefined,
+        titleEn: titleEn !== undefined ? titleEn : undefined,
+        descriptionAr: descriptionAr !== undefined ? descriptionAr : undefined,
+        descriptionEn: descriptionEn !== undefined ? descriptionEn : undefined,
+        type: type !== undefined ? type : undefined,
+        date: date !== undefined ? new Date(date) : undefined,
+        locationAr: locationAr !== undefined ? locationAr : undefined,
+        locationEn: locationEn !== undefined ? locationEn : undefined,
+        price: price !== undefined ? parseFloat(price) : undefined
+      }
+    });
+
+    // Log action
+    await logAction(
+      user.userId,
+      user.email,
+      user.fullName,
+      'UPDATE_EVENT',
+      `Updated event "${updated.titleAr}" (${updated.type})`
+    );
+
+    return res.status(200).json({ message: 'Event updated successfully.', event: updated });
+  } catch (error) {
+    console.error('Error updating event:', error);
+    return res.status(500).json({ error: 'Server error updating event.' });
+  }
+});
+
+// 4. Delete Event (Trip Manager can ONLY delete TRIP and CONFERENCE types)
 router.delete('/:id', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {
   const eventId = req.params.id;
 
@@ -77,11 +138,21 @@ router.delete('/:id', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETA
       return res.status(404).json({ error: 'Event not found.' });
     }
 
-    if (req.user!.role === Role.TRIP_MANAGER && event.type !== 'TRIP') {
-      return res.status(403).json({ error: 'Trip managers can only delete events of type "TRIP".' });
+    if (req.user!.role === Role.TRIP_MANAGER && event.type !== 'TRIP' && event.type !== 'CONFERENCE') {
+      return res.status(403).json({ error: 'Trip managers can only delete events of type "TRIP" or "CONFERENCE".' });
     }
 
     await prisma.event.delete({ where: { id: eventId } });
+
+    // Log action
+    await logAction(
+      req.user!.userId,
+      req.user!.email,
+      req.user!.fullName,
+      'DELETE_EVENT',
+      `Deleted event "${event.titleAr}" (${event.type})`
+    );
+
     return res.status(200).json({ message: 'Event deleted successfully.' });
   } catch (error) {
     return res.status(500).json({ error: 'Server error deleting event.' });
@@ -92,12 +163,12 @@ router.delete('/:id', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETA
 // MASS SCHEDULE SECTION (RECURRING MASSES)
 // ==========================================
 
-// 4. Get Mass Schedule
+// 5. Get Mass Schedule
 router.get('/schedule', async (req: Request, res: Response) => {
   try {
     const schedules = await prisma.massSchedule.findMany({
       orderBy: [
-        { dayEn: 'asc' }, // Order weekday or custom order if needed.
+        { dayEn: 'asc' }, 
         { timeEn: 'asc' }
       ]
     });
@@ -107,8 +178,8 @@ router.get('/schedule', async (req: Request, res: Response) => {
   }
 });
 
-// 5. Add Mass Schedule (Admins & Secretaries only)
-router.post('/schedule', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: Request, res: Response) => {
+// 6. Add Mass Schedule (Admins & Secretaries only)
+router.post('/schedule', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {
   const { dayAr, dayEn, timeAr, timeEn, eventTypeAr, eventTypeEn } = req.body;
 
   if (!dayAr || !dayEn || !timeAr || !timeEn || !eventTypeAr || !eventTypeEn) {
@@ -127,6 +198,15 @@ router.post('/schedule', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_
       }
     });
 
+    // Log action
+    await logAction(
+      req.user!.userId,
+      req.user!.email,
+      req.user!.fullName,
+      'CREATE_MASS_SCHEDULE',
+      `Created mass schedule: "${schedule.eventTypeAr}" on ${schedule.dayAr}`
+    );
+
     // Notify updates
     await sendPushNotification(
       'تحديث في مواعيد القداسات / Mass Schedule Updated',
@@ -141,12 +221,24 @@ router.post('/schedule', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_
   }
 });
 
-// 6. Delete Mass Schedule (Admins & Secretaries only)
-router.delete('/schedule/:id', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: Request, res: Response) => {
+// 7. Delete Mass Schedule (Admins & Secretaries only)
+router.delete('/schedule/:id', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {
   const scheduleId = req.params.id;
 
   try {
-    await prisma.massSchedule.delete({ where: { id: scheduleId } });
+    const schedule = await prisma.massSchedule.findUnique({ where: { id: scheduleId } });
+    if (schedule) {
+      await prisma.massSchedule.delete({ where: { id: scheduleId } });
+
+      // Log action
+      await logAction(
+        req.user!.userId,
+        req.user!.email,
+        req.user!.fullName,
+        'DELETE_MASS_SCHEDULE',
+        `Deleted mass schedule: "${schedule.eventTypeAr}" on ${schedule.dayAr}`
+      );
+    }
     return res.status(200).json({ message: 'Mass schedule deleted.' });
   } catch (error) {
     return res.status(500).json({ error: 'Server error deleting schedule.' });

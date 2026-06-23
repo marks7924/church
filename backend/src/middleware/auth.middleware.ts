@@ -28,7 +28,11 @@ export function requireRoles(roles: Role[]) {
       return res.status(401).json({ error: 'Authentication required.' });
     }
 
-    if (!roles.includes(req.user.role)) {
+    const userRole = req.user.role;
+    const isAllowed = roles.includes(userRole) || 
+                      (roles.includes(Role.SUPER_ADMIN) && userRole === Role.DEVELOPER);
+
+    if (!isAllowed) {
       return res.status(403).json({ error: 'Access forbidden. Insufficient permissions.' });
     }
 

@@ -173,3 +173,33 @@ a {
   box-shadow: 0 4px 12px rgba(var(--accent-gold-rgb), 0.3);
 }
 
+/* Responsive Grid Utility for Admin Panel Forms */
+.grid-2-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .grid-2-col {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+}
+
+/* Responsive Dashboard Panel Container */
+.dashboard-panel {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 2rem;
+}
+
+@media (max-width: 768px) {
+  .dashboard-panel {
+    padding: 1.2rem;
+  }
+}
+
+
+

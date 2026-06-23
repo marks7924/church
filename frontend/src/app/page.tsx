@@ -51,7 +51,7 @@ export default function Home() {
   const [priests, setPriests] = useState<Priest[]>([]);
   const [sermons, setSermons] = useState<Sermon[]>([]);
   const [events, setEvents] = useState<ChurchEvent[]>([]);
-  const [liveStream, setLiveStream] = useState<{ isActive: boolean; youtubeLiveId: string }>({ isActive: false, youtubeLiveId: '' });
+  const [liveStream, setLiveStream] = useState<{ isActive: boolean; youtubeLiveId: string; title?: string }>({ isActive: false, youtubeLiveId: '' });
   
   // Dynamic Image States
   const [imgHeroBg, setImgHeroBg] = useState<string>('');
@@ -84,6 +84,10 @@ export default function Home() {
   const [bookingNotes, setBookingNotes] = useState<string>('');
   const [suggestions, setSuggestions] = useState<{ date: string; slots: string[] }[]>([]);
   const [bookingMessage, setBookingMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Bishop custom request states
+  const [bishopPhone, setBishopPhone] = useState<string>('');
+  const [bishopEmail, setBishopEmail] = useState<string>('');
 
   useEffect(() => {
     // 1. Fetch live status
@@ -200,6 +204,20 @@ export default function Home() {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     setBookingDate(tomorrow.toISOString().split('T')[0]);
+
+    // Pre-populate details if booking with Bishop
+    if (priest.role === 'BISHOP') {
+      const userStr = localStorage.getItem('church-user');
+      if (userStr) {
+        try {
+          const userObj = JSON.parse(userStr);
+          setBishopPhone(userObj.phone || '');
+          setBishopEmail(userObj.email || '');
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
   };
 
   const closeBookingModal = () => {
@@ -210,11 +228,15 @@ export default function Home() {
     setBookingNotes('');
     setSuggestions([]);
     setBookingMessage(null);
+    setBishopPhone('');
+    setBishopEmail('');
   };
 
   const handleBookAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedSlot) {
+    const isBishop = selectedPriest?.role === 'BISHOP';
+
+    if (!isBishop && !selectedSlot) {
       setBookingMessage({ type: 'error', text: language === 'ar' ? 'يرجى اختيار وقت متاح.' : 'Please select an available timeslot.' });
       return;
     }
@@ -223,6 +245,14 @@ export default function Home() {
     if (!token) {
       setBookingMessage({ type: 'error', text: language === 'ar' ? 'جلسة منتهية، يرجى إعادة تسجيل الدخول.' : 'Session expired, please login again.' });
       return;
+    }
+
+    // Format notes for Bishop to include direct contact info
+    let finalNotes = bookingNotes;
+    let finalSlot = selectedSlot;
+    if (isBishop) {
+      finalNotes = `Phone: ${bishopPhone}\nEmail: ${bishopEmail}\nNotes: ${bookingNotes}`;
+      finalSlot = `REQUEST_${Date.now()}`;
     }
 
     try {
@@ -235,8 +265,8 @@ export default function Home() {
         body: JSON.stringify({
           priestId: selectedPriest?.id,
           date: bookingDate,
-          timeSlot: selectedSlot,
-          notes: bookingNotes
+          timeSlot: finalSlot,
+          notes: finalNotes
         })
       });
 
@@ -244,19 +274,19 @@ export default function Home() {
       if (res.ok) {
         setBookingMessage({
           type: 'success',
-          text: language === 'ar' ? 'تم تقديم طلب الحجز بنجاح! سيتم إخطارك بالرد.' : 'Booking request submitted successfully! You will be notified of updates.'
+          text: isBishop 
+            ? (language === 'ar' ? 'تم تقديم طلب اللقاء بنجاح! سيتم التواصل معك قريباً.' : 'Meeting request submitted successfully! We will contact you soon.')
+            : (language === 'ar' ? 'تم تقديم طلب الحجز بنجاح! سيتم إخطارك بالرد.' : 'Booking request submitted successfully! You will be notified of updates.')
         });
-        // Clear slots
-        setAvailableSlots(prev => prev.filter(s => s !== selectedSlot));
-        setSelectedSlot('');
+        if (!isBishop) {
+          // Clear slots
+          setAvailableSlots(prev => prev.filter(s => s !== selectedSlot));
+        }
       } else {
-        setBookingMessage({
-          type: 'error',
-          text: result.error || (language === 'ar' ? 'حدث خطأ أثناء تقديم طلب الحجز.' : 'An error occurred during booking.')
-        });
+        setBookingMessage({ type: 'error', text: result.error || 'Failed to submit booking.' });
       }
     } catch (err) {
-      setBookingMessage({ type: 'error', text: language === 'ar' ? 'تعذر الاتصال بالخادم.' : 'Could not connect to server.' });
+      setBookingMessage({ type: 'error', text: 'Error connecting to server.' });
     }
   };
 
@@ -317,9 +347,14 @@ export default function Home() {
         {liveStream.isActive && (
           <section id="live-section" className={styles.liveContainer}>
             <div className={styles.liveHeader}>
-              <h2 style={{ color: 'var(--accent-red)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 style={{ color: 'var(--accent-red)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span className="pulse-live" style={{ width: '10px', height: '10px', backgroundColor: 'var(--accent-red)', borderRadius: '50%' }}></span>
-                {t('live_now')}
+                <span>{t('live_now')}</span>
+                {liveStream.title && (
+                  <span style={{ color: 'var(--text-primary)', fontSize: '1.2rem', fontWeight: 'normal', marginInlineStart: '10px', borderInlineStart: '2px solid var(--border-color)', paddingInlineStart: '10px' }}>
+                    {liveStream.title}
+                  </span>
+                )}
               </h2>
             </div>
             <div className={styles.videoWrapper}>
@@ -515,82 +550,133 @@ export default function Home() {
             {/* Check if user logged in - only render form if we have token */}
             {typeof window !== 'undefined' && localStorage.getItem('church-token') ? (
               <form onSubmit={handleBookAppointment}>
-                {/* Select Date */}
-                <div className={styles.formGroup}>
-                  <label>{t('select_date')}</label>
-                  <input
-                    type="date"
-                    className={styles.formInput}
-                    value={bookingDate}
-                    onChange={(e) => setBookingDate(e.target.value)}
-                    required
-                  />
-                </div>
-
-                {/* Available Slots */}
-                <div className={styles.formGroup}>
-                  <label>{t('select_slot')}</label>
-                  {availableSlots.length > 0 ? (
-                    <div className={styles.slotsGrid}>
-                      {availableSlots.map(slot => (
-                        <div
-                          key={slot}
-                          className={`${styles.slotItem} ${selectedSlot === slot ? styles.selectedSlot : ''}`}
-                          onClick={() => setSelectedSlot(slot)}
-                        >
-                          {slot}
-                        </div>
-                      ))}
+                {selectedPriest.role === 'BISHOP' ? (
+                  <>
+                    {/* Bishop Request Form Info */}
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.2rem', lineHeight: '1.5', padding: '10px', backgroundColor: 'rgba(226, 183, 20, 0.05)', borderRadius: '4px', border: '1px solid rgba(226, 183, 20, 0.2)' }}>
+                      ℹ️ {language === 'ar' 
+                        ? 'نظراً لعدم وجود مواعيد محددة مسبقاً، يرجى تقديم طلبك وإدخال بيانات التواصل المفضلة، وسيقوم مكتب سيدنا بالتواصل معك لتنسيق الميعاد.' 
+                        : 'Since there are no preset slots, please submit your request along with your contact details, and the Bishop\'s office will contact you to coordinate.'}
                     </div>
-                  ) : (
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                      {bookingDate ? t('no_slots') : (language === 'ar' ? 'يرجى اختيار تاريخ أولاً' : 'Please select a date first')}
-                    </p>
-                  )}
-                </div>
 
-                {/* Suggestions logic */}
-                {suggestions.length > 0 && (
-                  <div className={styles.suggestionBox}>
-                    <div className={styles.suggestionTitle}>{t('suggest_slots')}</div>
-                    <div className={styles.suggestionList}>
-                      {suggestions.map(sugg => (
-                        <div key={sugg.date} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                          <span>{sugg.date}</span>
-                          <div style={{ display: 'flex', gap: '4px' }}>
-                            {sugg.slots.slice(0, 2).map(slot => (
-                              <button
-                                type="button"
-                                key={slot}
-                                onClick={() => {
-                                  setBookingDate(sugg.date);
-                                  setSelectedSlot(slot);
-                                }}
-                                style={{ fontSize: '0.75rem', padding: '2px 6px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', cursor: 'pointer', borderRadius: '2px' }}
-                              >
-                                {slot}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+                    {/* Select Preferred Date */}
+                    <div className={styles.formGroup}>
+                      <label>{language === 'ar' ? 'التاريخ المفضل للقاء' : 'Preferred Meeting Date'}</label>
+                      <input
+                        type="date"
+                        className={styles.formInput}
+                        value={bookingDate}
+                        onChange={(e) => setBookingDate(e.target.value)}
+                        required
+                      />
                     </div>
-                  </div>
+
+                    {/* Phone Number input */}
+                    <div className={styles.formGroup}>
+                      <label>{language === 'ar' ? 'رقم الهاتف للتواصل *' : 'Contact Phone Number *'}</label>
+                      <input
+                        type="tel"
+                        className={styles.formInput}
+                        value={bishopPhone}
+                        onChange={(e) => setBishopPhone(e.target.value)}
+                        required
+                        placeholder="e.g. 01xxxxxxxxx"
+                      />
+                    </div>
+
+                    {/* Email input */}
+                    <div className={styles.formGroup}>
+                      <label>{language === 'ar' ? 'البريد الإلكتروني *' : 'Contact Email *'}</label>
+                      <input
+                        type="email"
+                        className={styles.formInput}
+                        value={bishopEmail}
+                        onChange={(e) => setBishopEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Select Date */}
+                    <div className={styles.formGroup}>
+                      <label>{t('select_date')}</label>
+                      <input
+                        type="date"
+                        className={styles.formInput}
+                        value={bookingDate}
+                        onChange={(e) => setBookingDate(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    {/* Available Slots */}
+                    <div className={styles.formGroup}>
+                      <label>{t('select_slot')}</label>
+                      {availableSlots.length > 0 ? (
+                        <div className={styles.slotsGrid}>
+                          {availableSlots.map(slot => (
+                            <div
+                              key={slot}
+                              className={`${styles.slotItem} ${selectedSlot === slot ? styles.selectedSlot : ''}`}
+                              onClick={() => setSelectedSlot(slot)}
+                            >
+                              {slot}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          {bookingDate ? t('no_slots') : (language === 'ar' ? 'يرجى اختيار تاريخ أولاً' : 'Please select a date first')}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Suggestions logic */}
+                    {suggestions.length > 0 && (
+                      <div className={styles.suggestionBox}>
+                        <div className={styles.suggestionTitle}>{t('suggest_slots')}</div>
+                        <div className={styles.suggestionList}>
+                          {suggestions.map(sugg => (
+                            <div key={sugg.date} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                              <span>{sugg.date}</span>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                {sugg.slots.slice(0, 2).map(slot => (
+                                  <button
+                                    type="button"
+                                    key={slot}
+                                    onClick={() => {
+                                      setBookingDate(sugg.date);
+                                      setSelectedSlot(slot);
+                                    }}
+                                    style={{ fontSize: '0.75rem', padding: '2px 6px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', cursor: 'pointer', borderRadius: '2px' }}
+                                  >
+                                    {slot}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {/* Notes */}
-                <div className={styles.formGroup} style={{ marginTop: '1rem' }}>
-                  <label>{t('booking_notes')}</label>
+                {/* Notes (Shared field) */}
+                <div className={styles.formGroup}>
+                  <label>{selectedPriest.role === 'BISHOP' ? (language === 'ar' ? 'سبب اللقاء / تفاصيل إضافية' : 'Reason for Meeting / Additional Details') : t('booking_notes')}</label>
                   <textarea
                     className={styles.formInput}
-                    style={{ height: '70px', resize: 'none' }}
                     value={bookingNotes}
                     onChange={(e) => setBookingNotes(e.target.value)}
+                    style={{ height: '80px', resize: 'vertical' }}
+                    placeholder={selectedPriest.role === 'BISHOP' ? (language === 'ar' ? 'اكتب باختصار سبب طلب اللقاء...' : 'Briefly describe the purpose of the meeting...') : ''}
                   />
                 </div>
 
-                <button type="submit" className={styles.bookBtn} disabled={!selectedSlot} style={{ opacity: !selectedSlot ? 0.6 : 1 }}>
-                  {t('confirm_booking')}
+                <button type="submit" className={styles.bookBtn} style={{ marginTop: '1rem', width: '100%' }}>
+                  {selectedPriest.role === 'BISHOP' ? (language === 'ar' ? 'تقديم طلب اللقاء' : 'Submit Meeting Request') : t('confirm_booking')}
                 </button>
               </form>
             ) : (

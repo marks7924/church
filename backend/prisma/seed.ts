@@ -17,19 +17,31 @@ async function main() {
   await prisma.user.deleteMany({});
 
   const passwordHash = bcrypt.hashSync('Password123', 10);
-  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadmin@church.org';
-  const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || 'Password123';
-  const superAdminPasswordHash = bcrypt.hashSync(superAdminPassword, 10);
+  const developerEmail = 'marksamer010@gmail.com';
+  const developerPassword = process.env.SUPER_ADMIN_PASSWORD || 'ch140ch140';
+  const developerPasswordHash = bcrypt.hashSync(developerPassword, 10);
 
   // 1. Create Users
-  const superAdmin = await prisma.user.create({
+  const developerAdmin = await prisma.user.create({
     data: {
-      email: superAdminEmail,
-      passwordHash: superAdminPasswordHash,
-      role: Role.SUPER_ADMIN,
-      fullName: 'Super Admin',
+      email: developerEmail,
+      passwordHash: developerPasswordHash,
+      role: Role.DEVELOPER,
+      fullName: 'Developer Admin',
       phone: '+201000000001',
       nationalId: '10000000000001',
+      isVerified: true,
+    },
+  });
+
+  const superAdmin = await prisma.user.create({
+    data: {
+      email: 'superadmin@church.org',
+      passwordHash: bcrypt.hashSync('Password123', 10),
+      role: Role.SUPER_ADMIN,
+      fullName: 'Super Admin',
+      phone: '+201000000007',
+      nationalId: '10000000000007',
       isVerified: true,
     },
   });
