@@ -360,7 +360,7 @@ export default function SermonsPage() {
                 <input type="text" required value={titleEn} onChange={e => setTitleEn(e.target.value)} className={styles.formInput} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
                 <div className={styles.formGroup}>
                   <label>اسم الكاهن (عربي) *</label>
                   <input type="text" required value={priestNameAr} onChange={e => setPriestNameAr(e.target.value)} className={styles.formInput} />
@@ -371,7 +371,7 @@ export default function SermonsPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
                 <div className={styles.formGroup}>
                   <label>التصنيف/الموضوع (عربي) *</label>
                   <input type="text" required value={topicAr} onChange={e => setTopicAr(e.target.value)} className={styles.formInput} />

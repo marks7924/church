@@ -331,6 +331,12 @@
   padding: 4px 0;
 }
 
+@media (max-width: 480px) {
+  .slotsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .slotItem {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);

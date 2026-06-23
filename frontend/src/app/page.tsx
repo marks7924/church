@@ -6,6 +6,7 @@ import styles from './page.module.css';
 import { Play, Calendar, User, Heart, ShieldAlert, X, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { API_URL } from '../config';
+import { formatTimeSlot } from '../utils/format';
 
 interface Priest {
   id: string;
@@ -621,7 +622,7 @@ export default function Home() {
                               className={`${styles.slotItem} ${selectedSlot === slot ? styles.selectedSlot : ''}`}
                               onClick={() => setSelectedSlot(slot)}
                             >
-                              {slot}
+                              {formatTimeSlot(slot, language)}
                             </div>
                           ))}
                         </div>
@@ -651,7 +652,7 @@ export default function Home() {
                                     }}
                                     style={{ fontSize: '0.75rem', padding: '2px 6px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', cursor: 'pointer', borderRadius: '2px' }}
                                   >
-                                    {slot}
+                                    {formatTimeSlot(slot, language)}
                                   </button>
                                 ))}
                               </div>

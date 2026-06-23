@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTheme } from '../../components/ThemeContext';
 import styles from '../page.module.css';
 import { API_URL } from '../../config';
+import { formatTimeSlot, formatDateTime } from '../../utils/format';
 import { 
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
   Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText 
@@ -1397,7 +1398,7 @@ export default function DashboardPage() {
                           : `${b.priest?.titleEn} ${b.priest?.nameEn}`}
                       </div>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                        📅 {new Date(b.date).toLocaleDateString()} • 🕒 {b.timeSlot}
+                        📅 {new Date(b.date).toLocaleDateString()} • 🕒 {formatTimeSlot(b.timeSlot, language)}
                       </div>
                       {b.notes && (
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '6px', fontStyle: 'italic' }}>
@@ -1453,7 +1454,7 @@ export default function DashboardPage() {
                     {/* Security check: Priest emails never visible */}
                     <div style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>{b.member.fullName}</div>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                      📅 {new Date(b.date).toLocaleDateString()} • 🕒 {b.timeSlot} <br />
+                      📅 {new Date(b.date).toLocaleDateString()} • 🕒 {formatTimeSlot(b.timeSlot, language)} <br />
                       📞 {b.member.phone} • 🪪 {b.member.nationalId}
                     </div>
                     {b.notes && (
@@ -1635,8 +1636,13 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {allMembers.map(m => (
                 <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid var(--border-color)', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                  <div>
-                    <b>{m.fullName}</b> • <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>🪪 {m.nationalId} • 📞 {m.phoneNumbers.split(',')[0]}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <b style={{ fontSize: '0.95rem' }}>{m.fullName}</b>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span>🪪 {m.nationalId}</span>
+                      <span>•</span>
+                      <span>📞 {m.phoneNumbers.split(',')[0]}</span>
+                    </div>
                   </div>
                   <span style={{
                     fontSize: '0.75rem',
@@ -1856,7 +1862,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="grid-2-col" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+              <div className="grid-2-col" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'التاريخ *' : 'Date *'}</label>
                   <input type="date" required value={tripDate} onChange={e => setTripDate(e.target.value)} className={styles.formInput} />
@@ -2122,7 +2128,7 @@ export default function DashboardPage() {
                 <tbody>
                   {actionLogs.map(l => (
                     <tr key={l.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td style={{ padding: '8px', color: 'var(--text-secondary)' }}>{new Date(l.createdAt).toLocaleString()}</td>
+                      <td style={{ padding: '8px', color: 'var(--text-secondary)' }}>{formatDateTime(l.createdAt, language)}</td>
                       <td style={{ padding: '8px' }}>
                         <b>{l.userName}</b> <br />
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{l.userEmail}</span>
@@ -2691,7 +2697,7 @@ export default function DashboardPage() {
                       <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-primary)' }}>{msg.name}</span>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
                         ✉️ {msg.email} • 📞 {msg.phone} <br />
-                        📅 {new Date(msg.createdAt).toLocaleString()}
+                        📅 {formatDateTime(msg.createdAt, language)}
                       </div>
                     </div>
                     <button 
