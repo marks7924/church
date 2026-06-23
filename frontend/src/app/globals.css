@@ -183,7 +183,7 @@ a {
 @media (max-width: 768px) {
   .grid-2-col {
     grid-template-columns: 1fr !important;
-    gap: 1rem !important;
+    gap: 0.8rem !important;
   }
 }
 
@@ -197,7 +197,7 @@ a {
 
 @media (max-width: 768px) {
   .dashboard-panel {
-    padding: 1.2rem;
+    padding: 1rem;
   }
 }
 

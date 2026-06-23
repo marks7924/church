@@ -318,6 +318,11 @@
   border-radius: 4px;
   outline: none;
 }
+@media (max-width: 768px) {
+  .formInput {
+    padding: 8px 10px;
+  }
+}
 .formInput:focus {
   border-color: var(--accent-gold);
 }

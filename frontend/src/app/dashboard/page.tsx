@@ -10,6 +10,7 @@ import {
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
   Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown 
 } from 'lucide-react';
+import PriestScheduleManager from '../../components/PriestScheduleManager';
 
 interface Booking {
   id: string;
@@ -152,8 +153,9 @@ export default function DashboardPage() {
   const [priestTitleEn, setPriestTitleEn] = useState('Father');
   const [priestAvatarUrl, setPriestAvatarUrl] = useState('');
   const [priestMaxBookings, setPriestMaxBookings] = useState('5');
-  const [priestBuffer, setPriestBuffer] = useState('15');
-  const [priestAvailability, setPriestAvailability] = useState('{"Monday": ["17:00-17:30", "17:30-18:00"], "Wednesday": ["18:00-18:30"], "Friday": ["16:00-16:30"]}');
+  const [priestBuffer, setPriestBuffer] = useState('5');
+  const [priestConfessionDuration, setPriestConfessionDuration] = useState('15');
+  const [priestAvailability, setPriestAvailability] = useState('{"recurring":[], "specific":[]}');
   const [priestMsg, setPriestMsg] = useState<string | null>(null);
 
   // Super Admin Site Images States
@@ -737,6 +739,7 @@ export default function DashboardPage() {
       titleEn: priestTitleEn,
       avatarUrl: priestAvatarUrl,
       maxBookingsPerDay: priestMaxBookings,
+      confessionDuration: priestConfessionDuration,
       bufferMinutes: priestBuffer,
       availabilityJson: priestAvailability
     };
@@ -798,7 +801,8 @@ export default function DashboardPage() {
     setPriestTitleEn(priest.titleEn || 'Father');
     setPriestAvatarUrl(priest.avatarUrl || '');
     setPriestMaxBookings(String(priest.maxBookingsPerDay || 5));
-    setPriestBuffer(String(priest.bufferMinutes || 15));
+    setPriestConfessionDuration(String(priest.confessionDuration || 15));
+    setPriestBuffer(String(priest.bufferMinutes || 5));
     setPriestAvailability(typeof priest.availabilityJson === 'string' ? priest.availabilityJson : JSON.stringify(priest.availabilityJson));
   };
 
@@ -839,8 +843,9 @@ export default function DashboardPage() {
     setPriestTitleEn('Father');
     setPriestAvatarUrl('');
     setPriestMaxBookings('5');
-    setPriestBuffer('15');
-    setPriestAvailability('{"Monday": ["17:00-17:30", "17:30-18:00"], "Wednesday": ["18:00-18:30"], "Friday": ["16:00-16:30"]}');
+    setPriestConfessionDuration('15');
+    setPriestBuffer('5');
+    setPriestAvailability('{"recurring":[], "specific":[]}');
   };
 
   const handleSaveSiteInfo = async (e: React.FormEvent) => {
@@ -2190,18 +2195,21 @@ export default function DashboardPage() {
                   {priestAvatarUrl && <img src={priestAvatarUrl} alt="Avatar Preview" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '50%', marginTop: '4px' }} />}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Max Bookings/Day *</label>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Max Bookings/Day (Calculated Automatically unless forced) *</label>
                   <input type="number" required value={priestMaxBookings} onChange={e => setPriestMaxBookings(e.target.value)} className={styles.formInput} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Buffer Minutes *</label>
-                  <input type="number" required value={priestBuffer} onChange={e => setPriestBuffer(e.target.value)} className={styles.formInput} />
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Weekly Availability (JSON format) *</label>
-                <textarea required value={priestAvailability} onChange={e => setPriestAvailability(e.target.value)} className={styles.formInput} style={{ height: '80px', fontFamily: 'monospace' }} />
+              <div style={{ marginTop: '10px' }}>
+                <PriestScheduleManager 
+                  language={language}
+                  availabilityJson={priestAvailability}
+                  confessionDuration={priestConfessionDuration}
+                  bufferMinutes={priestBuffer}
+                  onAvailabilityChange={setPriestAvailability}
+                  onConfessionDurationChange={setPriestConfessionDuration}
+                  onBufferMinutesChange={setPriestBuffer}
+                />
               </div>
 
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>

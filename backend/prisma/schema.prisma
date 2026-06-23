@@ -69,9 +69,11 @@ model PriestProfile {
   titleAr              String        // e.g., "أبونا", "سيدنا"
   titleEn              String        // e.g., "Father", "Bishop"
   maxBookingsPerDay    Int           @default(5)
-  bufferMinutes        Int           @default(15)
+  confessionDuration   Int           @default(15)
+  bufferMinutes        Int           @default(5)
   avatarUrl            String?
-  // JSON field to store weekly availability: e.g., { "Sunday": ["09:00-10:00", "18:00-20:00"] }
+  // JSON field to store weekly availability and specific dates:
+  // e.g., { "recurring": { "Sunday": [{"start": "09:00", "end": "10:00"}] }, "specific": { "2026-07-23": [{"start": "18:00", "end": "20:00"}] } }
   availabilityJson     String        @default("{}")
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt

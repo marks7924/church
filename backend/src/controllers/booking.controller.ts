@@ -49,6 +49,19 @@ function getWeekdayEn(date: Date): string {
   return days[date.getDay()];
 }
 
+// Helper: Parse time to minutes
+function timeToMins(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+// Helper: Format minutes to HH:mm
+function minsToTime(m: number): string {
+  const h = Math.floor(m / 60);
+  const min = m % 60;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
 // Helper: Generate available slots for a priest on a given date
 async function getAvailableSlots(priestId: string, dateStr: string): Promise<{
   slots: string[];
@@ -57,7 +70,7 @@ async function getAvailableSlots(priestId: string, dateStr: string): Promise<{
   bookedCount: number;
 }> {
   const date = new Date(dateStr);
-  const weekday = getWeekdayEn(date);
+  const dayIndex = date.getDay();
 
   const priest = await prisma.priestProfile.findUnique({
     where: { id: priestId }
@@ -67,8 +80,44 @@ async function getAvailableSlots(priestId: string, dateStr: string): Promise<{
     return { slots: [], isFull: false, maxLimit: 0, bookedCount: 0 };
   }
 
-  const availability = JSON.parse(priest.availabilityJson);
-  const dailySlots: string[] = availability[weekday] || [];
+  let availability: any = { recurring: [], specific: [] };
+  try {
+    availability = JSON.parse(priest.availabilityJson);
+  } catch (e) {
+    // ignore
+  }
+
+  const specificDates = availability.specific || [];
+  const recurringDates = availability.recurring || [];
+
+  let timeRanges: any[] = [];
+  
+  const specificMatch = specificDates.filter((s: any) => s.date === dateStr);
+  if (specificMatch.length > 0) {
+    timeRanges = specificMatch;
+  } else {
+    const recurringMatch = recurringDates.filter((r: any) => r.day === dayIndex);
+    if (recurringMatch.length > 0) {
+      timeRanges = recurringMatch;
+    }
+  }
+
+  let dailySlots: string[] = [];
+  const duration = priest.confessionDuration || 15;
+  const buffer = priest.bufferMinutes || 5;
+
+  for (const range of timeRanges) {
+    if (!range.startTime || !range.endTime) continue;
+    let startMins = timeToMins(range.startTime);
+    const endMins = timeToMins(range.endTime);
+
+    while (startMins + duration <= endMins) {
+      const slotStartStr = minsToTime(startMins);
+      const slotEndStr = minsToTime(startMins + duration);
+      dailySlots.push(`${slotStartStr}-${slotEndStr}`);
+      startMins += duration + buffer;
+    }
+  }
 
   // Get already booked appointments for this priest on this date
   const bookedAppointments = await prisma.appointment.findMany({
@@ -86,12 +135,17 @@ async function getAvailableSlots(priestId: string, dateStr: string): Promise<{
 
   const bookedSlots = bookedAppointments.map(a => a.timeSlot);
   const available = dailySlots.filter(s => !bookedSlots.includes(s));
-  const isFull = bookedAppointments.length >= priest.maxBookingsPerDay;
+  
+  // Calculate true max limit (configured limit or available slots generated)
+  const generatedLimit = dailySlots.length;
+  const maxLimit = Math.min(priest.maxBookingsPerDay, generatedLimit > 0 ? generatedLimit : priest.maxBookingsPerDay);
+  
+  const isFull = bookedAppointments.length >= maxLimit || (dailySlots.length > 0 && available.length === 0);
 
   return {
     slots: isFull ? [] : available,
     isFull,
-    maxLimit: priest.maxBookingsPerDay,
+    maxLimit,
     bookedCount: bookedAppointments.length
   };
 }

@@ -30,6 +30,7 @@ router.get('/', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req: AuthR
       titleEn: p.titleEn,
       avatarUrl: p.avatarUrl,
       maxBookingsPerDay: p.maxBookingsPerDay,
+      confessionDuration: p.confessionDuration,
       bufferMinutes: p.bufferMinutes,
       availabilityJson: p.availabilityJson
     }));
@@ -55,6 +56,7 @@ router.post('/', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req: Auth
     titleEn,
     avatarUrl,
     maxBookingsPerDay,
+    confessionDuration,
     bufferMinutes,
     availabilityJson
   } = req.body;
@@ -103,7 +105,8 @@ router.post('/', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req: Auth
           titleEn,
           avatarUrl,
           maxBookingsPerDay: maxBookingsPerDay ? parseInt(maxBookingsPerDay) : 5,
-          bufferMinutes: bufferMinutes ? parseInt(bufferMinutes) : 15,
+          confessionDuration: confessionDuration ? parseInt(confessionDuration) : 15,
+          bufferMinutes: bufferMinutes ? parseInt(bufferMinutes) : 5,
           availabilityJson: availabilityJson || '{}'
         }
       });
@@ -133,6 +136,7 @@ router.patch('/:id', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req: 
     titleEn,
     avatarUrl,
     maxBookingsPerDay,
+    confessionDuration,
     bufferMinutes,
     availabilityJson
   } = req.body;
@@ -170,6 +174,7 @@ router.patch('/:id', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req: 
           titleEn,
           avatarUrl,
           maxBookingsPerDay: maxBookingsPerDay ? parseInt(maxBookingsPerDay) : undefined,
+          confessionDuration: confessionDuration ? parseInt(confessionDuration) : undefined,
           bufferMinutes: bufferMinutes ? parseInt(bufferMinutes) : undefined,
           availabilityJson
         }
