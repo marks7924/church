@@ -78,10 +78,10 @@ export default function MinistriesPage() {
         if (data.services_intro_ar) setIntroAr(data.services_intro_ar);
         if (data.services_intro_en) setIntroEn(data.services_intro_en);
 
-        if (data.church_services) {
+        if (data.hasOwnProperty('church_services') && data.church_services !== undefined && data.church_services !== null) {
           try {
             const parsed = JSON.parse(data.church_services);
-            if (Array.isArray(parsed) && parsed.length > 0) {
+            if (Array.isArray(parsed)) {
               setMinistries(parsed);
               return;
             }
