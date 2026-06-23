@@ -8,7 +8,7 @@ import { API_URL } from '../../config';
 import { formatTimeSlot, formatDateTime } from '../../utils/format';
 import { 
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
-  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText 
+  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown 
 } from 'lucide-react';
 
 interface Booking {
@@ -113,6 +113,7 @@ export default function DashboardPage() {
 
   // Tabs structure based on role
   const [activeTab, setActiveTab] = useState<string>('');
+  const [isMobileTabMenuOpen, setIsMobileTabMenuOpen] = useState(false);
 
   // Data states
   const [myBookings, setMyBookings] = useState<Booking[]>([]);
@@ -222,6 +223,113 @@ export default function DashboardPage() {
   const [tripPrice, setTripPrice] = useState('0');
   const [tripType, setTripType] = useState('TRIP');
   const [tripMsg, setTripMsg] = useState<string | null>(null);
+
+  const getAvailableTabs = () => {
+    if (!user) return [];
+    const role = user.role;
+    const tabs = [];
+
+    // Member Tab
+    if (role === 'MEMBER') {
+      tabs.push({
+        id: 'my-profile',
+        labelAr: 'حسابي وعضويتي',
+        labelEn: 'My Profile & Status',
+        icon: <User size={16} />
+      });
+    }
+
+    // Non-member News Tab
+    if (role && role !== 'MEMBER') {
+      tabs.push({
+        id: 'manage-news',
+        labelAr: 'إدارة الأخبار',
+        labelEn: 'Manage News',
+        icon: <FileText size={16} />
+      });
+    }
+
+    // Priest / Bishop Booking requests Tab
+    if (['PRIEST', 'BISHOP'].includes(role)) {
+      tabs.push({
+        id: 'confessions',
+        labelAr: t('booking_requests'),
+        labelEn: t('booking_requests'),
+        icon: <Calendar size={16} />
+      });
+    }
+
+    // Admin / Secretary / SuperAdmin / Developer tabs
+    if (['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(role)) {
+      tabs.push({
+        id: 'members',
+        labelAr: t('manage_members'),
+        labelEn: t('manage_members'),
+        icon: <Users size={16} />
+      });
+      tabs.push({
+        id: 'live',
+        labelAr: t('manage_live'),
+        labelEn: t('manage_live'),
+        icon: <Radio size={16} />
+      });
+      tabs.push({
+        id: 'push-alerts',
+        labelAr: language === 'ar' ? 'إرسال إشعار جماعي' : 'Broadcast Push Alerts',
+        labelEn: language === 'ar' ? 'إرسال إشعار جماعي' : 'Broadcast Push Alerts',
+        icon: <Bell size={16} />
+      });
+
+      if (['SUPER_ADMIN', 'DEVELOPER'].includes(role)) {
+        tabs.push({
+          id: 'manage-priests',
+          labelAr: language === 'ar' ? 'إدارة الكهنة' : 'Manage Priests',
+          labelEn: language === 'ar' ? 'إدارة الكهنة' : 'Manage Priests',
+          icon: <Users size={16} />
+        });
+        tabs.push({
+          id: 'manage-roles',
+          labelAr: language === 'ar' ? 'إدارة الرتب والمستخدمين' : 'Manage Role Accounts',
+          labelEn: language === 'ar' ? 'إدارة الرتب والمستخدمين' : 'Manage Role Accounts',
+          icon: <User size={16} />
+        });
+        tabs.push({
+          id: 'action-logs',
+          labelAr: language === 'ar' ? 'سجل العمليات' : 'Action Logs',
+          labelEn: language === 'ar' ? 'سجل العمليات' : 'Action Logs',
+          icon: <FileText size={16} />
+        });
+      }
+    }
+
+    // Settings and messages visible to SuperAdmin, Developer, Admin, Secretary, Priest, Bishop
+    if (['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY', 'PRIEST', 'BISHOP'].includes(role)) {
+      tabs.push({
+        id: 'manage-site-info',
+        labelAr: language === 'ar' ? 'محتوى وإعدادات الموقع' : 'Manage Site & Services',
+        labelEn: language === 'ar' ? 'محتوى وإعدادات الموقع' : 'Manage Site & Services',
+        icon: <FileText size={16} />
+      });
+      tabs.push({
+        id: 'member-messages',
+        labelAr: language === 'ar' ? 'رسائل الأعضاء' : 'Member Messages',
+        labelEn: language === 'ar' ? 'رسائل الأعضاء' : 'Member Messages',
+        icon: <Bell size={16} />
+      });
+    }
+
+    // Trip Manager Tab
+    if (role === 'TRIP_MANAGER') {
+      tabs.push({
+        id: 'trips',
+        labelAr: `${t('manage_events')} (Trips Only)`,
+        labelEn: `${t('manage_events')} (Trips Only)`,
+        icon: <Calendar size={16} />
+      });
+    }
+
+    return tabs;
+  };
 
   // Load Auth data
   useEffect(() => {
@@ -1103,236 +1211,85 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Tabs Menu Selection */}
-      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '2rem' }}>
-        {/* MEMBER tab options */}
-        {user?.role === 'MEMBER' && (
+      {/* Mobile Tab Dropdown Button */}
+      <button 
+        className="dashboard-mobile-menu-btn" 
+        onClick={() => setIsMobileTabMenuOpen(true)}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {getAvailableTabs().find(t => t.id === activeTab)?.icon}
+          <span>
+            {language === 'ar' ? 'القسم الحالي: ' : 'Section: '} 
+            <b>
+              {(() => {
+                const currentTab = getAvailableTabs().find(t => t.id === activeTab);
+                return currentTab ? (language === 'ar' ? currentTab.labelAr : currentTab.labelEn) : '';
+              })()}
+            </b>
+          </span>
+        </span>
+        <ChevronDown size={18} />
+      </button>
+
+      {/* Desktop Tabs Menu Selection */}
+      <div className="dashboard-tabs-desktop" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '2rem' }}>
+        {getAvailableTabs().map(tab => (
           <button 
+            key={tab.id}
             className="dashboard-tab-btn"
-            onClick={() => setActiveTab('my-profile')}
+            onClick={() => setActiveTab(tab.id)}
             style={{
               padding: '8px 16px',
               borderRadius: '4px',
               border: '1px solid var(--border-color)',
-              background: activeTab === 'my-profile' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-              color: activeTab === 'my-profile' ? '#000000' : 'var(--text-primary)',
+              background: activeTab === tab.id ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+              color: activeTab === tab.id ? '#000000' : 'var(--text-primary)',
               cursor: 'pointer',
               fontWeight: 'bold',
-              fontSize: '0.9rem'
+              fontSize: '0.9rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
             }}
           >
-            {language === 'ar' ? 'حسابي وعضويتي' : 'My Profile & Status'}
+            {tab.icon}
+            <span>{language === 'ar' ? tab.labelAr : tab.labelEn}</span>
           </button>
-        )}
-
-        {/* NON-MEMBER Shared tab options */}
-        {user?.role && user.role !== 'MEMBER' && (
-          <button 
-            className="dashboard-tab-btn"
-            onClick={() => setActiveTab('manage-news')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '4px',
-              border: '1px solid var(--border-color)',
-              background: activeTab === 'manage-news' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-              color: activeTab === 'manage-news' ? '#000000' : 'var(--text-primary)',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '0.9rem'
-            }}
-          >
-            <FileText size={16} style={{ verticalAlign: 'middle', marginInlineEnd: '6px' }} />
-            {language === 'ar' ? 'إدارة الأخبار' : 'Manage News'}
-          </button>
-        )}
-
-        {/* PRIEST / BISHOP tab options */}
-        {['PRIEST', 'BISHOP'].includes(user?.role) && (
-          <button 
-            className="dashboard-tab-btn"
-            onClick={() => setActiveTab('confessions')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '4px',
-              border: '1px solid var(--border-color)',
-              background: activeTab === 'confessions' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-              color: activeTab === 'confessions' ? '#000000' : 'var(--text-primary)',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '0.9rem'
-            }}
-          >
-            {t('booking_requests')}
-          </button>
-        )}
-
-        {/* SECRETARY / ADMIN tab options */}
-        {['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(user?.role) && (
-          <>
-            <button 
-              className="dashboard-tab-btn"
-              onClick={() => setActiveTab('members')}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '4px',
-                border: '1px solid var(--border-color)',
-                background: activeTab === 'members' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                color: activeTab === 'members' ? '#000000' : 'var(--text-primary)',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '0.9rem'
-              }}
-            >
-              <Users size={16} style={{ verticalAlign: 'middle', marginInlineEnd: '6px' }} />
-              {t('manage_members')}
-            </button>
-            <button 
-              className="dashboard-tab-btn"
-              onClick={() => setActiveTab('live')}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '4px',
-                border: '1px solid var(--border-color)',
-                background: activeTab === 'live' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                color: activeTab === 'live' ? '#000000' : 'var(--text-primary)',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '0.9rem'
-              }}
-            >
-              <Radio size={16} style={{ verticalAlign: 'middle', marginInlineEnd: '6px' }} />
-              {t('manage_live')}
-            </button>
-            <button 
-              className="dashboard-tab-btn"
-              onClick={() => setActiveTab('push-alerts')}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '4px',
-                border: '1px solid var(--border-color)',
-                background: activeTab === 'push-alerts' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                color: activeTab === 'push-alerts' ? '#000000' : 'var(--text-primary)',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '0.9rem'
-              }}
-            >
-              <Bell size={16} style={{ verticalAlign: 'middle', marginInlineEnd: '6px' }} />
-              {language === 'ar' ? 'إرسال إشعار جماعي' : 'Broadcast Push Alerts'}
-            </button>
-            {['SUPER_ADMIN', 'DEVELOPER'].includes(user?.role) && (
-              <>
-                <button 
-                  className="dashboard-tab-btn"
-                  onClick={() => setActiveTab('manage-priests')}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border-color)',
-                    background: activeTab === 'manage-priests' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                    color: activeTab === 'manage-priests' ? '#000000' : 'var(--text-primary)',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  {language === 'ar' ? 'إدارة الكهنة' : 'Manage Priests'}
-                </button>
-                <button 
-                  className="dashboard-tab-btn"
-                  onClick={() => setActiveTab('manage-roles')}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border-color)',
-                    background: activeTab === 'manage-roles' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                    color: activeTab === 'manage-roles' ? '#000000' : 'var(--text-primary)',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  {language === 'ar' ? 'إدارة الرتب والمستخدمين' : 'Manage Role Accounts'}
-                </button>
-                <button 
-                  className="dashboard-tab-btn"
-                  onClick={() => setActiveTab('action-logs')}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border-color)',
-                    background: activeTab === 'action-logs' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                    color: activeTab === 'action-logs' ? '#000000' : 'var(--text-primary)',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  {language === 'ar' ? 'سجل العمليات' : 'Action Logs'}
-                </button>
-              </>
-            )}
-          </>
-        )}
-
-        {/* Site Settings & Member Messages tab selection (visible to all admin and priest roles, except TRIP_MANAGER/MEMBER) */}
-        {['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY', 'PRIEST', 'BISHOP'].includes(user?.role) && (
-          <>
-            <button 
-              className="dashboard-tab-btn"
-              onClick={() => setActiveTab('manage-site-info')}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '4px',
-                border: '1px solid var(--border-color)',
-                background: activeTab === 'manage-site-info' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                color: activeTab === 'manage-site-info' ? '#000000' : 'var(--text-primary)',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '0.9rem'
-              }}
-            >
-              {language === 'ar' ? 'محتوى وإعدادات الموقع' : 'Manage Site & Services'}
-            </button>
-            <button 
-              className="dashboard-tab-btn"
-              onClick={() => setActiveTab('member-messages')}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '4px',
-                border: '1px solid var(--border-color)',
-                background: activeTab === 'member-messages' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                color: activeTab === 'member-messages' ? '#000000' : 'var(--text-primary)',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                fontSize: '0.9rem'
-              }}
-            >
-              {language === 'ar' ? 'رسائل الأعضاء' : 'Member Messages'}
-            </button>
-          </>
-        )}
-
-        {/* TRIP MANAGER Tab Options */}
-        {user?.role === 'TRIP_MANAGER' && (
-          <button 
-            className="dashboard-tab-btn"
-            onClick={() => setActiveTab('trips')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '4px',
-              border: '1px solid var(--border-color)',
-              background: activeTab === 'trips' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-              color: activeTab === 'trips' ? '#000000' : 'var(--text-primary)',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '0.9rem'
-            }}
-          >
-            {t('manage_events')} (Trips Only)
-          </button>
-        )}
+        ))}
       </div>
+
+      {/* Mobile Drawer (Bottom Sheet) for Dashboard Tabs */}
+      {isMobileTabMenuOpen && (
+        <div className="dashboard-drawer-overlay" onClick={() => setIsMobileTabMenuOpen(false)}>
+          <div className="dashboard-drawer-content" onClick={(e) => e.stopPropagation()}>
+            <div className="dashboard-drawer-header">
+              <span className="dashboard-drawer-title">{language === 'ar' ? 'أقسام لوحة التحكم' : 'Dashboard Sections'}</span>
+              <button className="dashboard-drawer-close" onClick={() => setIsMobileTabMenuOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {getAvailableTabs().map(tab => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    className={`dashboard-drawer-item ${isActive ? 'dashboard-drawer-item-active' : ''}`}
+                    onClick={() => {
+                      setActiveTab(tab.id);
+                      setIsMobileTabMenuOpen(false);
+                    }}
+                  >
+                    {tab.icon}
+                    <span>{language === 'ar' ? tab.labelAr : tab.labelEn}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TABS VIEW RENDER */}
 
