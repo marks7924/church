@@ -201,5 +201,11 @@ a {
   }
 }
 
+/* Dashboard Tab Buttons Mobile Spacing */
+.dashboard-tab-btn {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
 
 

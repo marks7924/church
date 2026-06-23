@@ -137,6 +137,12 @@ export default function DashboardPage() {
   const [serviceScheduleEn, setServiceScheduleEn] = useState('');
   const [serviceImage, setServiceImage] = useState('');
 
+  // Services Intro & Title States
+  const [servicesTitleAr, setServicesTitleAr] = useState('الخدمات الكنسية');
+  const [servicesTitleEn, setServicesTitleEn] = useState('Church Services');
+  const [servicesIntroAr, setServicesIntroAr] = useState('تضم كنيستنا العديد من الخدمات والأنشطة المباركة التي تخدم كل أفراد الأسرة من الأطفال إلى كبار السن.');
+  const [servicesIntroEn, setServicesIntroEn] = useState('Our church offers various blessed ministries and activities designed to serve all family members from young children to seniors.');
+
   // News Management States
   const [allNews, setAllNews] = useState<any[]>([]);
   const [newsContent, setNewsContent] = useState('');
@@ -356,6 +362,11 @@ export default function DashboardPage() {
           setAboutMissionEn(data.about_mission_en || '');
           setAboutVisionAr(data.about_vision_ar || '');
           setAboutVisionEn(data.about_vision_en || '');
+
+          setServicesTitleAr(data.services_title_ar || 'الخدمات الكنسية');
+          setServicesTitleEn(data.services_title_en || 'Church Services');
+          setServicesIntroAr(data.services_intro_ar || 'تضم كنيستنا العديد من الخدمات والأنشطة المباركة التي تخدم كل أفراد الأسرة من الأطفال إلى كبار السن.');
+          setServicesIntroEn(data.services_intro_en || 'Our church offers various blessed ministries and activities designed to serve all family members from young children to seniors.');
 
           if (data.church_services) {
             try {
@@ -696,6 +707,10 @@ export default function DashboardPage() {
           about_mission_en: aboutMissionEn,
           about_vision_ar: aboutVisionAr,
           about_vision_en: aboutVisionEn,
+          services_title_ar: servicesTitleAr,
+          services_title_en: servicesTitleEn,
+          services_intro_ar: servicesIntroAr,
+          services_intro_en: servicesIntroEn,
           church_services: JSON.stringify(churchServices)
         })
       });
@@ -1041,6 +1056,7 @@ export default function DashboardPage() {
         {/* MEMBER tab options */}
         {user?.role === 'MEMBER' && (
           <button 
+            className="dashboard-tab-btn"
             onClick={() => setActiveTab('my-profile')}
             style={{
               padding: '8px 16px',
@@ -1060,6 +1076,7 @@ export default function DashboardPage() {
         {/* NON-MEMBER Shared tab options */}
         {user?.role && user.role !== 'MEMBER' && (
           <button 
+            className="dashboard-tab-btn"
             onClick={() => setActiveTab('manage-news')}
             style={{
               padding: '8px 16px',
@@ -1080,6 +1097,7 @@ export default function DashboardPage() {
         {/* PRIEST / BISHOP tab options */}
         {['PRIEST', 'BISHOP'].includes(user?.role) && (
           <button 
+            className="dashboard-tab-btn"
             onClick={() => setActiveTab('confessions')}
             style={{
               padding: '8px 16px',
@@ -1100,6 +1118,7 @@ export default function DashboardPage() {
         {['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(user?.role) && (
           <>
             <button 
+              className="dashboard-tab-btn"
               onClick={() => setActiveTab('members')}
               style={{
                 padding: '8px 16px',
@@ -1116,6 +1135,7 @@ export default function DashboardPage() {
               {t('manage_members')}
             </button>
             <button 
+              className="dashboard-tab-btn"
               onClick={() => setActiveTab('live')}
               style={{
                 padding: '8px 16px',
@@ -1132,6 +1152,7 @@ export default function DashboardPage() {
               {t('manage_live')}
             </button>
             <button 
+              className="dashboard-tab-btn"
               onClick={() => setActiveTab('push-alerts')}
               style={{
                 padding: '8px 16px',
@@ -1150,6 +1171,7 @@ export default function DashboardPage() {
             {['SUPER_ADMIN', 'DEVELOPER'].includes(user?.role) && (
               <>
                 <button 
+                  className="dashboard-tab-btn"
                   onClick={() => setActiveTab('manage-priests')}
                   style={{
                     padding: '8px 16px',
@@ -1165,6 +1187,7 @@ export default function DashboardPage() {
                   {language === 'ar' ? 'إدارة الكهنة' : 'Manage Priests'}
                 </button>
                 <button 
+                  className="dashboard-tab-btn"
                   onClick={() => setActiveTab('manage-roles')}
                   style={{
                     padding: '8px 16px',
@@ -1180,6 +1203,7 @@ export default function DashboardPage() {
                   {language === 'ar' ? 'إدارة الرتب والمستخدمين' : 'Manage Role Accounts'}
                 </button>
                 <button 
+                  className="dashboard-tab-btn"
                   onClick={() => setActiveTab('action-logs')}
                   style={{
                     padding: '8px 16px',
@@ -1203,6 +1227,7 @@ export default function DashboardPage() {
         {['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY', 'PRIEST', 'BISHOP'].includes(user?.role) && (
           <>
             <button 
+              className="dashboard-tab-btn"
               onClick={() => setActiveTab('manage-site-info')}
               style={{
                 padding: '8px 16px',
@@ -1218,6 +1243,7 @@ export default function DashboardPage() {
               {language === 'ar' ? 'محتوى وإعدادات الموقع' : 'Manage Site & Services'}
             </button>
             <button 
+              className="dashboard-tab-btn"
               onClick={() => setActiveTab('member-messages')}
               style={{
                 padding: '8px 16px',
@@ -1238,6 +1264,7 @@ export default function DashboardPage() {
         {/* TRIP MANAGER Tab Options */}
         {user?.role === 'TRIP_MANAGER' && (
           <button 
+            className="dashboard-tab-btn"
             onClick={() => setActiveTab('trips')}
             style={{
               padding: '8px 16px',
@@ -2323,6 +2350,37 @@ export default function DashboardPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رسالتنا الرعوية (إنجليزي)' : 'Our Mission (English)'}</label>
                     <textarea value={aboutMissionEn} onChange={e => setAboutMissionEn(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* PANEL 2.5: SERVICES PAGE HEADER CONTENT */}
+            <div className="dashboard-panel">
+              <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+                🤝 {language === 'ar' ? 'إدارة مقدمة صفحة الخدمات الكنسية' : 'Manage Services Page Header & Intro'}
+              </h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div className="grid-2-col">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'عنوان صفحة الخدمات (عربي)' : 'Services Page Title (Arabic)'}</label>
+                    <input type="text" value={servicesTitleAr} onChange={e => setServicesTitleAr(e.target.value)} className={styles.formInput} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'عنوان صفحة الخدمات (إنجليزي)' : 'Services Page Title (English)'}</label>
+                    <input type="text" value={servicesTitleEn} onChange={e => setServicesTitleEn(e.target.value)} className={styles.formInput} />
+                  </div>
+                </div>
+
+                <div className="grid-2-col">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'مقدمة صفحة الخدمات (عربي)' : 'Services Page Intro (Arabic)'}</label>
+                    <textarea value={servicesIntroAr} onChange={e => setServicesIntroAr(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'مقدمة صفحة الخدمات (إنجليزي)' : 'Services Page Intro (English)'}</label>
+                    <textarea value={servicesIntroEn} onChange={e => setServicesIntroEn(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
                   </div>
                 </div>
               </div>

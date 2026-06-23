@@ -64,11 +64,20 @@ export default function MinistriesPage() {
   ];
 
   const [ministries, setMinistries] = useState<Ministry[]>([]);
+  const [titleAr, setTitleAr] = useState('الخدمات الكنسية');
+  const [titleEn, setTitleEn] = useState('Church Services');
+  const [introAr, setIntroAr] = useState('تضم كنيستنا العديد من الخدمات والأنشطة المباركة التي تخدم كل أفراد الأسرة من الأطفال إلى كبار السن.');
+  const [introEn, setIntroEn] = useState('Our church offers various blessed ministries and activities designed to serve all family members from young children to seniors.');
 
   useEffect(() => {
     fetch(`${API_URL}/settings`)
       .then(res => res.json())
       .then(data => {
+        if (data.services_title_ar) setTitleAr(data.services_title_ar);
+        if (data.services_title_en) setTitleEn(data.services_title_en);
+        if (data.services_intro_ar) setIntroAr(data.services_intro_ar);
+        if (data.services_intro_en) setIntroEn(data.services_intro_en);
+
         if (data.church_services) {
           try {
             const parsed = JSON.parse(data.church_services);
@@ -97,7 +106,7 @@ export default function MinistriesPage() {
         color: 'var(--accent-gold)',
         marginBottom: '1rem'
       }}>
-        {t('nav_ministries')}
+        {language === 'ar' ? titleAr : titleEn}
       </h1>
       <p style={{ 
         textAlign: 'center', 
@@ -107,9 +116,7 @@ export default function MinistriesPage() {
         fontSize: '1rem',
         lineHeight: '1.6'
       }}>
-        {language === 'ar' 
-          ? 'تضم كنيستنا العديد من الخدمات والأنشطة المباركة التي تخدم كل أفراد الأسرة من الأطفال إلى كبار السن.' 
-          : 'Our church offers various blessed ministries and activities designed to serve all family members from young children to seniors.'}
+        {language === 'ar' ? introAr : introEn}
       </p>
 
       {/* Grid */}
