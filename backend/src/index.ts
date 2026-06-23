@@ -15,6 +15,7 @@ import priestRouter from './controllers/priest.controller';
 import settingsRouter from './controllers/settings.controller';
 import newsRouter from './controllers/news.controller';
 import adminUsersRouter from './controllers/admin-users.controller';
+import contactRouter from './controllers/contact.controller';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -55,6 +56,7 @@ app.use('/api/priests', priestRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/news', newsRouter);
 app.use('/api/admin-users', adminUsersRouter);
+app.use('/api/contact', contactRouter);
 
 // Error Handling Middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

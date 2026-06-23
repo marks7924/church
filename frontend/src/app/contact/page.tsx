@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { useTheme } from '../../components/ThemeContext';
-import { Mail, Phone, MapPin, Send, HelpCircle } from 'lucide-react';
+import { Mail, Phone as PhoneIcon, MapPin, Send, HelpCircle } from 'lucide-react';
+import { API_URL } from '../../config';
 
 export default function ContactPage() {
   const { language, t } = useTheme();
@@ -10,19 +11,36 @@ export default function ContactPage() {
   // Form State
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   
   const [success, setSuccess] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSuccess(language === 'ar' ? 'تم إرسال رسالتك بنجاح! شكراً لتواصلك معنا.' : 'Your message has been sent successfully! Thank you.');
-    setName('');
-    setEmail('');
-    setSubject('');
-    setMessage('');
-    setTimeout(() => setSuccess(null), 5000);
+    try {
+      const res = await fetch(`${API_URL}/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, phone, subject, message })
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        setSuccess(language === 'ar' ? 'تم إرسال رسالتك بنجاح! شكراً لتواصلك معنا.' : 'Your message has been sent successfully! Thank you.');
+        setName('');
+        setEmail('');
+        setPhone('');
+        setSubject('');
+        setMessage('');
+        setTimeout(() => setSuccess(null), 5000);
+      } else {
+        alert(data.error || 'Failed to send message.');
+      }
+    } catch (err) {
+      alert('Error connecting to server.');
+    }
   };
 
   return (
@@ -73,7 +91,7 @@ export default function ContactPage() {
             alignItems: 'center',
             gap: '12px'
           }}>
-            <Phone size={24} style={{ color: 'var(--accent-gold)' }} />
+            <PhoneIcon size={24} style={{ color: 'var(--accent-gold)' }} />
             <div>
               <h4 style={{ fontWeight: 'bold' }}>{language === 'ar' ? 'رقم الهاتف والتليفون' : 'Phone Numbers'}</h4>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
@@ -148,6 +166,17 @@ export default function ContactPage() {
                 required 
                 value={email} 
                 onChange={e => setEmail(e.target.value)} 
+                style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px', outline: 'none' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رقم الهاتف للتواصل *' : 'Contact Phone Number *'}</label>
+              <input 
+                type="tel" 
+                required 
+                value={phone} 
+                onChange={e => setPhone(e.target.value)} 
                 style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px', outline: 'none' }}
               />
             </div>

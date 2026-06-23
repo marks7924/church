@@ -71,6 +71,7 @@ export default function DashboardPage() {
   const [priestBookings, setPriestBookings] = useState<Booking[]>([]);
   const [pendingMembers, setPendingMembers] = useState<PendingProfile[]>([]);
   const [allMembers, setAllMembers] = useState<PendingProfile[]>([]);
+  const [contactMessages, setContactMessages] = useState<any[]>([]);
   
   // Live Config State
   const [isLiveActive, setIsLiveActive] = useState(false);
@@ -378,7 +379,40 @@ export default function DashboardPage() {
         })
         .catch(err => console.log(err));
     }
+
+    if (activeTab === 'member-messages') {
+      fetch(`${API_URL}/contact`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => {
+          if (res.status === 401) throw new Error('Unauthorized');
+          return res.json();
+        })
+        .then(data => {
+          if (Array.isArray(data)) setContactMessages(data);
+        })
+        .catch(err => console.log(err));
+    }
   }, [activeTab, token, user]);
+
+  const handleDeleteContactMessage = async (id: string) => {
+    if (!confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذه الرسالة؟' : 'Are you sure you want to delete this message?')) return;
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/contact/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setContactMessages(prev => prev.filter(m => m.id !== id));
+      } else {
+        alert('Failed to delete message.');
+      }
+    } catch (err) {
+      console.log('Error deleting message:', err);
+    }
+  };
 
   // Appointment Actions: Approve/Reject
   const handleUpdateBookingStatus = async (id: string, status: 'APPROVED' | 'REJECTED') => {
@@ -1160,23 +1194,44 @@ export default function DashboardPage() {
                 >
                   {language === 'ar' ? 'سجل العمليات' : 'Action Logs'}
                 </button>
-                <button 
-                  onClick={() => setActiveTab('manage-site-info')}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border-color)',
-                    background: activeTab === 'manage-site-info' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                    color: activeTab === 'manage-site-info' ? '#000000' : 'var(--text-primary)',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  {language === 'ar' ? 'محتوى وإعدادات الموقع' : 'Manage Site & Services'}
-                </button>
               </>
             )}
+          </>
+        )}
+
+        {/* Site Settings & Member Messages tab selection (visible to all admin and priest roles, except TRIP_MANAGER/MEMBER) */}
+        {['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY', 'PRIEST', 'BISHOP'].includes(user?.role) && (
+          <>
+            <button 
+              onClick={() => setActiveTab('manage-site-info')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '4px',
+                border: '1px solid var(--border-color)',
+                background: activeTab === 'manage-site-info' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+                color: activeTab === 'manage-site-info' ? '#000000' : 'var(--text-primary)',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: '0.9rem'
+              }}
+            >
+              {language === 'ar' ? 'محتوى وإعدادات الموقع' : 'Manage Site & Services'}
+            </button>
+            <button 
+              onClick={() => setActiveTab('member-messages')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '4px',
+                border: '1px solid var(--border-color)',
+                background: activeTab === 'member-messages' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+                color: activeTab === 'member-messages' ? '#000000' : 'var(--text-primary)',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: '0.9rem'
+              }}
+            >
+              {language === 'ar' ? 'رسائل الأعضاء' : 'Member Messages'}
+            </button>
           </>
         )}
 
@@ -2508,6 +2563,49 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Tab: Member Messages */}
+      {activeTab === 'member-messages' && (
+        <div className="dashboard-panel">
+          <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
+            📬 {language === 'ar' ? 'رسائل واستفسارات الأعضاء' : 'Member Messages & Inquiries'}
+          </h3>
+
+          {contactMessages.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              {contactMessages.map(msg => (
+                <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', padding: '15px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-card)', borderRadius: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
+                    <div>
+                      <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-primary)' }}>{msg.name}</span>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        ✉️ {msg.email} • 📞 {msg.phone} <br />
+                        📅 {new Date(msg.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handleDeleteContactMessage(msg.id)} 
+                      style={{ backgroundColor: '#ff4d4d', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}
+                    >
+                      {language === 'ar' ? 'حذف' : 'Delete'}
+                    </button>
+                  </div>
+                  <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '10px', marginTop: '5px' }}>
+                    <b style={{ color: 'var(--accent-gold)', fontSize: '0.9rem', display: 'block', marginBottom: '4px' }}>
+                      {language === 'ar' ? 'الموضوع: ' : 'Subject: '} {msg.subject}
+                    </b>
+                    <p style={{ fontSize: '0.9rem', whiteSpace: 'pre-wrap', lineHeight: '1.5', color: 'var(--text-primary)' }}>{msg.message}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+              {language === 'ar' ? 'لا توجد رسائل واردة حالياً.' : 'No incoming messages currently.'}
+            </p>
+          )}
         </div>
       )}
     </div>

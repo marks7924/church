@@ -22,8 +22,8 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// 2. Update System Settings (SUPER_ADMIN only)
-router.post('/', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {
+// 2. Update System Settings (All admin and priest roles allowed)
+router.post('/', requireAuth, requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.SECRETARY, Role.PRIEST, Role.BISHOP]), async (req: AuthRequest, res: Response) => {
   const settings = req.body; // Expecting key-value object, e.g. { "img_hero_bg": "http...", "img_about_1": "http..." }
 
   if (!settings || typeof settings !== 'object') {

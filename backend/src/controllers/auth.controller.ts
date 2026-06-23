@@ -60,23 +60,24 @@ router.post('/register', async (req: Request, res: Response) => {
         phone,
         nationalId,
         role: 'MEMBER',
-        isVerified: false,
+        isVerified: true,
         otpCode,
         otpExpiry
       }
     });
 
-    // Send OTP
-    await sendEmail(
+    // Send welcome email in background (without await) to prevent connection hangs
+    sendEmail(
       email,
-      'Church Platform — Verify Email OTP',
+      'Welcome to Coptic Church Platform',
       `<p>Welcome to our Church Platform, <b>${fullName}</b>.</p>
-       <p>Your verification OTP is: <h2 style="color: #2F3E46; letter-spacing: 2px;">${otpCode}</h2></p>
-       <p>This code expires in 10 minutes.</p>`
-    );
+       <p>Your account has been successfully created. You can now login using your credentials.</p>`
+    ).catch(err => {
+      console.error('Background email dispatch failed during registration:', err);
+    });
 
     return res.status(201).json({
-      message: 'Registration successful. OTP code sent to your email.',
+      message: 'Registration successful.',
       email: user.email
     });
   } catch (error: any) {

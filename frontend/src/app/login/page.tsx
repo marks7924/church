@@ -89,8 +89,12 @@ export default function LoginPage() {
         setSuccessMsg(language === 'ar' ? 'تم تسجيل الدخول بنجاح!' : 'Logged in successfully!');
         setTimeout(() => router.push('/'), 1000);
       } else if (mode === 'register') {
-        setSuccessMsg(language === 'ar' ? 'تم إرسال كود الـ OTP لبريدك الإلكتروني.' : 'OTP code sent to your email.');
-        setMode('otp');
+        setSuccessMsg(language === 'ar' ? 'تم إنشاء الحساب بنجاح! جاري تحويلك لصفحة تسجيل الدخول...' : 'Account created successfully! Redirecting to login...');
+        setTimeout(() => {
+          setMode('login');
+          setSuccessMsg(null);
+          setPassword('');
+        }, 1500);
       } else if (mode === 'otp') {
         localStorage.setItem('church-token', data.accessToken);
         localStorage.setItem('church-refresh-token', data.refreshToken);
