@@ -94,25 +94,33 @@ export default function Home() {
     // 1. Fetch live status
     fetch(`${API_URL}/live`)
       .then(res => res.json())
-      .then(data => setLiveStream(data))
+      .then(data => {
+        if (data && typeof data === 'object' && !data.error) setLiveStream(data);
+      })
       .catch(err => console.log('Error fetching live:', err));
 
     // 2. Fetch Priests
     fetch(`${API_URL}/bookings/priests`)
       .then(res => res.json())
-      .then(data => setPriests(data))
+      .then(data => {
+        if (Array.isArray(data)) setPriests(data);
+      })
       .catch(err => console.log('Error fetching priests:', err));
 
     // 3. Fetch Sermons
     fetch(`${API_URL}/sermons`)
       .then(res => res.json())
-      .then(data => setSermons(data.slice(0, 4))) // Get top 4
+      .then(data => {
+        if (Array.isArray(data)) setSermons(data.slice(0, 4));
+      })
       .catch(err => console.log('Error fetching sermons:', err));
 
     // 4. Fetch Events
     fetch(`${API_URL}/events`)
       .then(res => res.json())
-      .then(data => setEvents(data.filter((e: any) => e.type === 'TRIP' || e.type === 'CONFERENCE').slice(0, 3)))
+      .then(data => {
+        if (Array.isArray(data)) setEvents(data.filter((e: any) => e.type === 'TRIP' || e.type === 'CONFERENCE').slice(0, 3));
+      })
       .catch(err => console.log('Error fetching events:', err));
 
     // 5. Fetch Global Settings
