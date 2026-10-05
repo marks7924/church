@@ -96,10 +96,14 @@ async function checkYoutubeLiveStatus() {
 
 // 1. Get Live state
 router.get('/', async (req: Request, res: Response) => {
-  // Trigger background check
-  await checkYoutubeLiveStatus();
-
   try {
+    // Trigger background check safely
+    try {
+      await checkYoutubeLiveStatus();
+    } catch (e) {
+      console.error('Error during auto-check YouTube live status:', e);
+    }
+
     const liveActiveConfig = await prisma.systemConfig.findUnique({ where: { key: 'live_active' } });
     const liveYoutubeConfig = await prisma.systemConfig.findUnique({ where: { key: 'live_youtube_id' } });
     const liveTitleConfig = await prisma.systemConfig.findUnique({ where: { key: 'live_youtube_title' } });
@@ -110,6 +114,7 @@ router.get('/', async (req: Request, res: Response) => {
       title: liveTitleConfig ? liveTitleConfig.value : ''
     });
   } catch (error) {
+    console.error('Error in GET /api/live:', error);
     return res.status(500).json({ error: 'Server error retrieving live state.' });
   }
 });

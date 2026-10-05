@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "ts-node src/index.ts",
     "build": "prisma generate && tsc",
+    "vercel-build": "prisma generate",
     "start": "prisma db push && node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:seed": "prisma db seed"

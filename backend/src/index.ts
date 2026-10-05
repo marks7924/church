@@ -22,17 +22,27 @@ const PORT = process.env.PORT || 4000;
 
 // Global Middleware
 const allowedOrigins = process.env.APP_URL
-  ? process.env.APP_URL.split(',').map(url => url.trim())
-  : ['http://localhost:3000'];
+  ? process.env.APP_URL.split(',').map(url => url.trim().replace(/\/$/, ''))
+  : ['http://localhost:3000', 'https://church-ruby-beta.vercel.app'];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // allow requests with no origin (like mobile apps, curl, or Postman)
+    // Allow requests with no origin (like mobile apps, curl, or Postman)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+    
+    const cleanOrigin = origin.replace(/\/$/, '');
+    
+    // Check if origin matches allowedOrigins, ends with vercel.app, or is localhost
+    const isAllowed = 
+      allowedOrigins.includes('*') ||
+      allowedOrigins.includes(cleanOrigin) ||
+      cleanOrigin.endsWith('.vercel.app') ||
+      cleanOrigin.includes('localhost');
+
+    if (isAllowed) {
       callback(null, true);
     } else {
-      callback(new Error(`Origin ${origin} not allowed by CORS`));
+      callback(null, false);
     }
   },
   credentials: true
@@ -61,10 +71,20 @@ app.use('/api/contact', contactRouter);
 // Error Handling Middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled server error:', err);
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`\n🚀 Church Platform backend listening at http://localhost:${PORT}`);
-  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}\n`);
-});
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`\n🚀 Church Platform backend listening at http://localhost:${PORT}`);
+    console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}\n`);
+  });
+}
+
+export default app;
+
