@@ -76,7 +76,10 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
-  res.status(500).json({ error: 'Internal Server Error' });
+  res.status(500).json({ 
+    error: 'Internal Server Error', 
+    message: err.message || String(err)
+  });
 });
 
 if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
