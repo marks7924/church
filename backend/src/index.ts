@@ -73,6 +73,15 @@ const healthHandler = async (req: Request, res: Response) => {
   });
 };
 
+app.get('/', (req: Request, res: Response) => {
+  res.status(200).json({
+    name: 'Church Platform Backend API',
+    status: 'online',
+    healthCheck: '/api/health',
+    version: '1.0.0'
+  });
+});
+
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
