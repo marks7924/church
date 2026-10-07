@@ -47,9 +47,12 @@ router.get('/', async (req: Request, res: Response) => {
     });
 
     return res.status(200).json(sermons);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching sermons:', error);
-    return res.status(500).json({ error: 'Server error fetching sermons.' });
+    return res.status(500).json({ 
+      error: 'Server error fetching sermons.', 
+      details: error.message || String(error) 
+    });
   }
 });
 

@@ -21,8 +21,11 @@ router.get('/', async (req: Request, res: Response) => {
       orderBy: { date: 'asc' }
     });
     return res.status(200).json(events);
-  } catch (error) {
-    return res.status(500).json({ error: 'Server error retrieving events.' });
+  } catch (error: any) {
+    return res.status(500).json({ 
+      error: 'Server error retrieving events.',
+      details: error.message || String(error)
+    });
   }
 });
 
@@ -173,8 +176,11 @@ router.get('/schedule', async (req: Request, res: Response) => {
       ]
     });
     return res.status(200).json(schedules);
-  } catch (error) {
-    return res.status(500).json({ error: 'Server error retrieving Mass Schedule.' });
+  } catch (error: any) {
+    return res.status(500).json({ 
+      error: 'Server error retrieving Mass Schedule.',
+      details: error.message || String(error)
+    });
   }
 });
 

@@ -113,9 +113,12 @@ router.get('/', async (req: Request, res: Response) => {
       youtubeLiveId: liveYoutubeConfig ? liveYoutubeConfig.value : '',
       title: liveTitleConfig ? liveTitleConfig.value : ''
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in GET /api/live:', error);
-    return res.status(500).json({ error: 'Server error retrieving live state.' });
+    return res.status(500).json({ 
+      error: 'Server error retrieving live state.', 
+      details: error.message || String(error) 
+    });
   }
 });
 
