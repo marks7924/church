@@ -50,10 +50,31 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
+import prisma from './db';
+
 // Test connection
-app.get('/health', (req: Request, res: Response) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date(), version: '1.0.0' });
-});
+const healthHandler = async (req: Request, res: Response) => {
+  let dbStatus = 'disconnected';
+  let dbError = null;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = 'connected';
+  } catch (err: any) {
+    dbError = err.message || String(err);
+  }
+
+  const statusCode = dbStatus === 'connected' ? 200 : 500;
+  res.status(statusCode).json({
+    status: dbStatus === 'connected' ? 'OK' : 'DATABASE_ERROR',
+    database: dbStatus,
+    dbError,
+    timestamp: new Date(),
+    version: '1.0.0'
+  });
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // Routing
 app.use('/api/auth', authRouter);
