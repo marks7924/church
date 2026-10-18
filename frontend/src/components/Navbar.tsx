@@ -46,6 +46,29 @@ export default function Navbar() {
     };
   }, []);
 
+  // Sync mobile drawer state to body class & window event so floating buttons (like AI Assistant) can hide
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (isMobileMenuOpen) {
+        document.body.classList.add('mobile-drawer-open');
+        window.dispatchEvent(new CustomEvent('church-drawer-toggle', { detail: { open: true } }));
+      } else {
+        document.body.classList.remove('mobile-drawer-open');
+        window.dispatchEvent(new CustomEvent('church-drawer-toggle', { detail: { open: false } }));
+      }
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('mobile-drawer-open');
+      }
+    };
+  }, [isMobileMenuOpen]);
+
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
+
   // Poll API for Live Stream status
   useEffect(() => {
     const checkLiveStatus = async () => {

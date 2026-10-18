@@ -352,10 +352,6 @@ router.post(
   async (req: AuthRequest, res: Response) => {
     try {
       const { query, language } = req.body;
-      if (!query || typeof query !== 'string') {
-        return res.status(400).json({ error: 'Query is required for testing.' });
-      }
-
       const result = await ChurchAiService.processChat(
         query.slice(0, 500),
         [],
@@ -366,6 +362,165 @@ router.post(
     } catch (error) {
       console.error('Error in AI test playground:', error);
       return res.status(500).json({ error: 'Error running test query.' });
+    }
+  }
+);
+
+/**
+ * 8. GET /api/ai/faqs
+ * Public endpoint to fetch active custom FAQs for quick chips
+ */
+router.get('/faqs', async (req: Request, res: Response) => {
+  try {
+    const faqs = await ChurchKnowledgeRetriever.getCustomFaqs();
+    return res.status(200).json(faqs.filter(f => f.isActive));
+  } catch (error) {
+    console.error('Error fetching public FAQs:', error);
+    return res.status(500).json({ error: 'Failed to retrieve FAQs.' });
+  }
+});
+
+/**
+ * 9. GET /api/ai/admin/faqs
+ * Admin endpoint to list all custom FAQs
+ */
+router.get(
+  '/admin/faqs',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const faqs = await ChurchKnowledgeRetriever.getCustomFaqs();
+      return res.status(200).json(faqs);
+    } catch (error) {
+      console.error('Error fetching admin FAQs:', error);
+      return res.status(500).json({ error: 'Failed to retrieve FAQs.' });
+    }
+  }
+);
+
+/**
+ * 10. POST /api/ai/admin/faqs
+ * Admin endpoint to create a new custom FAQ
+ */
+router.post(
+  '/admin/faqs',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { questionAr, questionEn, answerAr, answerEn, imageUrl, category } = req.body;
+
+      if (!questionAr || !answerAr) {
+        return res.status(400).json({ error: 'Arabic Question and Answer are required.' });
+      }
+
+      const faqs = await ChurchKnowledgeRetriever.getCustomFaqs();
+      const newFaq = {
+        id: `faq-${Date.now()}`,
+        questionAr: String(questionAr).trim(),
+        questionEn: String(questionEn || questionAr).trim(),
+        answerAr: String(answerAr).trim(),
+        answerEn: String(answerEn || answerAr).trim(),
+        imageUrl: imageUrl && typeof imageUrl === 'string' && imageUrl.trim().length > 0 ? imageUrl.trim() : undefined,
+        category: category && typeof category === 'string' ? category.trim() : 'عام',
+        isActive: true,
+        createdAt: new Date().toISOString()
+      };
+
+      faqs.unshift(newFaq);
+
+      await prisma.systemConfig.upsert({
+        where: { key: 'ai_custom_faqs' },
+        update: { value: JSON.stringify(faqs) },
+        create: { key: 'ai_custom_faqs', value: JSON.stringify(faqs) }
+      });
+
+      const { invalidateKnowledgeCache } = await import('../services/ai.service');
+      invalidateKnowledgeCache();
+
+      return res.status(201).json(newFaq);
+    } catch (error) {
+      console.error('Error creating FAQ:', error);
+      return res.status(500).json({ error: 'Failed to create FAQ.' });
+    }
+  }
+);
+
+/**
+ * 11. PUT /api/ai/admin/faqs/:id
+ * Admin endpoint to update an existing custom FAQ
+ */
+router.put(
+  '/admin/faqs/:id',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { questionAr, questionEn, answerAr, answerEn, imageUrl, category, isActive } = req.body;
+
+      const faqs = await ChurchKnowledgeRetriever.getCustomFaqs();
+      const index = faqs.findIndex(f => f.id === id);
+
+      if (index === -1) {
+        return res.status(404).json({ error: 'FAQ not found.' });
+      }
+
+      if (questionAr !== undefined) faqs[index].questionAr = String(questionAr).trim();
+      if (questionEn !== undefined) faqs[index].questionEn = String(questionEn).trim();
+      if (answerAr !== undefined) faqs[index].answerAr = String(answerAr).trim();
+      if (answerEn !== undefined) faqs[index].answerEn = String(answerEn).trim();
+      if (imageUrl !== undefined) {
+        faqs[index].imageUrl = imageUrl && String(imageUrl).trim().length > 0 ? String(imageUrl).trim() : undefined;
+      }
+      if (category !== undefined) faqs[index].category = String(category).trim();
+      if (isActive !== undefined) faqs[index].isActive = Boolean(isActive);
+
+      await prisma.systemConfig.upsert({
+        where: { key: 'ai_custom_faqs' },
+        update: { value: JSON.stringify(faqs) },
+        create: { key: 'ai_custom_faqs', value: JSON.stringify(faqs) }
+      });
+
+      const { invalidateKnowledgeCache } = await import('../services/ai.service');
+      invalidateKnowledgeCache();
+
+      return res.status(200).json(faqs[index]);
+    } catch (error) {
+      console.error('Error updating FAQ:', error);
+      return res.status(500).json({ error: 'Failed to update FAQ.' });
+    }
+  }
+);
+
+/**
+ * 12. DELETE /api/ai/admin/faqs/:id
+ * Admin endpoint to delete a custom FAQ
+ */
+router.delete(
+  '/admin/faqs/:id',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const faqs = await ChurchKnowledgeRetriever.getCustomFaqs();
+      const filtered = faqs.filter(f => f.id !== id);
+
+      await prisma.systemConfig.upsert({
+        where: { key: 'ai_custom_faqs' },
+        update: { value: JSON.stringify(filtered) },
+        create: { key: 'ai_custom_faqs', value: JSON.stringify(filtered) }
+      });
+
+      const { invalidateKnowledgeCache } = await import('../services/ai.service');
+      invalidateKnowledgeCache();
+
+      return res.status(200).json({ message: 'FAQ deleted successfully.' });
+    } catch (error) {
+      console.error('Error deleting FAQ:', error);
+      return res.status(500).json({ error: 'Failed to delete FAQ.' });
     }
   }
 );

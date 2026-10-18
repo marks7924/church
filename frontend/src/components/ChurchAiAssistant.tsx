@@ -39,6 +39,34 @@ export default function ChurchAiAssistant() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showPrivacyBanner, setShowPrivacyBanner] = useState(true);
+  const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
+
+  // Hide AI trigger button whenever the mobile navigation drawer is open
+  useEffect(() => {
+    const handleDrawerToggle = (e: any) => {
+      setIsNavDrawerOpen(!!e?.detail?.open);
+    };
+    window.addEventListener('church-drawer-toggle', handleDrawerToggle);
+
+    const checkDrawerState = () => {
+      if (typeof document !== 'undefined') {
+        const hasOpenClass = document.body.classList.contains('mobile-drawer-open');
+        const hasDrawer = !!document.querySelector('[class*="mobileDropdownDrawer"]');
+        setIsNavDrawerOpen(hasOpenClass || hasDrawer);
+      }
+    };
+
+    const observer = new MutationObserver(checkDrawerState);
+    if (typeof document !== 'undefined' && document.body) {
+      observer.observe(document.body, { attributes: true, attributeFilter: ['class'], childList: true, subtree: true });
+      checkDrawerState();
+    }
+
+    return () => {
+      window.removeEventListener('church-drawer-toggle', handleDrawerToggle);
+      observer.disconnect();
+    };
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -216,6 +244,51 @@ export default function ChurchAiAssistant() {
         return <div key={pIdx} style={{ height: '8px' }} />;
       }
 
+      // Check if paragraph is an image markdown: ![alt](url)
+      const imgMatch = para.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+      if (imgMatch) {
+        const altText = imgMatch[1];
+        const imgUrl = imgMatch[2];
+        return (
+          <div
+            key={pIdx}
+            style={{
+              margin: '8px 0',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              border: '1px solid var(--border-color)',
+              backgroundColor: 'rgba(0, 0, 0, 0.2)',
+              maxWidth: '100%'
+            }}
+          >
+            <img
+              src={imgUrl}
+              alt={altText || 'صورة توضيحية'}
+              loading="lazy"
+              style={{
+                width: '100%',
+                maxHeight: '220px',
+                objectFit: 'cover',
+                display: 'block'
+              }}
+            />
+            {altText && (
+              <div
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '0.72rem',
+                  color: 'var(--text-secondary)',
+                  textAlign: 'center',
+                  backgroundColor: 'rgba(0, 0, 0, 0.3)'
+                }}
+              >
+                {altText}
+              </div>
+            )}
+          </div>
+        );
+      }
+
       // Regex to parse [title](url) links
       const parts = [];
       const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
@@ -307,7 +380,7 @@ export default function ChurchAiAssistant() {
   return (
     <>
       {/* 1. Floating Action Trigger Button (Bottom corner) */}
-      {!isOpen && (
+      {!isOpen && !isNavDrawerOpen && (
         <button
           id="church-ai-trigger-btn"
           onClick={() => {

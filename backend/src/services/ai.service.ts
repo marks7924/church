@@ -32,6 +32,18 @@ export interface ProviderResult {
   errorMessage?: string;
 }
 
+export interface CustomFaq {
+  id: string;
+  questionAr: string;
+  questionEn: string;
+  answerAr: string;
+  answerEn: string;
+  imageUrl?: string;
+  category?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 // Church static authoritative identity constants
 export const CHURCH_INFO = {
   nameAr: 'كنيسة الشهيد العظيم فيلوباتير مرقوريوس (أبي سيفين) بحدائق القبة',
@@ -262,7 +274,64 @@ export class ChurchKnowledgeRetriever {
   }
 
   /**
-   * 5. Live stream status from SystemConfig
+   * 5. Custom FAQs & Quick Q&A with rich answers and optional images
+   */
+  static async getCustomFaqs(): Promise<CustomFaq[]> {
+    try {
+      let faqs = getCached<CustomFaq[]>('custom_faqs');
+      if (!faqs) {
+        const entry = await prisma.systemConfig.findUnique({
+          where: { key: 'ai_custom_faqs' }
+        });
+        if (entry && entry.value) {
+          try {
+            faqs = JSON.parse(entry.value);
+          } catch {
+            faqs = [];
+          }
+        } else {
+          // Initialize with default rich Q&As
+          faqs = [
+            {
+              id: 'faq-1',
+              questionAr: 'ما هي مواعيد زيارة مزار الشهيد العظيم أبي سيفين؟',
+              questionEn: 'What are the visiting hours for St. Abu Sefein Shrine?',
+              answerAr: 'المزار مفتوح يومياً لنيل البركة والصلوات من الساعة 8:00 صباحاً حتى الساعة 9:00 مساءً، وتقام صلوات التمجيد ورفع بخور عشية مساء كل أربعاء وسبت.',
+              answerEn: 'The shrine is open daily for veneration and prayers from 8:00 AM to 9:00 PM. Special glorification and Vespers prayers take place every Wednesday and Saturday evening.',
+              imageUrl: 'https://images.unsplash.com/photo-1548625361-19599292db2d?q=80&w=600',
+              category: 'مزارات وبركات',
+              isActive: true,
+              createdAt: new Date().toISOString()
+            },
+            {
+              id: 'faq-2',
+              questionAr: 'أين يقع مسرح الكنيسة وقاعة المناسبات؟',
+              questionEn: 'Where is the church auditorium and event hall located?',
+              answerAr: 'يقع المسرح الكبير وقاعات المناسبات الكنسية بالمبنى الملحق بالدور الأرضي، ومدخلها من البوابة الجانبية لشارع طومانباي.',
+              answerEn: 'The main auditorium and event halls are located on the ground floor of the adjacent church annex building, accessible via the side gate on Tomanbay Street.',
+              imageUrl: 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?q=80&w=600',
+              category: 'مباني الكنيسة',
+              isActive: true,
+              createdAt: new Date().toISOString()
+            }
+          ];
+          await prisma.systemConfig.upsert({
+            where: { key: 'ai_custom_faqs' },
+            update: { value: JSON.stringify(faqs) },
+            create: { key: 'ai_custom_faqs', value: JSON.stringify(faqs) }
+          });
+        }
+        setCached('custom_faqs', faqs);
+      }
+      return faqs || [];
+    } catch (err) {
+      console.error('Error fetching custom FAQs:', err);
+      return [];
+    }
+  }
+
+  /**
+   * 6. Live stream status from SystemConfig
    */
   static async getLiveStatus() {
     try {
@@ -523,13 +592,14 @@ export class ChurchAiService {
     const norm = normalizeQuery(query);
 
     // Concurrently fetch authorized public knowledge sources
-    const [schedules, events, priests, sermons, liveStatus, news] = await Promise.all([
+    const [schedules, events, priests, sermons, liveStatus, news, customFaqs] = await Promise.all([
       ChurchKnowledgeRetriever.getMassSchedules(),
       ChurchKnowledgeRetriever.getUpcomingEvents(),
       ChurchKnowledgeRetriever.getClergyDirectory(),
       ChurchKnowledgeRetriever.searchSermons(norm),
       ChurchKnowledgeRetriever.getLiveStatus(),
-      ChurchKnowledgeRetriever.getLatestNews()
+      ChurchKnowledgeRetriever.getLatestNews(),
+      ChurchKnowledgeRetriever.getCustomFaqs()
     ]);
 
     const sources: AiSourceReference[] = [];
@@ -608,7 +678,15 @@ export class ChurchAiService {
     // Contact
     sources.push({ title: userLanguage === 'ar' ? 'اتصل بالكنيسة' : 'Contact Us', url: '/contact', type: 'contact' });
 
-    return { knowledgeText, sources };
+    // Custom FAQs
+    if (customFaqs && customFaqs.length > 0) {
+      knowledgeText += `\n### Verified Custom Quick Questions & Answers:\n`;
+      customFaqs.filter(f => f.isActive).forEach(f => {
+        knowledgeText += `- Q: "${f.questionAr}" (${f.questionEn}) -> A: "${f.answerAr}" (${f.answerEn}) ${f.imageUrl ? `[Image: ${f.imageUrl}]` : ''}\n`;
+      });
+    }
+
+    return { knowledgeText, sources, customFaqs };
   }
 
   /**
@@ -655,9 +733,38 @@ CRITICAL OPERATIONAL RULES:
   /**
    * High-fidelity Grounded Fallback Engine
    */
-  static generateGroundedResponse(query: string, language: 'ar' | 'en', context: { knowledgeText: string, sources: AiSourceReference[] }): { text: string; matchedSources: AiSourceReference[]; suggested: string[] } {
+  static generateGroundedResponse(
+    query: string,
+    language: 'ar' | 'en',
+    context: { knowledgeText: string; sources: AiSourceReference[]; customFaqs?: CustomFaq[] }
+  ): { text: string; matchedSources: AiSourceReference[]; suggested: string[] } {
     const q = normalizeQuery(query);
     const isAr = language === 'ar';
+
+    // 0. Check Custom FAQs first
+    if (context.customFaqs && context.customFaqs.length > 0) {
+      const activeFaqs = context.customFaqs.filter(f => f.isActive);
+      for (const faq of activeFaqs) {
+        const qArNorm = normalizeQuery(faq.questionAr);
+        const qEnNorm = normalizeQuery(faq.questionEn);
+        if (
+          (qArNorm.length > 3 && (q.includes(qArNorm) || qArNorm.includes(q))) ||
+          (qEnNorm.length > 3 && (q.includes(qEnNorm) || qEnNorm.includes(q)))
+        ) {
+          let text = isAr ? faq.answerAr : faq.answerEn;
+          if (faq.imageUrl && faq.imageUrl.trim()) {
+            text += `\n\n![${isAr ? 'صورة توضيحية' : 'Illustration'}](${faq.imageUrl.trim()})`;
+          }
+          return {
+            text,
+            matchedSources: context.sources.slice(0, 2),
+            suggested: isAr
+              ? ['مواعيد القداسات', 'حجز موعد اعتراف', 'ما هي رحلات الكنيسة القادمة؟']
+              : ['Mass schedules', 'Book confession', 'Upcoming church trips']
+          };
+        }
+      }
+    }
 
     // 1. Liturgy / Mass schedule
     if (q.includes('قداس') || q.includes('مواعيد') || q.includes('صلاه') || q.includes('mass') || q.includes('liturgy') || q.includes('schedule') || q.includes('جمعه') || q.includes('احد') || q.includes('اربع')) {
@@ -866,7 +973,7 @@ CRITICAL OPERATIONAL RULES:
     const lang = preferredLanguage || detectLanguage(userMessage);
 
     // 1. Retrieve Grounded Context
-    const { knowledgeText, sources } = await ChurchAiService.buildContext(userMessage, lang);
+    const { knowledgeText, sources, customFaqs } = await ChurchAiService.buildContext(userMessage, lang);
 
     // 2. Read Configuration
     const geminiKey = process.env.GEMINI_API_KEY?.trim() || '';
@@ -889,7 +996,7 @@ CRITICAL OPERATIONAL RULES:
     // 3. Shared Budget Check
     if (isBudgetExceeded()) {
       console.warn('AI shared daily budget limit reached. Serving via verified local knowledge engine.');
-      const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources });
+      const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources, customFaqs });
       return {
         response: fallback.text,
         sources: fallback.matchedSources,
@@ -959,7 +1066,7 @@ CRITICAL OPERATIONAL RULES:
 
     // B. If neither external provider generated a response (keys missing, permanent error, or both down)
     if (!chosenText) {
-      const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources });
+      const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources, customFaqs });
       const latencyMs = Date.now() - startTime;
       return {
         response: fallback.text,

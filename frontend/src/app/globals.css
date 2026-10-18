@@ -434,3 +434,14 @@ html, body {
   }
 }
 
+/* Hide Church AI Assistant Floating Trigger Button when mobile drawer is open */
+body.mobile-drawer-open #church-ai-trigger-btn,
+body:has([class*="mobileDropdownDrawer"]) #church-ai-trigger-btn,
+body:has([class*="mobileDropdownOverlay"]) #church-ai-trigger-btn {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: translateY(20px) scale(0.8) !important;
+}
+
