@@ -93,6 +93,7 @@ router.patch('/me', requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Priest profile not found.' });
     }
     const {
+      avatarUrl,
       availabilityJson,
       confessionStatus,
       confessionStatusNote,
@@ -105,6 +106,7 @@ router.patch('/me', requireAuth, async (req: AuthRequest, res: Response) => {
     const updated = await prisma.priestProfile.update({
       where: { id: profile.id },
       data: {
+        avatarUrl: avatarUrl !== undefined ? avatarUrl : undefined,
         availabilityJson: availabilityJson !== undefined ? availabilityJson : undefined,
         confessionStatus: confessionStatus !== undefined ? confessionStatus : undefined,
         confessionStatusNote: confessionStatusNote !== undefined ? confessionStatusNote : undefined,

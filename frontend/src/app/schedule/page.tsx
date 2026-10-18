@@ -295,98 +295,98 @@ export default function SchedulePage() {
   };
 
   return (
-    <div className="container" style={{ padding: 'clamp(1.5rem, 4vw, 3rem) clamp(0.8rem, 3vw, 1.5rem)', maxWidth: '980px' }}>
+    <div className="container" style={{ padding: 'clamp(1rem, 3.5vw, 2.5rem) clamp(0.6rem, 2.5vw, 1.2rem)', maxWidth: '980px', width: '100%', boxSizing: 'border-box' }}>
       
       {/* Page Title */}
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+      <div style={{ textAlign: 'center', marginBottom: '1.5rem', width: '100%' }}>
         <h1 style={{ 
-          fontSize: 'clamp(1.6rem, 5vw, 2.3rem)', 
+          fontSize: 'clamp(1.3rem, 5vw, 2.2rem)', 
           fontWeight: '800', 
           color: 'var(--accent-gold)',
-          marginBottom: '0.6rem'
+          marginBottom: '0.6rem',
+          lineHeight: 1.3,
+          wordBreak: 'break-word'
         }}>
           {language === 'ar' ? 'مواعيد القداسات والمناسبات الكنسية' : 'Liturgies & Occasions Schedule'}
         </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 'clamp(0.82rem, 2.8vw, 0.95rem)', lineHeight: 1.5, wordBreak: 'break-word', maxWidth: '650px', margin: '0 auto' }}>
           {language === 'ar' 
             ? 'مواعيد الصلوات الأسبوعية الثابتة، الأعياد والمناسبات، والتقويم القبطي التفاعلي'
             : 'Weekly mass timings, liturgical feasts, and interactive Coptic calendar'}
         </p>
       </div>
 
-      {/* Navigation Tabs */}
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        marginBottom: '2rem',
-        overflowX: 'auto',
-        paddingBottom: '8px',
-        borderBottom: '1px solid var(--border-color)',
-        justifyContent: 'center'
+      {/* Navigation Tabs (Scrollable on mobile) */}
+      <div className="schedule-tabs-container" style={{
+        marginBottom: '1.8rem',
+        borderBottom: '1px solid var(--border-color)'
       }}>
         <button
           onClick={() => setActiveTab('weekly')}
           style={{
-            padding: '10px 18px',
+            padding: '8px 14px',
             borderRadius: '6px',
             border: activeTab === 'weekly' ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
             backgroundColor: activeTab === 'weekly' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
             color: activeTab === 'weekly' ? '#000000' : 'var(--text-primary)',
             fontWeight: 'bold',
-            fontSize: '0.9rem',
+            fontSize: '0.85rem',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '6px',
             whiteSpace: 'nowrap',
+            flexShrink: 0,
             transition: 'all 0.2s ease'
           }}
         >
-          <CalendarIcon size={18} />
+          <CalendarIcon size={16} />
           <span>{language === 'ar' ? 'مواعيد القداسات الثابتة' : 'Regular Liturgies'}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('occasions')}
           style={{
-            padding: '10px 18px',
+            padding: '8px 14px',
             borderRadius: '6px',
             border: activeTab === 'occasions' ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
             backgroundColor: activeTab === 'occasions' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
             color: activeTab === 'occasions' ? '#000000' : 'var(--text-primary)',
             fontWeight: 'bold',
-            fontSize: '0.9rem',
+            fontSize: '0.85rem',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '6px',
             whiteSpace: 'nowrap',
+            flexShrink: 0,
             transition: 'all 0.2s ease'
           }}
         >
-          <Sparkles size={18} />
+          <Sparkles size={16} />
           <span>{language === 'ar' ? 'مواعيد المناسبات والأعياد' : 'Special Occasions & Feasts'}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('coptic-calendar')}
           style={{
-            padding: '10px 18px',
+            padding: '8px 14px',
             borderRadius: '6px',
             border: activeTab === 'coptic-calendar' ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
             backgroundColor: activeTab === 'coptic-calendar' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
             color: activeTab === 'coptic-calendar' ? '#000000' : 'var(--text-primary)',
             fontWeight: 'bold',
-            fontSize: '0.9rem',
+            fontSize: '0.85rem',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '6px',
             whiteSpace: 'nowrap',
+            flexShrink: 0,
             transition: 'all 0.2s ease'
           }}
         >
-          <BookOpen size={18} />
+          <BookOpen size={16} />
           <span>{language === 'ar' ? 'التقويم القبطي والنتيجة' : 'Coptic Calendar'}</span>
         </button>
       </div>
@@ -395,23 +395,25 @@ export default function SchedulePage() {
       {/* TAB 1: WEEKLY REGULAR LITURGIES */}
       {/* ======================================================== */}
       {activeTab === 'weekly' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%' }}>
           
           {/* Day Filter */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '12px',
+            gap: '10px',
             backgroundColor: 'var(--bg-secondary)',
             border: '1px solid var(--border-color)',
-            padding: '0.9rem 1.2rem',
+            padding: '0.8rem 1rem',
             borderRadius: '6px',
-            flexWrap: 'wrap'
+            flexWrap: 'wrap',
+            width: '100%',
+            boxSizing: 'border-box'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Filter size={18} style={{ color: 'var(--accent-gold)' }} />
-              <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>
+              <Filter size={16} style={{ color: 'var(--accent-gold)' }} />
+              <span style={{ fontSize: '0.88rem', fontWeight: 'bold' }}>
                 {language === 'ar' ? 'تصفية حسب اليوم:' : 'Filter by Day:'}
               </span>
             </div>
@@ -422,11 +424,12 @@ export default function SchedulePage() {
                 backgroundColor: 'var(--bg-card)',
                 border: '1px solid var(--border-color)',
                 color: 'var(--text-primary)',
-                padding: '8px 14px',
+                padding: '8px 12px',
                 borderRadius: '4px',
                 outline: 'none',
                 cursor: 'pointer',
-                fontSize: '0.9rem'
+                fontSize: '0.88rem',
+                flex: '1 1 180px'
               }}
             >
               <option value="">{language === 'ar' ? 'جميع الأيام' : 'All Days'}</option>
@@ -438,8 +441,8 @@ export default function SchedulePage() {
             </select>
           </div>
 
-          {/* Desktop Table View (Hidden on mobile < 640px) */}
-          <div className="desktop-schedule-table" style={{
+          {/* Desktop Table View (>= 769px) */}
+          <div className="desktop-only-table" style={{
             backgroundColor: 'var(--bg-secondary)',
             border: '1px solid var(--border-color)',
             borderRadius: '8px',
@@ -516,6 +519,102 @@ export default function SchedulePage() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Card List (< 769px) - Never overflows or cuts columns */}
+          <div className="mobile-only-cards" style={{ width: '100%' }}>
+            {filteredSchedules.length > 0 ? (
+              filteredSchedules.map(item => (
+                <div
+                  key={item.id}
+                  style={{
+                    backgroundColor: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    padding: '1rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    boxShadow: 'var(--shadow-sm)',
+                    width: '100%',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '1.2rem' }}>🕯️</span>
+                      <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                        {language === 'ar' ? item.eventTypeAr : item.eventTypeEn}
+                      </span>
+                    </div>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleDeleteSchedule(item.id)}
+                        style={{
+                          background: 'none',
+                          border: '1px solid rgba(255, 77, 77, 0.3)',
+                          color: '#ff4d4d',
+                          cursor: 'pointer',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '0.75rem'
+                        }}
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                        <span>{language === 'ar' ? 'حذف' : 'Delete'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '8px',
+                    paddingTop: '8px',
+                    borderTop: '1px solid var(--border-color)'
+                  }}>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ar' ? 'اليوم: ' : 'Day: '}
+                      <b style={{ color: 'var(--accent-gold)', fontSize: '1rem' }}>
+                        {language === 'ar' ? item.dayAr : item.dayEn}
+                      </b>
+                    </div>
+
+                    <span style={{
+                      display: 'inline-block',
+                      whiteSpace: 'nowrap',
+                      backgroundColor: 'rgba(226, 183, 20, 0.12)',
+                      color: 'var(--accent-gold)',
+                      border: '1px solid var(--accent-gold)',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      fontWeight: 'bold',
+                      fontSize: '0.85rem',
+                      direction: 'ltr'
+                    }}>
+                      {language === 'ar' ? item.timeAr : item.timeEn}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div style={{
+                padding: '24px 15px',
+                textAlign: 'center',
+                backgroundColor: 'var(--bg-secondary)',
+                borderRadius: '8px',
+                border: '1px dashed var(--border-color)',
+                color: 'var(--text-secondary)'
+              }}>
+                {language === 'ar' ? 'لا يوجد قداسات مسجلة حالياً.' : 'No liturgies scheduled.'}
+              </div>
+            )}
           </div>
 
           {/* Admin Form: Add regular mass */}
