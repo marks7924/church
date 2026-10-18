@@ -32,13 +32,93 @@ router.get('/', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req: AuthR
       maxBookingsPerDay: p.maxBookingsPerDay,
       confessionDuration: p.confessionDuration,
       bufferMinutes: p.bufferMinutes,
-      availabilityJson: p.availabilityJson
+      availabilityJson: p.availabilityJson,
+      confessionStatus: p.confessionStatus,
+      confessionStatusNote: p.confessionStatusNote,
+      noFixedSchedule: p.noFixedSchedule
     }));
 
     return res.status(200).json(formatted);
   } catch (error) {
     console.error('Error fetching all priests:', error);
     return res.status(500).json({ error: 'Server error fetching all priests.' });
+  }
+});
+
+// Priest Self Profile: GET /me
+router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const profile = await prisma.priestProfile.findUnique({
+      where: { userId },
+      include: { user: true }
+    });
+    if (!profile) {
+      return res.status(404).json({ error: 'Priest profile not found for current user.' });
+    }
+    return res.status(200).json({
+      id: profile.id,
+      userId: profile.userId,
+      email: profile.user.email,
+      fullName: profile.user.fullName,
+      phone: profile.user.phone,
+      nameAr: profile.nameAr,
+      nameEn: profile.nameEn,
+      titleAr: profile.titleAr,
+      titleEn: profile.titleEn,
+      avatarUrl: profile.avatarUrl,
+      maxBookingsPerDay: profile.maxBookingsPerDay,
+      confessionDuration: profile.confessionDuration,
+      bufferMinutes: profile.bufferMinutes,
+      availabilityJson: profile.availabilityJson,
+      confessionStatus: profile.confessionStatus,
+      confessionStatusNote: profile.confessionStatusNote,
+      noFixedSchedule: profile.noFixedSchedule,
+      role: profile.user.role
+    });
+  } catch (error) {
+    console.error('Error fetching priest me:', error);
+    return res.status(500).json({ error: 'Server error fetching priest profile.' });
+  }
+});
+
+// Priest Self Profile: PATCH /me (priest updates their own schedule, confession status, etc.)
+router.patch('/me', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const profile = await prisma.priestProfile.findUnique({
+      where: { userId }
+    });
+    if (!profile) {
+      return res.status(404).json({ error: 'Priest profile not found.' });
+    }
+    const {
+      availabilityJson,
+      confessionStatus,
+      confessionStatusNote,
+      noFixedSchedule,
+      maxBookingsPerDay,
+      confessionDuration,
+      bufferMinutes
+    } = req.body;
+
+    const updated = await prisma.priestProfile.update({
+      where: { id: profile.id },
+      data: {
+        availabilityJson: availabilityJson !== undefined ? availabilityJson : undefined,
+        confessionStatus: confessionStatus !== undefined ? confessionStatus : undefined,
+        confessionStatusNote: confessionStatusNote !== undefined ? confessionStatusNote : undefined,
+        noFixedSchedule: noFixedSchedule !== undefined ? Boolean(noFixedSchedule) : undefined,
+        maxBookingsPerDay: maxBookingsPerDay !== undefined ? parseInt(maxBookingsPerDay) : undefined,
+        confessionDuration: confessionDuration !== undefined ? parseInt(confessionDuration) : undefined,
+        bufferMinutes: bufferMinutes !== undefined ? parseInt(bufferMinutes) : undefined
+      }
+    });
+
+    return res.status(200).json({ message: 'Profile updated successfully.', profile: updated });
+  } catch (error) {
+    console.error('Error updating priest me:', error);
+    return res.status(500).json({ error: 'Server error updating profile.' });
   }
 });
 
@@ -124,64 +204,70 @@ router.post('/', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req: Auth
 // 2. Edit Priest (SUPER_ADMIN only)
 router.patch('/:id', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {
   const profileId = req.params.id;
-  const {
-    email,
-    password,
-    fullName,
-    phone,
-    nationalId,
-    nameAr,
-    nameEn,
-    titleAr,
-    titleEn,
-    avatarUrl,
-    maxBookingsPerDay,
-    confessionDuration,
-    bufferMinutes,
-    availabilityJson
-  } = req.body;
+    const {
+      email,
+      password,
+      fullName,
+      phone,
+      nationalId,
+      nameAr,
+      nameEn,
+      titleAr,
+      titleEn,
+      avatarUrl,
+      maxBookingsPerDay,
+      confessionDuration,
+      bufferMinutes,
+      availabilityJson,
+      confessionStatus,
+      confessionStatusNote,
+      noFixedSchedule
+    } = req.body;
 
-  try {
-    const profile = await prisma.priestProfile.findUnique({
-      where: { id: profileId },
-      include: { user: true }
-    });
-
-    if (!profile) {
-      return res.status(404).json({ error: 'Priest profile not found.' });
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
-      // Update User
-      const updatedUser = await tx.user.update({
-        where: { id: profile.userId },
-        data: {
-          email,
-          passwordHash: password ? bcrypt.hashSync(password, 10) : undefined,
-          fullName,
-          phone,
-          nationalId: nationalId || null
-        }
-      });
-
-      // Update Profile
-      const updatedProfile = await tx.priestProfile.update({
+    try {
+      const profile = await prisma.priestProfile.findUnique({
         where: { id: profileId },
-        data: {
-          nameAr,
-          nameEn,
-          titleAr,
-          titleEn,
-          avatarUrl,
-          maxBookingsPerDay: maxBookingsPerDay ? parseInt(maxBookingsPerDay) : undefined,
-          confessionDuration: confessionDuration ? parseInt(confessionDuration) : undefined,
-          bufferMinutes: bufferMinutes ? parseInt(bufferMinutes) : undefined,
-          availabilityJson
-        }
+        include: { user: true }
       });
 
-      return { user: updatedUser, profile: updatedProfile };
-    });
+      if (!profile) {
+        return res.status(404).json({ error: 'Priest profile not found.' });
+      }
+
+      const result = await prisma.$transaction(async (tx) => {
+        // Update User
+        const updatedUser = await tx.user.update({
+          where: { id: profile.userId },
+          data: {
+            email,
+            passwordHash: password ? bcrypt.hashSync(password, 10) : undefined,
+            fullName,
+            phone,
+            nationalId: nationalId || null
+          }
+        });
+
+        // Update Profile
+        const updatedProfile = await tx.priestProfile.update({
+          where: { id: profileId },
+          data: {
+            nameAr,
+            nameEn,
+            titleAr,
+            titleEn,
+            avatarUrl,
+            maxBookingsPerDay: maxBookingsPerDay ? parseInt(maxBookingsPerDay) : undefined,
+            confessionDuration: confessionDuration ? parseInt(confessionDuration) : undefined,
+            bufferMinutes: bufferMinutes ? parseInt(bufferMinutes) : undefined,
+            availabilityJson,
+            confessionStatus: confessionStatus !== undefined ? confessionStatus : undefined,
+            confessionStatusNote: confessionStatusNote !== undefined ? confessionStatusNote : undefined,
+            noFixedSchedule: noFixedSchedule !== undefined ? Boolean(noFixedSchedule) : undefined
+          }
+        });
+
+        return { user: updatedUser, profile: updatedProfile };
+      });
 
     return res.status(200).json(result);
   } catch (error) {

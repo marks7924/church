@@ -58,6 +58,79 @@ async function main() {
     },
   });
 
+  // --- Priests ---
+  const priest1User = await prisma.user.create({
+    data: {
+      email: 'fr.mina@church.org',
+      passwordHash,
+      role: Role.PRIEST,
+      fullName: 'القمص مينا عزت',
+      phone: '+201000000010',
+      nationalId: '10000000000010',
+      isVerified: true,
+    },
+  });
+
+  const priest2User = await prisma.user.create({
+    data: {
+      email: 'fr.philopateer@church.org',
+      passwordHash,
+      role: Role.PRIEST,
+      fullName: 'القمص فيلوباتير عزمي',
+      phone: '+201000000011',
+      nationalId: '10000000000011',
+      isVerified: true,
+    },
+  });
+
+  const priest3User = await prisma.user.create({
+    data: {
+      email: 'fr.yohanna@church.org',
+      passwordHash,
+      role: Role.PRIEST,
+      fullName: 'القس يوحنا جون',
+      phone: '+201000000012',
+      nationalId: '10000000000012',
+      isVerified: true,
+    },
+  });
+
+  const priest4User = await prisma.user.create({
+    data: {
+      email: 'fr.karas@church.org',
+      passwordHash,
+      role: Role.PRIEST,
+      fullName: 'القس كاراس عزيز',
+      phone: '+201000000013',
+      nationalId: '10000000000013',
+      isVerified: true,
+    },
+  });
+
+  const priest5User = await prisma.user.create({
+    data: {
+      email: 'fr.michael@church.org',
+      passwordHash,
+      role: Role.PRIEST,
+      fullName: 'القس مايكل اسحاق',
+      phone: '+201000000014',
+      nationalId: '10000000000014',
+      isVerified: true,
+    },
+  });
+
+  const priest6User = await prisma.user.create({
+    data: {
+      email: 'fr.moussa@church.org',
+      passwordHash,
+      role: Role.PRIEST,
+      fullName: 'القس موسى عريان',
+      phone: '+201000000015',
+      nationalId: '10000000000015',
+      isVerified: true,
+    },
+  });
+
   const bishopUser = await prisma.user.create({
     data: {
       email: 'bishop@church.org',
@@ -66,18 +139,6 @@ async function main() {
       fullName: 'الأنبا اثناسيوس',
       phone: '+201000000003',
       nationalId: '10000000000003',
-      isVerified: true,
-    },
-  });
-
-  const priestUser = await prisma.user.create({
-    data: {
-      email: 'priest@church.org',
-      passwordHash,
-      role: Role.PRIEST,
-      fullName: 'القمص يوحنا كمال',
-      phone: '+201000000004',
-      nationalId: '10000000000004',
       isVerified: true,
     },
   });
@@ -120,22 +181,114 @@ async function main() {
 
   console.log('Demo users created.');
 
-  // 2. Priest Profiles
-  const priestProfile = await prisma.priestProfile.create({
+  // 2. Priest Profiles (in order)
+  await prisma.priestProfile.create({
     data: {
-      userId: priestUser.id,
-      nameAr: 'القمص يوحنا كمال',
-      nameEn: 'Fr. John Kamal',
+      userId: priest1User.id,
+      nameAr: 'القمص مينا عزت',
+      nameEn: 'Fr. Mina Ezzat',
       titleAr: 'أبونا',
       titleEn: 'Father',
       maxBookingsPerDay: 5,
-      bufferMinutes: 15,
-      // Mondays, Wednesdays and Fridays
+      bufferMinutes: 10,
+      confessionStatus: 'ACTIVE',
       availabilityJson: JSON.stringify({
-        Monday: ['17:00-17:30', '17:30-18:00', '18:00-18:30', '18:30-19:00'],
-        Wednesday: ['18:00-18:30', '18:30-19:00', '19:00-19:30', '19:30-20:00'],
-        Friday: ['16:00-16:30', '16:30-17:00', '17:00-17:30', '17:30-18:00'],
+        recurring: [
+          { day: 1, startTime: '17:00', endTime: '20:00' },
+          { day: 3, startTime: '18:00', endTime: '20:00' },
+        ],
+        specific: []
       }),
+    },
+  });
+
+  await prisma.priestProfile.create({
+    data: {
+      userId: priest2User.id,
+      nameAr: 'القمص فيلوباتير عزمي',
+      nameEn: 'Fr. Philopateer Azmy',
+      titleAr: 'أبونا',
+      titleEn: 'Father',
+      maxBookingsPerDay: 5,
+      bufferMinutes: 10,
+      confessionStatus: 'ACTIVE',
+      availabilityJson: JSON.stringify({
+        recurring: [
+          { day: 2, startTime: '17:00', endTime: '19:00' },
+          { day: 5, startTime: '16:00', endTime: '18:00' },
+        ],
+        specific: []
+      }),
+    },
+  });
+
+  await prisma.priestProfile.create({
+    data: {
+      userId: priest3User.id,
+      nameAr: 'القس يوحنا جون',
+      nameEn: 'Fr. Yohanna John',
+      titleAr: 'أبونا',
+      titleEn: 'Father',
+      maxBookingsPerDay: 5,
+      bufferMinutes: 10,
+      confessionStatus: 'ACTIVE',
+      availabilityJson: JSON.stringify({
+        recurring: [
+          { day: 0, startTime: '12:00', endTime: '14:00' },
+          { day: 4, startTime: '18:00', endTime: '20:00' },
+        ],
+        specific: []
+      }),
+    },
+  });
+
+  await prisma.priestProfile.create({
+    data: {
+      userId: priest4User.id,
+      nameAr: 'القس كاراس عزيز',
+      nameEn: 'Fr. Karas Aziz',
+      titleAr: 'أبونا',
+      titleEn: 'Father',
+      maxBookingsPerDay: 5,
+      bufferMinutes: 10,
+      confessionStatus: 'ACTIVE',
+      availabilityJson: JSON.stringify({
+        recurring: [
+          { day: 3, startTime: '16:00', endTime: '18:00' },
+          { day: 6, startTime: '10:00', endTime: '12:00' },
+        ],
+        specific: []
+      }),
+    },
+  });
+
+  await prisma.priestProfile.create({
+    data: {
+      userId: priest5User.id,
+      nameAr: 'القس مايكل اسحاق',
+      nameEn: 'Fr. Michael Isaac',
+      titleAr: 'أبونا',
+      titleEn: 'Father',
+      maxBookingsPerDay: 5,
+      bufferMinutes: 10,
+      confessionStatus: 'TRAVELING',
+      confessionStatusNote: 'أبونا مسافر خارج مصر حالياً',
+      availabilityJson: JSON.stringify({ recurring: [], specific: [] }),
+    },
+  });
+
+  await prisma.priestProfile.create({
+    data: {
+      userId: priest6User.id,
+      nameAr: 'القس موسى عريان',
+      nameEn: 'Fr. Moussa Erian',
+      titleAr: 'أبونا',
+      titleEn: 'Father',
+      maxBookingsPerDay: 5,
+      bufferMinutes: 10,
+      confessionStatus: 'INACTIVE',
+      confessionStatusNote: 'أبونا لا يقبل اعترافات حالياً',
+      availabilityJson: JSON.stringify({ recurring: [], specific: [] }),
     },
   });
 
@@ -148,9 +301,9 @@ async function main() {
       titleEn: 'Bishop',
       maxBookingsPerDay: 3,
       bufferMinutes: 20,
-      availabilityJson: JSON.stringify({
-        Thursday: ['19:00-19:30', '19:30-20:00', '20:00-20:30', '20:30-21:00'],
-      }),
+      confessionStatus: 'ACTIVE',
+      noFixedSchedule: true,
+      availabilityJson: JSON.stringify({ recurring: [], specific: [] }),
     },
   });
 
@@ -277,6 +430,17 @@ async function main() {
         date: new Date('2026-05-28T19:00:00Z'),
         youtubeUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
         thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
+      },
+      {
+        titleAr: 'يا ترى بتعرف ربنا بجد',
+        titleEn: 'Do You Really Know God?',
+        priestNameAr: 'الأنبا اثناسيوس',
+        priestNameEn: 'Bishop Athanasius',
+        topicAr: 'معرفة الله',
+        topicEn: 'Knowing God',
+        date: new Date('2026-09-20T19:00:00Z'),
+        youtubeUrl: 'https://www.youtube.com/embed/XgiWh84TxHY',
+        thumbnailUrl: 'https://img.youtube.com/vi/XgiWh84TxHY/mqdefault.jpg',
       },
     ],
   });

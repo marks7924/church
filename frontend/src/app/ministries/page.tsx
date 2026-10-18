@@ -89,11 +89,11 @@ export default function MinistriesPage() {
             console.log(e);
           }
         }
-        setMinistries(defaultMinistries);
+        setMinistries([]);
       })
       .catch(err => {
         console.log(err);
-        setMinistries(defaultMinistries);
+        setMinistries([]);
       });
   }, []);
 

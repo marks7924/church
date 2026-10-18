@@ -163,6 +163,107 @@ router.delete('/:id', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETA
 });
 
 // ==========================================
+// TRIP BOOKINGS SECTION
+// ==========================================
+
+// 4a. Submit a Trip Booking (Public or Authenticated)
+router.post('/:id/book', async (req: Request, res: Response) => {
+  const eventId = req.params.id;
+  const {
+    fullName,
+    phone,
+    paymentMethod,
+    firstInstallment,
+    paymentChannel,
+    receiptImageUrl,
+    notes
+  } = req.body;
+
+  if (!fullName || !phone) {
+    return res.status(400).json({ error: 'Name and phone are required.' });
+  }
+
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId }
+    });
+
+    if (!event) {
+      return res.status(404).json({ error: 'Trip or event not found.' });
+    }
+
+    const booking = await prisma.tripBooking.create({
+      data: {
+        eventId,
+        fullName,
+        phone,
+        paymentMethod: paymentMethod === 'INSTALLMENT' ? 'INSTALLMENT' : 'FULL',
+        firstInstallment: paymentMethod === 'INSTALLMENT' && firstInstallment ? parseFloat(firstInstallment) : null,
+        totalAmount: event.price || 0,
+        paymentChannel: paymentChannel === 'INSTAPAY' ? 'INSTAPAY' : 'CASH',
+        receiptImageUrl: receiptImageUrl || null,
+        notes: notes || null,
+        status: 'PENDING'
+      }
+    });
+
+    return res.status(201).json({ message: 'Booking submitted successfully.', booking });
+  } catch (error) {
+    console.error('Error booking trip:', error);
+    return res.status(500).json({ error: 'Server error processing trip booking.' });
+  }
+});
+
+// 4b. Get Trip Bookings (Trip Managers & Admins)
+router.get('/trip-bookings/list', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {
+  const { eventId } = req.query;
+  try {
+    const bookings = await prisma.tripBooking.findMany({
+      where: eventId ? { eventId: eventId as string } : {},
+      include: {
+        event: {
+          select: {
+            id: true,
+            titleAr: true,
+            titleEn: true,
+            price: true,
+            date: true,
+            locationAr: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return res.status(200).json(bookings);
+  } catch (error) {
+    console.error('Error fetching trip bookings:', error);
+    return res.status(500).json({ error: 'Server error fetching bookings.' });
+  }
+});
+
+// 4c. Update Trip Booking Status (Trip Managers & Admins)
+router.patch('/trip-bookings/:id', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {
+  const bookingId = req.params.id;
+  const { status, notes } = req.body;
+
+  try {
+    const updated = await prisma.tripBooking.update({
+      where: { id: bookingId },
+      data: {
+        status: status !== undefined ? status : undefined,
+        notes: notes !== undefined ? notes : undefined
+      }
+    });
+
+    return res.status(200).json({ message: 'Booking status updated successfully.', booking: updated });
+  } catch (error) {
+    console.error('Error updating trip booking:', error);
+    return res.status(500).json({ error: 'Server error updating booking.' });
+  }
+});
+
+// ==========================================
 // MASS SCHEDULE SECTION (RECURRING MASSES)
 // ==========================================
 

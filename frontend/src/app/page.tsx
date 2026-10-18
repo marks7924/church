@@ -17,6 +17,9 @@ interface Priest {
   avatarUrl: string;
   role: string;
   availability: any;
+  confessionStatus?: 'ACTIVE' | 'TRAVELING' | 'INACTIVE';
+  confessionStatusNote?: string | null;
+  noFixedSchedule?: boolean;
 }
 
 interface Sermon {
@@ -58,11 +61,7 @@ export default function Home() {
   const [imgHeroBg, setImgHeroBg] = useState<string>('');
   const [heroBgs, setHeroBgs] = useState<string[]>([]);
   const [currentBgIndex, setCurrentBgIndex] = useState(0);
-  const [historicPhotos, setHistoricPhotos] = useState<string[]>([
-    'https://images.unsplash.com/photo-1548625361-155deee223cb?q=80&w=400',
-    'https://images.unsplash.com/photo-1438032005730-c779502df39b?q=80&w=400',
-    'https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=400',
-  ]);
+  const [historicPhotos, setHistoricPhotos] = useState<string[]>([]);
 
   interface NewsItem {
     id: string;
@@ -89,6 +88,18 @@ export default function Home() {
   // Bishop custom request states
   const [bishopPhone, setBishopPhone] = useState<string>('');
   const [bishopEmail, setBishopEmail] = useState<string>('');
+
+  // Trip Booking Modal States
+  const [selectedTrip, setSelectedTrip] = useState<ChurchEvent | null>(null);
+  const [tripFullName, setTripFullName] = useState('');
+  const [tripPhone, setTripPhone] = useState('');
+  const [tripPaymentMethod, setTripPaymentMethod] = useState<'FULL' | 'INSTALLMENT'>('FULL');
+  const [tripFirstInstallment, setTripFirstInstallment] = useState('');
+  const [tripPaymentChannel, setTripPaymentChannel] = useState<'CASH' | 'INSTAPAY'>('CASH');
+  const [tripReceiptImage, setTripReceiptImage] = useState<string>('');
+  const [tripNotes, setTripNotes] = useState('');
+  const [tripBookingMsg, setTripBookingMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSubmittingTrip, setIsSubmittingTrip] = useState(false);
 
   useEffect(() => {
     // 1. Fetch live status
@@ -144,15 +155,10 @@ export default function Home() {
           setImgHeroBg(data.img_hero_bg);
           setHeroBgs(prev => prev.length === 0 ? [data.img_hero_bg] : prev);
         }
-        const photos = [];
-        if (data.img_historic_1) photos.push(data.img_historic_1);
-        else photos.push('https://images.unsplash.com/photo-1548625361-155deee223cb?q=80&w=400');
-
-        if (data.img_historic_2) photos.push(data.img_historic_2);
-        else photos.push('https://images.unsplash.com/photo-1438032005730-c779502df39b?q=80&w=400');
-
-        if (data.img_historic_3) photos.push(data.img_historic_3);
-        else photos.push('https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=400');
+        const photos: string[] = [];
+        if (data.img_historic_1 && data.img_historic_1.trim()) photos.push(data.img_historic_1);
+        if (data.img_historic_2 && data.img_historic_2.trim()) photos.push(data.img_historic_2);
+        if (data.img_historic_3 && data.img_historic_3.trim()) photos.push(data.img_historic_3);
 
         setHistoricPhotos(photos);
       })
@@ -196,12 +202,21 @@ export default function Home() {
   }, [selectedPriest, bookingDate]);
 
   const openBookingModal = (priest: Priest) => {
+    // If traveling or inactive, alert user
+    if (priest.confessionStatus === 'TRAVELING') {
+      alert(priest.confessionStatusNote || (language === 'ar' ? 'أبونا مسافر خارج مصر حالياً ولا يستقبل اعترافات.' : 'Father is currently traveling abroad and not accepting confessions.'));
+      return;
+    }
+    if (priest.confessionStatus === 'INACTIVE') {
+      alert(priest.confessionStatusNote || (language === 'ar' ? 'أبونا غير متاح لسر الاعتراف حالياً.' : 'Father is currently not available for confessions.'));
+      return;
+    }
+
     // Check if user is logged in
     const token = localStorage.getItem('church-token');
     if (!token) {
       setBookingMessage({ type: 'error', text: language === 'ar' ? 'يرجى تسجيل الدخول أولاً لتتمكن من الحجز.' : 'Please login first to book an appointment.' });
       setSelectedPriest(priest);
-      // Auto-set tomorrow's date
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       setBookingDate(tomorrow.toISOString().split('T')[0]);
@@ -214,8 +229,9 @@ export default function Home() {
     tomorrow.setDate(tomorrow.getDate() + 1);
     setBookingDate(tomorrow.toISOString().split('T')[0]);
 
-    // Pre-populate details if booking with Bishop
-    if (priest.role === 'BISHOP') {
+    // Pre-populate details if booking with Bishop or noFixedSchedule
+    const isCustomRequest = priest.role === 'BISHOP' || priest.noFixedSchedule;
+    if (isCustomRequest) {
       const userStr = localStorage.getItem('church-user');
       if (userStr) {
         try {
@@ -243,9 +259,9 @@ export default function Home() {
 
   const handleBookAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
-    const isBishop = selectedPriest?.role === 'BISHOP';
+    const isCustomRequest = selectedPriest?.role === 'BISHOP' || selectedPriest?.noFixedSchedule;
 
-    if (!isBishop && !selectedSlot) {
+    if (!isCustomRequest && !selectedSlot) {
       setBookingMessage({ type: 'error', text: language === 'ar' ? 'يرجى اختيار وقت متاح.' : 'Please select an available timeslot.' });
       return;
     }
@@ -256,10 +272,10 @@ export default function Home() {
       return;
     }
 
-    // Format notes for Bishop to include direct contact info
+    // Format notes for Bishop / noFixedSchedule to include direct contact info
     let finalNotes = bookingNotes;
     let finalSlot = selectedSlot;
-    if (isBishop) {
+    if (isCustomRequest) {
       finalNotes = `Phone: ${bishopPhone}\nEmail: ${bishopEmail}\nNotes: ${bookingNotes}`;
       finalSlot = `REQUEST_${Date.now()}`;
     }
@@ -283,12 +299,11 @@ export default function Home() {
       if (res.ok) {
         setBookingMessage({
           type: 'success',
-          text: isBishop 
+          text: isCustomRequest 
             ? (language === 'ar' ? 'تم تقديم طلب اللقاء بنجاح! سيتم التواصل معك قريباً.' : 'Meeting request submitted successfully! We will contact you soon.')
             : (language === 'ar' ? 'تم تقديم طلب الحجز بنجاح! سيتم إخطارك بالرد.' : 'Booking request submitted successfully! You will be notified of updates.')
         });
-        if (!isBishop) {
-          // Clear slots
+        if (!isCustomRequest) {
           setAvailableSlots(prev => prev.filter(s => s !== selectedSlot));
         }
       } else {
@@ -296,6 +311,89 @@ export default function Home() {
       }
     } catch (err) {
       setBookingMessage({ type: 'error', text: 'Error connecting to server.' });
+    }
+  };
+
+  const handleReceiptUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert(language === 'ar' ? 'حجم الصورة يجب ألا يتجاوز 5 ميجابايت' : 'Image size must not exceed 5MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setTripReceiptImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleBookTripSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTrip) return;
+    if (!tripFullName || !tripPhone) {
+      setTripBookingMsg({
+        type: 'error',
+        text: language === 'ar' ? 'يرجى إدخال الاسم ورقم الهاتف' : 'Please provide full name and phone number'
+      });
+      return;
+    }
+    if (selectedTrip.price > 0 && tripPaymentMethod === 'INSTALLMENT' && !tripFirstInstallment) {
+      setTripBookingMsg({
+        type: 'error',
+        text: language === 'ar' ? 'يرجى تحديد قيمة القسط الأول' : 'Please specify the first installment amount'
+      });
+      return;
+    }
+    if (selectedTrip.price > 0 && tripPaymentChannel === 'INSTAPAY' && !tripReceiptImage) {
+      setTripBookingMsg({
+        type: 'error',
+        text: language === 'ar' ? 'يرجى إرفاق صورة إيصال تحويل إنستاباي' : 'Please attach the InstaPay receipt screenshot'
+      });
+      return;
+    }
+
+    setIsSubmittingTrip(true);
+    setTripBookingMsg(null);
+    try {
+      const res = await fetch(`${API_URL}/events/${selectedTrip.id}/book`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: tripFullName,
+          phone: tripPhone,
+          paymentMethod: tripPaymentMethod,
+          firstInstallment: tripPaymentMethod === 'INSTALLMENT' ? tripFirstInstallment : null,
+          paymentChannel: tripPaymentChannel,
+          receiptImageUrl: tripPaymentChannel === 'INSTAPAY' ? tripReceiptImage : null,
+          notes: tripNotes
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTripBookingMsg({
+          type: 'success',
+          text: language === 'ar' ? 'تم تسجيل حجز الرحلة بنجاح! سيقوم مسؤول الرحلات بمراجعة طلبك والتواصل معك.' : 'Trip booking submitted successfully! The trip manager will review your booking and contact you.'
+        });
+        setTimeout(() => {
+          setSelectedTrip(null);
+          setTripFullName('');
+          setTripPhone('');
+          setTripPaymentMethod('FULL');
+          setTripFirstInstallment('');
+          setTripPaymentChannel('CASH');
+          setTripReceiptImage('');
+          setTripNotes('');
+          setTripBookingMsg(null);
+        }, 3000);
+      } else {
+        setTripBookingMsg({ type: 'error', text: data.error || 'Failed to submit trip booking.' });
+      }
+    } catch (err) {
+      setTripBookingMsg({ type: 'error', text: 'Error connecting to server.' });
+    } finally {
+      setIsSubmittingTrip(false);
     }
   };
 
@@ -437,11 +535,27 @@ export default function Home() {
                 </span>
                 <p className={styles.priestDays}>
                   <b>{language === 'ar' ? 'أيام التواجد:' : 'Available Days:'}</b><br />
-                  {Object.keys(p.availability).join(', ')}
+                  {p.confessionStatus === 'TRAVELING' 
+                    ? (p.confessionStatusNote || (language === 'ar' ? 'مسافر خارج مصر حالياً' : 'Traveling abroad'))
+                    : p.confessionStatus === 'INACTIVE'
+                    ? (p.confessionStatusNote || (language === 'ar' ? 'غير متاح للاعترافات حالياً' : 'Not available currently'))
+                    : p.noFixedSchedule
+                    ? (language === 'ar' ? 'مواعيد بالتنسيق المسبق' : 'By coordination')
+                    : (p.availability && Object.keys(p.availability).length > 0 ? Object.keys(p.availability).join(', ') : (language === 'ar' ? 'مواعيد بالتنسيق' : 'By appointment'))}
                 </p>
-                <button className={styles.bookBtn} onClick={() => openBookingModal(p)}>
-                  {p.role === 'BISHOP' ? t('meet_bishop') : t('book_confession')}
-                </button>
+                {p.confessionStatus === 'TRAVELING' ? (
+                  <button className={styles.bookBtn} style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#555' }} disabled>
+                    ✈️ {language === 'ar' ? 'أبونا مسافر خارج مصر' : 'Traveling Abroad'}
+                  </button>
+                ) : p.confessionStatus === 'INACTIVE' ? (
+                  <button className={styles.bookBtn} style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#555' }} disabled>
+                    ⏸️ {language === 'ar' ? 'غير متاح للاعترافات' : 'Unavailable'}
+                  </button>
+                ) : (
+                  <button className={styles.bookBtn} onClick={() => openBookingModal(p)}>
+                    {p.role === 'BISHOP' ? t('meet_bishop') : (p.noFixedSchedule ? (language === 'ar' ? 'طلب ميعاد اعتراف' : 'Request Confession') : t('book_confession'))}
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -498,28 +612,50 @@ export default function Home() {
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '15px', lineHeight: '1.4' }}>
                   {language === 'ar' ? e.descriptionAr : e.descriptionEn}
                 </p>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'auto' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'auto', marginBottom: '12px' }}>
                   📅 {new Date(e.date).toLocaleDateString()} <br />
                   📍 {language === 'ar' ? e.locationAr : e.locationEn}
                 </div>
+                {(e.type === 'TRIP' || e.type === 'CONFERENCE') && (
+                  <button 
+                    className={styles.bookBtn} 
+                    style={{ width: '100%', marginTop: 'auto' }}
+                    onClick={() => {
+                      setSelectedTrip(e);
+                      setTripBookingMsg(null);
+                      const userStr = typeof window !== 'undefined' ? localStorage.getItem('church-user') : null;
+                      if (userStr) {
+                        try {
+                          const u = JSON.parse(userStr);
+                          setTripFullName(u.fullName || '');
+                          setTripPhone(u.phone || '');
+                        } catch (err) {}
+                      }
+                    }}
+                  >
+                    🎫 {language === 'ar' ? 'حجز الرحلة / الاشتراك' : 'Register / Book Trip'}
+                  </button>
+                )}
               </div>
             ))}
           </div>
         </section>
 
-        {/* Historic Photos Gallery */}
-        <section className={styles.rowSection}>
-          <h2 className={styles.rowTitle}>{t('photos')}</h2>
-          <div className={styles.netflixGrid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-            {historicPhotos.map((url, i) => (
-              <div 
-                key={i} 
-                className={styles.sermonCard} 
-                style={{ height: '180px', backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center', cursor: 'default' }}
-              ></div>
-            ))}
-          </div>
-        </section>
+        {/* Historic Photos Gallery (Only if photos were uploaded in Dashboard) */}
+        {historicPhotos.length > 0 && (
+          <section className={styles.rowSection}>
+            <h2 className={styles.rowTitle}>{t('photos')}</h2>
+            <div className={styles.netflixGrid} style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+              {historicPhotos.map((url, i) => (
+                <div 
+                  key={i} 
+                  className={styles.sermonCard} 
+                  style={{ height: '180px', backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center', cursor: 'default' }}
+                ></div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
 
       {/* Booking Modal */}
@@ -559,13 +695,17 @@ export default function Home() {
             {/* Check if user logged in - only render form if we have token */}
             {typeof window !== 'undefined' && localStorage.getItem('church-token') ? (
               <form onSubmit={handleBookAppointment}>
-                {selectedPriest.role === 'BISHOP' ? (
+                {(selectedPriest.role === 'BISHOP' || selectedPriest.noFixedSchedule) ? (
                   <>
-                    {/* Bishop Request Form Info */}
+                    {/* Bishop or Open Request Form Info */}
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.2rem', lineHeight: '1.5', padding: '10px', backgroundColor: 'rgba(226, 183, 20, 0.05)', borderRadius: '4px', border: '1px solid rgba(226, 183, 20, 0.2)' }}>
-                      ℹ️ {language === 'ar' 
-                        ? 'نظراً لعدم وجود مواعيد محددة مسبقاً، يرجى تقديم طلبك وإدخال بيانات التواصل المفضلة، وسيقوم مكتب سيدنا بالتواصل معك لتنسيق الميعاد.' 
-                        : 'Since there are no preset slots, please submit your request along with your contact details, and the Bishop\'s office will contact you to coordinate.'}
+                      ℹ️ {selectedPriest.role === 'BISHOP'
+                        ? (language === 'ar' 
+                          ? 'نظراً لعدم وجود مواعيد محددة مسبقاً، يرجى تقديم طلبك وإدخال بيانات التواصل، وسيقوم مكتب سيدنا بالتواصل معك لتنسيق الميعاد (يتطلب عضوية كنسية معتمدة).' 
+                          : 'Since there are no preset slots, please submit your request and contact details. The Bishop\'s office will contact you to coordinate (Requires approved membership).')
+                        : (language === 'ar'
+                          ? 'نظراً لعدم وجود مواعيد ثابتة محددة، يرجى إدخال التاريخ المفضل وبيانات التواصل، وسيقوم أبونا بالتواصل لتحديد وتأكيد الميعاد.'
+                          : 'Since there are no fixed slots, please provide your preferred date and contact info, and Father will contact you to confirm the appointment.')}
                     </div>
 
                     {/* Select Preferred Date */}
@@ -674,18 +814,18 @@ export default function Home() {
 
                 {/* Notes (Shared field) */}
                 <div className={styles.formGroup}>
-                  <label>{selectedPriest.role === 'BISHOP' ? (language === 'ar' ? 'سبب اللقاء / تفاصيل إضافية' : 'Reason for Meeting / Additional Details') : t('booking_notes')}</label>
+                  <label>{(selectedPriest.role === 'BISHOP' || selectedPriest.noFixedSchedule) ? (language === 'ar' ? 'سبب اللقاء / تفاصيل إضافية' : 'Reason for Meeting / Additional Details') : t('booking_notes')}</label>
                   <textarea
                     className={styles.formInput}
                     value={bookingNotes}
                     onChange={(e) => setBookingNotes(e.target.value)}
                     style={{ height: '80px', resize: 'vertical' }}
-                    placeholder={selectedPriest.role === 'BISHOP' ? (language === 'ar' ? 'اكتب باختصار سبب طلب اللقاء...' : 'Briefly describe the purpose of the meeting...') : ''}
+                    placeholder={(selectedPriest.role === 'BISHOP' || selectedPriest.noFixedSchedule) ? (language === 'ar' ? 'اكتب باختصار سبب طلب المقابلة...' : 'Briefly describe the purpose of the meeting...') : ''}
                   />
                 </div>
 
                 <button type="submit" className={styles.bookBtn} style={{ marginTop: '1rem', width: '100%' }}>
-                  {selectedPriest.role === 'BISHOP' ? (language === 'ar' ? 'تقديم طلب اللقاء' : 'Submit Meeting Request') : t('confirm_booking')}
+                  {(selectedPriest.role === 'BISHOP' || selectedPriest.noFixedSchedule) ? (language === 'ar' ? 'تقديم طلب اللقاء' : 'Submit Meeting Request') : t('confirm_booking')}
                 </button>
               </form>
             ) : (
@@ -698,6 +838,205 @@ export default function Home() {
                 </Link>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Trip Booking Modal */}
+      {selectedTrip && (
+        <div className={styles.modalOverlay} onClick={() => setSelectedTrip(null)}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <button className={styles.closeBtn} onClick={() => setSelectedTrip(null)}>
+              <X size={20} />
+            </button>
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1rem', fontSize: '1.3rem' }}>
+              🎫 {language === 'ar' ? 'حجز الرحلة / الفعالية' : 'Book Trip / Event'}
+            </h3>
+            
+            <div style={{ marginBottom: '1.2rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+                {language === 'ar' ? selectedTrip.titleAr : selectedTrip.titleEn}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.85rem', color: 'var(--accent-gold)' }}>
+                <span>📅 {new Date(selectedTrip.date).toLocaleDateString()}</span>
+                <span>💰 {selectedTrip.price > 0 ? `${selectedTrip.price} ${language === 'ar' ? 'ج.م' : 'EGP'}` : (language === 'ar' ? 'مجاناً' : 'Free')}</span>
+              </div>
+            </div>
+
+            {tripBookingMsg && (
+              <div style={{ 
+                padding: '10px 14px', 
+                borderRadius: '6px', 
+                marginBottom: '1rem', 
+                fontSize: '0.9rem',
+                backgroundColor: tripBookingMsg.type === 'success' ? 'rgba(46, 204, 113, 0.15)' : 'rgba(229, 9, 20, 0.15)',
+                border: `1px solid ${tripBookingMsg.type === 'success' ? 'var(--accent-green)' : 'var(--accent-red)'}`,
+                color: tripBookingMsg.type === 'success' ? '#2ecc71' : '#ff4d4d',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <ShieldAlert size={18} />
+                <span>{tripBookingMsg.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleBookTripSubmit}>
+              {/* Full Name */}
+              <div className={styles.formGroup}>
+                <label>{language === 'ar' ? 'الاسم بالكامل *' : 'Full Name *'}</label>
+                <input
+                  type="text"
+                  className={styles.formInput}
+                  value={tripFullName}
+                  onChange={(e) => setTripFullName(e.target.value)}
+                  required
+                  placeholder={language === 'ar' ? 'الاسم رباعي' : 'Full Name'}
+                />
+              </div>
+
+              {/* Phone */}
+              <div className={styles.formGroup}>
+                <label>{language === 'ar' ? 'رقم الهاتف (واتساب) *' : 'Phone (WhatsApp) *'}</label>
+                <input
+                  type="tel"
+                  className={styles.formInput}
+                  value={tripPhone}
+                  onChange={(e) => setTripPhone(e.target.value)}
+                  required
+                  placeholder="01xxxxxxxxx"
+                />
+              </div>
+
+              {selectedTrip.price > 0 && (
+                <>
+                  {/* Payment Method */}
+                  <div className={styles.formGroup}>
+                    <label>{language === 'ar' ? 'نظام الدفع *' : 'Payment Method *'}</label>
+                    <div style={{ display: 'flex', gap: '15px', marginTop: '6px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="tripPayMethod"
+                          checked={tripPaymentMethod === 'FULL'}
+                          onChange={() => setTripPaymentMethod('FULL')}
+                        />
+                        <span>{language === 'ar' ? 'دفع كامل المبلغ' : 'Full Payment'} ({selectedTrip.price} {language === 'ar' ? 'ج.م' : 'EGP'})</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="tripPayMethod"
+                          checked={tripPaymentMethod === 'INSTALLMENT'}
+                          onChange={() => setTripPaymentMethod('INSTALLMENT')}
+                        />
+                        <span>{language === 'ar' ? 'تقسيط' : 'Installments'}</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* If installment: specify first installment */}
+                  {tripPaymentMethod === 'INSTALLMENT' && (
+                    <div className={styles.formGroup} style={{ backgroundColor: 'rgba(255,255,255,0.03)', padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                      <label>{language === 'ar' ? 'قيمة القسط الأول (المقدم) بالجنيه *' : 'First Installment Amount (EGP) *'}</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max={selectedTrip.price}
+                        className={styles.formInput}
+                        value={tripFirstInstallment}
+                        onChange={(e) => setTripFirstInstallment(e.target.value)}
+                        required
+                        placeholder={language === 'ar' ? 'مثال: 100' : 'e.g. 100'}
+                      />
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        {language === 'ar' ? `المتبقي: ${selectedTrip.price - (Number(tripFirstInstallment) || 0)} ج.م تسدد لاحقاً` : `Remaining: ${selectedTrip.price - (Number(tripFirstInstallment) || 0)} EGP to pay later`}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Payment Channel */}
+                  <div className={styles.formGroup}>
+                    <label>{language === 'ar' ? 'طريقة وسداد الدفع *' : 'Payment Channel *'}</label>
+                    <div style={{ display: 'flex', gap: '15px', marginTop: '6px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="tripChannel"
+                          checked={tripPaymentChannel === 'CASH'}
+                          onChange={() => setTripPaymentChannel('CASH')}
+                        />
+                        <span>{language === 'ar' ? 'كاش لمسؤول الرحلات' : 'Cash to Trip Manager'}</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="tripChannel"
+                          checked={tripPaymentChannel === 'INSTAPAY'}
+                          onChange={() => setTripPaymentChannel('INSTAPAY')}
+                        />
+                        <span>InstaPay (إنستاباي)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* If InstaPay: show details and receipt upload */}
+                  {tripPaymentChannel === 'INSTAPAY' && (
+                    <div style={{ backgroundColor: 'rgba(226, 183, 20, 0.08)', padding: '12px', borderRadius: '6px', border: '1px solid rgba(226, 183, 20, 0.25)', marginBottom: '1rem' }}>
+                      <div style={{ fontWeight: 'bold', color: 'var(--accent-gold)', marginBottom: '6px', fontSize: '0.9rem' }}>
+                        📲 {language === 'ar' ? 'بيانات التحويل عبر إنستاباي' : 'InstaPay Transfer Details'}
+                      </div>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '8px', lineHeight: '1.4' }}>
+                        {language === 'ar' 
+                          ? 'يرجى تحويل المبلغ المطلوب إلى رقم مسؤول الرحلات: 01000000005 (أو العنوان: church@instapay)' 
+                          : 'Please transfer the required amount to the Trip Manager phone: 01000000005 (or handle: church@instapay)'}
+                      </p>
+                      
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '6px' }}>
+                        {language === 'ar' ? 'رفع صورة إيصال التحويل (سكرين شوت) *' : 'Upload Receipt Screenshot *'}
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleReceiptUpload}
+                        className={styles.formInput}
+                        required={!tripReceiptImage}
+                        style={{ padding: '6px' }}
+                      />
+                      {tripReceiptImage && (
+                        <div style={{ marginTop: '8px', textAlign: 'center' }}>
+                          <img src={tripReceiptImage} alt="Receipt Preview" style={{ maxHeight: '120px', borderRadius: '4px', border: '1px solid var(--accent-gold)' }} />
+                          <div style={{ fontSize: '0.75rem', color: '#2ecc71', marginTop: '2px' }}>✓ {language === 'ar' ? 'تم تجهيز صورة الإيصال' : 'Receipt attached'}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Notes */}
+              <div className={styles.formGroup}>
+                <label>{language === 'ar' ? 'ملاحظات إضافية (اختياري)' : 'Additional Notes (Optional)'}</label>
+                <textarea
+                  className={styles.formInput}
+                  value={tripNotes}
+                  onChange={(e) => setTripNotes(e.target.value)}
+                  style={{ height: '60px', resize: 'vertical' }}
+                  placeholder={language === 'ar' ? 'أي رغبات خاصة أو تفاصيل للأفراد المرافقين...' : 'Any special requests or details of accompanying persons...'}
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                className={styles.bookBtn} 
+                style={{ marginTop: '1rem', width: '100%', padding: '12px' }}
+                disabled={isSubmittingTrip}
+              >
+                {isSubmittingTrip 
+                  ? (language === 'ar' ? 'جاري إرسال الحجز...' : 'Submitting Booking...') 
+                  : (language === 'ar' ? 'تأكيد إرسال طلب الحجز' : 'Confirm & Submit Booking')}
+              </button>
+            </form>
           </div>
         </div>
       )}

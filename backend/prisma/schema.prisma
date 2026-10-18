@@ -25,6 +25,12 @@ enum AppointmentStatus {
   REJECTED
 }
 
+enum ConfessionStatus {
+  ACTIVE
+  TRAVELING
+  INACTIVE
+}
+
 enum SocialStatus {
   SINGLE
   MARRIED
@@ -73,6 +79,9 @@ model PriestProfile {
   confessionDuration   Int           @default(15)
   bufferMinutes        Int           @default(5)
   avatarUrl            String?
+  confessionStatus     ConfessionStatus @default(ACTIVE)
+  confessionStatusNote String?       // Custom note like "مسافر خارج مصر"
+  noFixedSchedule      Boolean       @default(false) // true = no preset slots
   // JSON field to store weekly availability and specific dates:
   // e.g., { "recurring": { "Sunday": [{"start": "09:00", "end": "10:00"}] }, "specific": { "2026-07-23": [{"start": "18:00", "end": "20:00"}] } }
   availabilityJson     String        @default("{}")
@@ -175,6 +184,8 @@ model Event {
   price         Float?   // Optional (e.g. for trips)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  tripBookings  TripBooking[]
 }
 
 model SystemConfig {
@@ -210,4 +221,37 @@ model ContactMessage {
   subject   String
   message   String
   createdAt DateTime @default(now())
+}
+
+enum TripPaymentMethod {
+  FULL
+  INSTALLMENT
+}
+
+enum TripPaymentChannel {
+  CASH
+  INSTAPAY
+}
+
+enum TripBookingStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+model TripBooking {
+  id               String             @id @default(uuid())
+  eventId          String
+  event            Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  fullName         String
+  phone            String
+  paymentMethod    TripPaymentMethod  @default(FULL)
+  firstInstallment Float?             // Only for INSTALLMENT
+  totalAmount      Float
+  paymentChannel   TripPaymentChannel @default(CASH)
+  receiptImageUrl  String?            // InstaPay receipt screenshot (base64)
+  status           TripBookingStatus  @default(PENDING)
+  notes            String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 }

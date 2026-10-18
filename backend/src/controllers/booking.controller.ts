@@ -32,8 +32,11 @@ router.get('/priests', async (req: AuthRequest, res: Response) => {
       maxBookingsPerDay: p.maxBookingsPerDay,
       bufferMinutes: p.bufferMinutes,
       avatarUrl: p.avatarUrl,
-      availability: JSON.parse(p.availabilityJson),
-      role: p.user.role // PRIEST or BISHOP
+      availability: JSON.parse(p.availabilityJson || '{"recurring":[],"specific":[]}'),
+      role: p.user.role, // PRIEST or BISHOP
+      confessionStatus: p.confessionStatus || 'ACTIVE',
+      confessionStatusNote: p.confessionStatusNote || null,
+      noFixedSchedule: p.noFixedSchedule || false
     }));
 
     return res.status(200).json(formatted);
@@ -250,9 +253,22 @@ router.post('/book', requireAuth, async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const isBishop = priest.user.role === Role.BISHOP;
+    // Check priest confession availability status
+    if (priest.confessionStatus === 'TRAVELING') {
+      return res.status(400).json({
+        error: priest.confessionStatusNote || 'أبونا مسافر خارج مصر حالياً ولا يستقبل اعترافات.'
+      });
+    }
+    if (priest.confessionStatus === 'INACTIVE') {
+      return res.status(400).json({
+        error: priest.confessionStatusNote || 'أبونا غير متاح لسر الاعتراف حالياً.'
+      });
+    }
 
-    if (!isBishop) {
+    const isBishop = priest.user.role === Role.BISHOP;
+    const skipSlotCheck = isBishop || priest.noFixedSchedule;
+
+    if (!skipSlotCheck) {
       // 4. Verify slot is still free and priest hasn't reached daily capacity
       const { slots, isFull } = await getAvailableSlots(priestId, dateStr);
 

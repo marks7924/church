@@ -157,6 +157,23 @@ export default function DashboardPage() {
   const [priestConfessionDuration, setPriestConfessionDuration] = useState('15');
   const [priestAvailability, setPriestAvailability] = useState('{"recurring":[], "specific":[]}');
   const [priestMsg, setPriestMsg] = useState<string | null>(null);
+  const [priestConfessionStatus, setPriestConfessionStatus] = useState<'ACTIVE' | 'TRAVELING' | 'INACTIVE'>('ACTIVE');
+  const [priestConfessionStatusNote, setPriestConfessionStatusNote] = useState('');
+  const [priestNoFixedSchedule, setPriestNoFixedSchedule] = useState(false);
+
+  // Priest Self-Schedule States
+  const [myConfessionStatus, setMyConfessionStatus] = useState<'ACTIVE' | 'TRAVELING' | 'INACTIVE'>('ACTIVE');
+  const [myConfessionStatusNote, setMyConfessionStatusNote] = useState('');
+  const [myNoFixedSchedule, setMyNoFixedSchedule] = useState(false);
+  const [myAvailability, setMyAvailability] = useState('{"recurring":[], "specific":[]}');
+  const [myMaxBookings, setMyMaxBookings] = useState('5');
+  const [myBufferMinutes, setMyBufferMinutes] = useState('5');
+  const [myConfessionDuration, setMyConfessionDuration] = useState('15');
+  const [myScheduleMsg, setMyScheduleMsg] = useState<string | null>(null);
+
+  // Trip Bookings State (for Trip Manager & Admins)
+  const [allTripBookings, setAllTripBookings] = useState<any[]>([]);
+  const [viewingReceiptUrl, setViewingReceiptUrl] = useState<string | null>(null);
 
   // Super Admin Site Images States
   const [imgHeroBg, setImgHeroBg] = useState('');
@@ -251,8 +268,14 @@ export default function DashboardPage() {
       });
     }
 
-    // Priest / Bishop Booking requests Tab
+    // Priest / Bishop Booking requests and Schedule Tab
     if (['PRIEST', 'BISHOP'].includes(role)) {
+      tabs.push({
+        id: 'my-schedule',
+        labelAr: language === 'ar' ? 'مواعيد اعترافاتي وحالتي' : 'My Confession Schedule',
+        labelEn: language === 'ar' ? 'مواعيد اعترافاتي وحالتي' : 'My Confession Schedule',
+        icon: <Calendar size={16} />
+      });
       tabs.push({
         id: 'confessions',
         labelAr: t('booking_requests'),
@@ -320,12 +343,12 @@ export default function DashboardPage() {
       });
     }
 
-    // Trip Manager Tab
-    if (role === 'TRIP_MANAGER') {
+    // Trip Manager & Admins Tab
+    if (['TRIP_MANAGER', 'SUPER_ADMIN', 'CHURCH_ADMIN', 'SECRETARY'].includes(role)) {
       tabs.push({
         id: 'trips',
-        labelAr: `${t('manage_events')} (Trips Only)`,
-        labelEn: `${t('manage_events')} (Trips Only)`,
+        labelAr: language === 'ar' ? 'إدارة الرحلات والاشتراكات' : 'Manage Trips & Bookings',
+        labelEn: language === 'ar' ? 'إدارة الرحلات والاشتراكات' : 'Manage Trips & Bookings',
         icon: <Calendar size={16} />
       });
     }
@@ -490,6 +513,36 @@ export default function DashboardPage() {
           }
         })
         .catch(err => console.log(err));
+
+      if (token) {
+        fetch(`${API_URL}/events/trip-bookings/list`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (Array.isArray(data)) setAllTripBookings(data);
+          })
+          .catch(err => console.log(err));
+      }
+    }
+
+    if (activeTab === 'my-schedule' && token) {
+      fetch(`${API_URL}/priests/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data && !data.error) {
+            setMyConfessionStatus(data.confessionStatus || 'ACTIVE');
+            setMyConfessionStatusNote(data.confessionStatusNote || '');
+            setMyNoFixedSchedule(data.noFixedSchedule || false);
+            setMyAvailability(typeof data.availabilityJson === 'string' ? data.availabilityJson : JSON.stringify(data.availabilityJson || { recurring: [], specific: [] }));
+            setMyMaxBookings(String(data.maxBookingsPerDay || '5'));
+            setMyBufferMinutes(String(data.bufferMinutes || '5'));
+            setMyConfessionDuration(String(data.confessionDuration || '15'));
+          }
+        })
+        .catch(err => console.log(err));
     }
 
     if (activeTab === 'manage-site-info') {
@@ -532,13 +585,13 @@ export default function DashboardPage() {
               if (Array.isArray(parsed)) {
                 setChurchServices(parsed);
               } else {
-                setChurchServices(defaultMinistries);
+                setChurchServices([]);
               }
             } catch (e) {
-              setChurchServices(defaultMinistries);
+              setChurchServices([]);
             }
           } else {
-            setChurchServices(defaultMinistries);
+            setChurchServices([]);
           }
         })
         .catch(err => console.log(err));
@@ -741,7 +794,10 @@ export default function DashboardPage() {
       maxBookingsPerDay: priestMaxBookings,
       confessionDuration: priestConfessionDuration,
       bufferMinutes: priestBuffer,
-      availabilityJson: priestAvailability
+      availabilityJson: priestAvailability,
+      confessionStatus: priestConfessionStatus,
+      confessionStatusNote: priestConfessionStatusNote,
+      noFixedSchedule: priestNoFixedSchedule
     };
 
     try {
@@ -804,6 +860,9 @@ export default function DashboardPage() {
     setPriestConfessionDuration(String(priest.confessionDuration || 15));
     setPriestBuffer(String(priest.bufferMinutes || 5));
     setPriestAvailability(typeof priest.availabilityJson === 'string' ? priest.availabilityJson : JSON.stringify(priest.availabilityJson));
+    setPriestConfessionStatus(priest.confessionStatus || 'ACTIVE');
+    setPriestConfessionStatusNote(priest.confessionStatusNote || '');
+    setPriestNoFixedSchedule(priest.noFixedSchedule || false);
   };
 
   const handleDeletePriest = async (id: string) => {
@@ -846,6 +905,60 @@ export default function DashboardPage() {
     setPriestConfessionDuration('15');
     setPriestBuffer('5');
     setPriestAvailability('{"recurring":[], "specific":[]}');
+    setPriestConfessionStatus('ACTIVE');
+    setPriestConfessionStatusNote('');
+    setPriestNoFixedSchedule(false);
+  };
+
+  const handleSaveMySchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setMyScheduleMsg(null);
+    try {
+      const res = await fetch(`${API_URL}/priests/me`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          confessionStatus: myConfessionStatus,
+          confessionStatusNote: myConfessionStatusNote,
+          noFixedSchedule: myNoFixedSchedule,
+          availabilityJson: myAvailability,
+          maxBookingsPerDay: myMaxBookings,
+          confessionDuration: myConfessionDuration,
+          bufferMinutes: myBufferMinutes
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMyScheduleMsg(language === 'ar' ? 'تم حفظ وتحديث مواعيدك وحالتك بنجاح!' : 'Your schedule and status have been updated successfully!');
+      } else {
+        setMyScheduleMsg(data.error || 'Failed to update schedule.');
+      }
+    } catch (err) {
+      setMyScheduleMsg('Error connecting to server.');
+    }
+  };
+
+  const handleUpdateTripBookingStatus = async (bookingId: string, status: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/events/trip-bookings/${bookingId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        setAllTripBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status } : b));
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleSaveSiteInfo = async (e: React.FormEvent) => {
@@ -1391,6 +1504,139 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Tab: Priest Confession Schedule & Status Self-Management */}
+      {activeTab === 'my-schedule' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+          <div className="dashboard-panel">
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+              🗓️ {language === 'ar' ? 'إدارة مواعيد اعترافاتي وحالتي' : 'My Confession Schedule & Availability'}
+            </h3>
+
+            {myScheduleMsg && (
+              <div style={{
+                backgroundColor: 'rgba(226, 183, 20, 0.08)',
+                border: '1px solid var(--accent-gold)',
+                color: 'var(--accent-gold)',
+                padding: '12px',
+                borderRadius: '6px',
+                marginBottom: '1.5rem',
+                fontSize: '0.9rem'
+              }}>
+                {myScheduleMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveMySchedule} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {/* Confession Status Selector */}
+              <div style={{ backgroundColor: 'var(--bg-card)', padding: '1.2rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <label style={{ display: 'block', fontSize: '0.95rem', fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent-gold)' }}>
+                  {language === 'ar' ? 'حالة استقبال الاعترافات حالياً:' : 'Current Confession Reception Status:'}
+                </label>
+                <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', marginTop: '6px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 14px', borderRadius: '6px', backgroundColor: myConfessionStatus === 'ACTIVE' ? 'rgba(46, 204, 113, 0.15)' : 'transparent', border: `1px solid ${myConfessionStatus === 'ACTIVE' ? 'var(--accent-green)' : 'var(--border-color)'}` }}>
+                    <input
+                      type="radio"
+                      name="myConfessionStatus"
+                      value="ACTIVE"
+                      checked={myConfessionStatus === 'ACTIVE'}
+                      onChange={() => setMyConfessionStatus('ACTIVE')}
+                    />
+                    <span style={{ fontWeight: myConfessionStatus === 'ACTIVE' ? 'bold' : 'normal', color: myConfessionStatus === 'ACTIVE' ? '#2ecc71' : 'var(--text-primary)' }}>
+                      🟢 {language === 'ar' ? 'متاح للاعترافات' : 'Active (Accepting)'}
+                    </span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 14px', borderRadius: '6px', backgroundColor: myConfessionStatus === 'TRAVELING' ? 'rgba(226, 183, 20, 0.15)' : 'transparent', border: `1px solid ${myConfessionStatus === 'TRAVELING' ? 'var(--accent-gold)' : 'var(--border-color)'}` }}>
+                    <input
+                      type="radio"
+                      name="myConfessionStatus"
+                      value="TRAVELING"
+                      checked={myConfessionStatus === 'TRAVELING'}
+                      onChange={() => setMyConfessionStatus('TRAVELING')}
+                    />
+                    <span style={{ fontWeight: myConfessionStatus === 'TRAVELING' ? 'bold' : 'normal', color: myConfessionStatus === 'TRAVELING' ? 'var(--accent-gold)' : 'var(--text-primary)' }}>
+                      ✈️ {language === 'ar' ? 'مسافر خارج مصر' : 'Traveling Abroad'}
+                    </span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 14px', borderRadius: '6px', backgroundColor: myConfessionStatus === 'INACTIVE' ? 'rgba(229, 9, 20, 0.15)' : 'transparent', border: `1px solid ${myConfessionStatus === 'INACTIVE' ? 'var(--accent-red)' : 'var(--border-color)'}` }}>
+                    <input
+                      type="radio"
+                      name="myConfessionStatus"
+                      value="INACTIVE"
+                      checked={myConfessionStatus === 'INACTIVE'}
+                      onChange={() => setMyConfessionStatus('INACTIVE')}
+                    />
+                    <span style={{ fontWeight: myConfessionStatus === 'INACTIVE' ? 'bold' : 'normal', color: myConfessionStatus === 'INACTIVE' ? '#ff4d4d' : 'var(--text-primary)' }}>
+                      ⏸️ {language === 'ar' ? 'غير متاح للاعترافات حالياً' : 'Not Available Currently'}
+                    </span>
+                  </label>
+                </div>
+
+                {myConfessionStatus !== 'ACTIVE' && (
+                  <div style={{ marginTop: '12px' }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                      {language === 'ar' ? 'رسالة توضيحية للشعب تظهر عند محاولة الحجز (اختياري):' : 'Status note shown to congregation (Optional):'}
+                    </label>
+                    <input
+                      type="text"
+                      className={styles.formInput}
+                      value={myConfessionStatusNote}
+                      onChange={e => setMyConfessionStatusNote(e.target.value)}
+                      placeholder={language === 'ar' ? 'مثال: أبونا مسافر في زيارة رعوية خارج مصر حتى أول الشهر' : 'e.g. Father is abroad on pastoral duty until next month'}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* No Fixed Schedule Toggle */}
+              <div style={{ backgroundColor: 'var(--bg-card)', padding: '1.2rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+                  <input
+                    type="checkbox"
+                    checked={myNoFixedSchedule}
+                    onChange={e => setMyNoFixedSchedule(e.target.checked)}
+                    style={{ width: '18px', height: '18px', accentColor: 'var(--accent-gold)' }}
+                  />
+                  <span>
+                    ⏰ {language === 'ar' ? 'مفيش ميعاد محدد (حجز مفتوح / المواعيد بالتنسيق المباشر)' : 'No fixed schedule (Open requests / Coordinated directly)'}
+                  </span>
+                </label>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '6px', marginInlineStart: '28px' }}>
+                  {language === 'ar' 
+                    ? 'عند تفعيل هذا الخيار، لن يُطلب من المعترف اختيار ساعة محددة، بل سيضع تاريخاً مفضلاً وبيانات تواصله وموضوع المقابلة، وتقوم أنت أو مكتبك بتأكيد الميعاد المناسب معه.'
+                    : 'When checked, people will submit an open appointment request with preferred date and contact details without picking a specific time slot.'}
+                </p>
+              </div>
+
+              {/* If Fixed Schedule is enabled: PriestScheduleManager */}
+              {!myNoFixedSchedule && (
+                <div style={{ backgroundColor: 'var(--bg-card)', padding: '1.2rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <h4 style={{ color: 'var(--accent-gold)', marginBottom: '1rem' }}>
+                    📅 {language === 'ar' ? 'تحديد الأيام وساعات التواجد:' : 'Set Available Days & Times:'}
+                  </h4>
+                  <PriestScheduleManager 
+                    language={language}
+                    availabilityJson={myAvailability}
+                    confessionDuration={myConfessionDuration}
+                    bufferMinutes={myBufferMinutes}
+                    onAvailabilityChange={setMyAvailability}
+                    onConfessionDurationChange={setMyConfessionDuration}
+                    onBufferMinutesChange={setMyBufferMinutes}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                <button type="submit" className={styles.bookBtn} style={{ width: 'auto', padding: '12px 36px', fontSize: '1rem' }}>
+                  💾 {language === 'ar' ? 'حفظ إعدادات المواعيد والحالة' : 'Save Schedule & Status'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Tab: Priest Confession Bookings Review */}
       {activeTab === 'confessions' && (
         <div className="dashboard-panel">
@@ -1932,6 +2178,149 @@ export default function DashboardPage() {
               </p>
             )}
           </div>
+
+          {/* Trip Bookings Review Panel */}
+          <div className="dashboard-panel">
+            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
+              📋 {language === 'ar' ? 'سجل طلبات الحجز والاشتراك في الرحلات' : 'Trip Bookings & Payment Submissions'}
+            </h3>
+
+            {allTripBookings.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {allTripBookings.map(b => (
+                  <div key={b.id} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    padding: '1.2rem',
+                    borderRadius: '6px',
+                    flexWrap: 'wrap',
+                    gap: '1rem'
+                  }}>
+                    <div style={{ flex: 1, minWidth: '260px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                        <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+                          👤 {b.fullName}
+                        </span>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--accent-gold)' }}>
+                          📞 {b.phone}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                        🎫 <b>{language === 'ar' ? b.event?.titleAr : b.event?.titleEn}</b>
+                      </div>
+
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                        <span>💰 {language === 'ar' ? 'المبلغ الكلي:' : 'Total:'} <b>{b.totalAmount} {language === 'ar' ? 'ج.م' : 'EGP'}</b></span>
+                        <span>
+                          💳 {b.paymentMethod === 'INSTALLMENT' 
+                            ? (language === 'ar' ? `تقسيط (القسط الأول: ${b.firstInstallment} ج.م)` : `Installment (First: ${b.firstInstallment} EGP)`)
+                            : (language === 'ar' ? 'دفع كامل' : 'Full Payment')}
+                        </span>
+                        <span>
+                          💵 {b.paymentChannel === 'INSTAPAY' ? 'InstaPay (إنستاباي)' : (language === 'ar' ? 'كاش لمسؤول الرحلة' : 'Cash')}
+                        </span>
+                      </div>
+
+                      {b.notes && (
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '6px', fontStyle: 'italic' }}>
+                          📝 {b.notes}
+                        </div>
+                      )}
+
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                        📅 {new Date(b.createdAt).toLocaleString(language === 'ar' ? 'ar-EG' : 'en-US')}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                      {/* InstaPay Receipt screenshot if available */}
+                      {b.receiptImageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingReceiptUrl(b.receiptImageUrl)}
+                          style={{
+                            backgroundColor: 'rgba(226, 183, 20, 0.1)',
+                            border: '1px solid var(--accent-gold)',
+                            color: 'var(--accent-gold)',
+                            padding: '4px 10px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          🔍 {language === 'ar' ? 'معاينة إيصال إنستاباي' : 'View Receipt'}
+                        </button>
+                      )}
+
+                      {/* Status Badge */}
+                      <span style={{
+                        padding: '4px 10px',
+                        borderRadius: '4px',
+                        fontSize: '0.8rem',
+                        fontWeight: 'bold',
+                        backgroundColor: b.status === 'CONFIRMED' ? 'rgba(46, 204, 113, 0.15)' : b.status === 'REJECTED' ? 'rgba(229, 9, 20, 0.15)' : 'rgba(226, 183, 20, 0.15)',
+                        color: b.status === 'CONFIRMED' ? '#2ecc71' : b.status === 'REJECTED' ? '#ff4d4d' : 'var(--accent-gold)',
+                        border: `1px solid ${b.status === 'CONFIRMED' ? 'var(--accent-green)' : b.status === 'REJECTED' ? 'var(--accent-red)' : 'var(--accent-gold)'}`
+                      }}>
+                        {b.status === 'CONFIRMED' 
+                          ? (language === 'ar' ? 'مؤكد ومقبول' : 'Confirmed') 
+                          : b.status === 'REJECTED'
+                          ? (language === 'ar' ? 'مرفوض' : 'Rejected')
+                          : (language === 'ar' ? 'قيد المراجعة' : 'Pending')}
+                      </span>
+
+                      {/* Status Action Buttons */}
+                      {b.status === 'PENDING' && (
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateTripBookingStatus(b.id, 'CONFIRMED')}
+                            style={{
+                              backgroundColor: '#2ecc71',
+                              color: '#ffffff',
+                              border: 'none',
+                              padding: '5px 10px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '0.75rem',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            ✓ {language === 'ar' ? 'تأكيد الحجز' : 'Confirm'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateTripBookingStatus(b.id, 'REJECTED')}
+                            style={{
+                              backgroundColor: '#ff4d4d',
+                              color: '#ffffff',
+                              border: 'none',
+                              padding: '5px 10px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '0.75rem',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            ✕ {language === 'ar' ? 'رفض' : 'Reject'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+                {language === 'ar' ? 'لا توجد حجوزات رحلات مسجلة حتى الآن.' : 'No trip bookings submitted yet.'}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -2200,17 +2589,51 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div style={{ marginTop: '10px' }}>
-                <PriestScheduleManager 
-                  language={language}
-                  availabilityJson={priestAvailability}
-                  confessionDuration={priestConfessionDuration}
-                  bufferMinutes={priestBuffer}
-                  onAvailabilityChange={setPriestAvailability}
-                  onConfessionDurationChange={setPriestConfessionDuration}
-                  onBufferMinutesChange={setPriestBuffer}
-                />
+              <div style={{ backgroundColor: 'var(--bg-card)', padding: '1rem', borderRadius: '6px', border: '1px solid var(--border-color)', marginTop: '6px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--accent-gold)', marginBottom: '8px' }}>
+                  {language === 'ar' ? 'حالة استقبال الاعترافات:' : 'Confession Status:'}
+                </label>
+                <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                    <input type="radio" name="adminPriestStatus" value="ACTIVE" checked={priestConfessionStatus === 'ACTIVE'} onChange={() => setPriestConfessionStatus('ACTIVE')} />
+                    <span>🟢 {language === 'ar' ? 'متاح' : 'Active'}</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                    <input type="radio" name="adminPriestStatus" value="TRAVELING" checked={priestConfessionStatus === 'TRAVELING'} onChange={() => setPriestConfessionStatus('TRAVELING')} />
+                    <span>✈️ {language === 'ar' ? 'مسافر خارج مصر' : 'Traveling'}</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                    <input type="radio" name="adminPriestStatus" value="INACTIVE" checked={priestConfessionStatus === 'INACTIVE'} onChange={() => setPriestConfessionStatus('INACTIVE')} />
+                    <span>⏸️ {language === 'ar' ? 'غير متاح حالياً' : 'Inactive'}</span>
+                  </label>
+                </div>
+                {priestConfessionStatus !== 'ACTIVE' && (
+                  <div style={{ marginTop: '8px' }}>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'ملاحظة الحالة' : 'Status Note'}</label>
+                    <input type="text" value={priestConfessionStatusNote} onChange={e => setPriestConfessionStatusNote(e.target.value)} className={styles.formInput} placeholder="مثال: مسافر خارج مصر حالياً" />
+                  </div>
+                )}
+                <div style={{ marginTop: '10px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                    <input type="checkbox" checked={priestNoFixedSchedule} onChange={e => setPriestNoFixedSchedule(e.target.checked)} />
+                    <span>⏰ {language === 'ar' ? 'مفيش ميعاد محدد (حجز مفتوح بدون أوقات ثابتة)' : 'No fixed schedule (Open requests)'}</span>
+                  </label>
+                </div>
               </div>
+
+              {!priestNoFixedSchedule && (
+                <div style={{ marginTop: '10px' }}>
+                  <PriestScheduleManager 
+                    language={language}
+                    availabilityJson={priestAvailability}
+                    confessionDuration={priestConfessionDuration}
+                    bufferMinutes={priestBuffer}
+                    onAvailabilityChange={setPriestAvailability}
+                    onConfessionDurationChange={setPriestConfessionDuration}
+                    onBufferMinutesChange={setPriestBuffer}
+                  />
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
                 {editingPriest && (
@@ -2686,6 +3109,35 @@ export default function DashboardPage() {
               {language === 'ar' ? 'لا توجد رسائل واردة حالياً.' : 'No incoming messages currently.'}
             </p>
           )}
+        </div>
+      )}
+
+      {/* InstaPay Receipt Preview Modal */}
+      {viewingReceiptUrl && (
+        <div className={styles.modalOverlay} onClick={() => setViewingReceiptUrl(null)}>
+          <div className={styles.modalContent} onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '90%', textAlign: 'center', maxHeight: '90vh', overflowY: 'auto' }}>
+            <button className={styles.closeBtn} onClick={() => setViewingReceiptUrl(null)}>
+              <X size={20} />
+            </button>
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.2rem', fontSize: '1.3rem' }}>
+              🧾 {language === 'ar' ? 'معاينة إيصال تحويل إنستاباي' : 'InstaPay Receipt Preview'}
+            </h3>
+            <img 
+              src={viewingReceiptUrl} 
+              alt="Receipt" 
+              style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '6px', border: '1px solid var(--border-color)' }} 
+            />
+            <div style={{ marginTop: '1rem' }}>
+              <button 
+                type="button" 
+                onClick={() => setViewingReceiptUrl(null)} 
+                className={styles.bookBtn} 
+                style={{ width: 'auto', padding: '8px 24px' }}
+              >
+                {language === 'ar' ? 'إغلاق' : 'Close'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
