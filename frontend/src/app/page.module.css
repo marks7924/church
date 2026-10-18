@@ -328,16 +328,20 @@
 
 .formInput {
   width: 100%;
+  box-sizing: border-box;
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   padding: 10px 12px;
-  border-radius: 4px;
+  border-radius: 6px;
   outline: none;
+  font-family: inherit;
+  font-size: 0.95rem;
 }
 @media (max-width: 768px) {
   .formInput {
-    padding: 8px 10px;
+    padding: 10px 12px;
+    font-size: 0.9rem;
   }
 }
 .formInput:focus {

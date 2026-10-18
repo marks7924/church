@@ -291,6 +291,7 @@ export default function DashboardPage() {
   const [tripPrice, setTripPrice] = useState('0');
   const [tripType, setTripType] = useState('TRIP');
   const [tripMsg, setTripMsg] = useState<string | null>(null);
+  const [tripSubTab, setTripSubTab] = useState<'bookings' | 'trips' | 'form'>('bookings');
 
   const getAvailableTabs = () => {
     if (!user) return [];
@@ -2330,320 +2331,334 @@ export default function DashboardPage() {
 
       {/* Tab: Trip Manager View */}
       {activeTab === 'trips' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-          {/* Create/Edit Trip/Conference Form */}
-          <div className="dashboard-panel" id="trip-form-card">
-            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-              ✈️ {editingTripId 
-                ? (language === 'ar' ? 'تعديل الرحلة/المؤتمر' : 'Edit Trip/Conference') 
-                : (language === 'ar' ? 'إضافة رحلة أو مؤتمر جديد' : 'Add New Trip/Conference')}
-            </h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', width: '100%', boxSizing: 'border-box' }}>
+          
+          {/* Mobile-First Segmented Sub-Navigation */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))',
+            gap: '8px',
+            width: '100%',
+            boxSizing: 'border-box'
+          }}>
+            <button
+              type="button"
+              onClick={() => setTripSubTab('bookings')}
+              style={{
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: tripSubTab === 'bookings' ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                backgroundColor: tripSubTab === 'bookings' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+                color: tripSubTab === 'bookings' ? '#000000' : 'var(--text-primary)',
+                fontWeight: 'bold',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                minHeight: '44px',
+                transition: 'all 0.2s ease',
+                boxShadow: tripSubTab === 'bookings' ? '0 2px 8px rgba(226, 183, 20, 0.25)' : 'none'
+              }}
+            >
+              <span>📋</span>
+              <span>{language === 'ar' ? 'طلبات الاشتراك' : 'Bookings'}</span>
+              {allTripBookings.filter(b => b.status === 'PENDING').length > 0 && (
+                <span style={{
+                  backgroundColor: tripSubTab === 'bookings' ? '#000000' : 'var(--accent-gold)',
+                  color: tripSubTab === 'bookings' ? 'var(--accent-gold)' : '#000000',
+                  borderRadius: '10px',
+                  padding: '1px 6px',
+                  fontSize: '0.72rem',
+                  fontWeight: 'bold'
+                }}>
+                  {allTripBookings.filter(b => b.status === 'PENDING').length}
+                </span>
+              )}
+            </button>
 
-            {tripMsg && (
-              <div style={{ padding: '10px', backgroundColor: 'rgba(226, 183, 20, 0.05)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '4px', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
-                {tripMsg}
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => setTripSubTab('trips')}
+              style={{
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: tripSubTab === 'trips' ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                backgroundColor: tripSubTab === 'trips' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+                color: tripSubTab === 'trips' ? '#000000' : 'var(--text-primary)',
+                fontWeight: 'bold',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                minHeight: '44px',
+                transition: 'all 0.2s ease',
+                boxShadow: tripSubTab === 'trips' ? '0 2px 8px rgba(226, 183, 20, 0.25)' : 'none'
+              }}
+            >
+              <span>✈️</span>
+              <span>{language === 'ar' ? 'الرحلات الحالية' : 'Trips List'} ({tripsList.length})</span>
+            </button>
 
-            <form onSubmit={handleSaveTrip} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-              <div className="grid-2-col">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'العنوان (عربي) *' : 'Title (Arabic) *'}</label>
-                  <input type="text" required value={tripTitleAr} onChange={e => setTripTitleAr(e.target.value)} className={styles.formInput} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'العنوان (إنجليزي) *' : 'Title (English) *'}</label>
-                  <input type="text" required value={tripTitleEn} onChange={e => setTripTitleEn(e.target.value)} className={styles.formInput} />
-                </div>
-              </div>
-
-              <div className="grid-2-col">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الوصف (عربي)' : 'Description (Arabic)'}</label>
-                  <textarea value={tripDescAr} onChange={e => setTripDescAr(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الوصف (إنجليزي)' : 'Description (English)'}</label>
-                  <textarea value={tripDescEn} onChange={e => setTripDescEn(e.target.value)} className={styles.formInput} style={{ height: '80px', resize: 'vertical' }} />
-                </div>
-              </div>
-
-              <div className="grid-2-col">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الموقع (عربي)' : 'Location (Arabic)'}</label>
-                  <input type="text" value={tripLocationAr} onChange={e => setTripLocationAr(e.target.value)} className={styles.formInput} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الموقع (إنجليزي)' : 'Location (English)'}</label>
-                  <input type="text" value={tripLocationEn} onChange={e => setTripLocationEn(e.target.value)} className={styles.formInput} />
-                </div>
-              </div>
-
-              <div className="grid-2-col" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'التاريخ *' : 'Date *'}</label>
-                  <input type="date" required value={tripDate} onChange={e => setTripDate(e.target.value)} className={styles.formInput} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'السعر (ج.م)' : 'Price (EGP)'}</label>
-                  <input type="number" step="any" value={tripPrice} onChange={e => setTripPrice(e.target.value)} className={styles.formInput} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'النوع *' : 'Type *'}</label>
-                  <select value={tripType} onChange={e => setTripType(e.target.value)} className={styles.formInput}>
-                    <option value="TRIP">{language === 'ar' ? 'رحلة' : 'Trip'}</option>
-                    <option value="CONFERENCE">{language === 'ar' ? 'مؤتمر كنسي' : 'Conference'}</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button 
-                  type="submit" 
-                  className={`${styles.bookBtn} ${savedTrip ? 'btn-saved-success' : ''}`} 
-                  style={{ 
-                    width: 'min(100%, 200px)',
-                    backgroundColor: savedTrip ? '#2ecc71' : undefined,
-                    color: savedTrip ? '#fff' : undefined,
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  {savedTrip ? '✓ تم الحفظ بنجاح!' : (editingTripId ? (language === 'ar' ? 'حفظ التعديلات' : 'Save Changes') : (language === 'ar' ? 'إضافة الفعالية' : 'Add Event'))}
-                </button>
-                {editingTripId && (
-                  <button 
-                    type="button" 
-                    onClick={() => {
-                      setEditingTripId(null);
-                      setTripTitleAr('');
-                      setTripTitleEn('');
-                      setTripDescAr('');
-                      setTripDescEn('');
-                      setTripLocationAr('');
-                      setTripLocationEn('');
-                      setTripDate('');
-                      setTripPrice('0');
-                      setTripType('TRIP');
-                    }}
-                    style={{ padding: '10px 20px', backgroundColor: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer' }}
-                  >
-                    {language === 'ar' ? 'إلغاء' : 'Cancel'}
-                  </button>
-                )}
-              </div>
-            </form>
+            <button
+              type="button"
+              onClick={() => setTripSubTab('form')}
+              style={{
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: tripSubTab === 'form' ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                backgroundColor: tripSubTab === 'form' ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+                color: tripSubTab === 'form' ? '#000000' : 'var(--text-primary)',
+                fontWeight: 'bold',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                minHeight: '44px',
+                transition: 'all 0.2s ease',
+                boxShadow: tripSubTab === 'form' ? '0 2px 8px rgba(226, 183, 20, 0.25)' : 'none'
+              }}
+            >
+              <span>{editingTripId ? '✏️' : '➕'}</span>
+              <span>{editingTripId ? (language === 'ar' ? 'تعديل الفعالية' : 'Edit Event') : (language === 'ar' ? 'إضافة فعالية' : 'Add Event')}</span>
+            </button>
           </div>
 
-          {/* Trips List Panel */}
-          <div className="dashboard-panel">
-            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-              📋 {language === 'ar' ? 'قائمة الرحلات والمؤتمرات الحالية' : 'Current Trips & Conferences'}
-            </h3>
-
-            {tripsList.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {tripsList.map(t => (
-                  <div key={t.id} className="responsive-card-row">
-                    <div style={{ flex: 1, minWidth: 'min(100%, 200px)' }}>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '0.75rem', padding: '2px 6px', backgroundColor: 'rgba(226,183,20,0.1)', color: 'var(--accent-gold)', borderRadius: '4px', fontWeight: 'bold' }}>
-                          {t.type === 'TRIP' ? (language === 'ar' ? 'رحلة' : 'Trip') : (language === 'ar' ? 'مؤتمر' : 'Conference')}
-                        </span>
-                        <span style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>
-                          {language === 'ar' ? t.titleAr : t.titleEn}
-                        </span>
-                      </div>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                        {language === 'ar' ? t.descriptionAr : t.descriptionEn}
-                      </p>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        <span>📅 {new Date(t.date).toLocaleDateString()}</span>
-                        <span>•</span>
-                        <span>📍 {language === 'ar' ? t.locationAr : t.locationEn}</span>
-                        <span>•</span>
-                        <span>💰 {t.price} {language === 'ar' ? 'ج.م' : 'EGP'}</span>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '8px', width: 'auto' }} className="mobile-w-100">
-                      <button 
-                        onClick={() => {
-                          setEditingTripId(t.id);
-                          setTripTitleAr(t.titleAr);
-                          setTripTitleEn(t.titleEn);
-                          setTripDescAr(t.descriptionAr || '');
-                          setTripDescEn(t.descriptionEn || '');
-                          setTripLocationAr(t.locationAr || '');
-                          setTripLocationEn(t.locationEn || '');
-                          setTripDate(t.date.split('T')[0]);
-                          setTripPrice(String(t.price));
-                          setTripType(t.type);
-                          triggerEditScrollAndHighlight('trip-form-card');
-                        }}
-                        style={{ flex: 1, backgroundColor: 'var(--accent-gold)', color: '#000000', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', minHeight: '38px' }}
-                      >
-                        {language === 'ar' ? 'تعديل' : 'Edit'}
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteTrip(t.id)}
-                        style={{ flex: 1, backgroundColor: '#ff4d4d', color: '#ffffff', border: 'none', padding: '8px 14px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', minHeight: '38px' }}
-                      >
-                        {language === 'ar' ? 'حذف' : 'Delete'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
-                {language === 'ar' ? 'لا توجد رحلات أو مؤتمرات مضافة حالياً.' : 'No trips or conferences added yet.'}
-              </p>
-            )}
-          </div>
-
-          {/* Trip Bookings Review Panel */}
-          <div className="dashboard-panel">
-            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
-              📋 {language === 'ar' ? 'سجل طلبات الحجز والاشتراك في الرحلات' : 'Trip Bookings & Payment Submissions'}
-            </h3>
-
-            {/* Filter bar for trip bookings */}
-            {allTripBookings.length > 0 && (
+          {/* ======================================================== */}
+          {/* SUBTAB 1: BOOKINGS & SUBMISSIONS */}
+          {/* ======================================================== */}
+          {tripSubTab === 'bookings' && (
+            <div className="dashboard-panel" style={{ width: '100%', boxSizing: 'border-box' }}>
+              
+              {/* Header with Stats Badges */}
               <div style={{
                 display: 'flex',
-                gap: '12px',
+                justifyContent: 'space-between',
+                alignItems: 'center',
                 flexWrap: 'wrap',
-                marginBottom: '1.5rem',
-                padding: '1rem',
-                backgroundColor: 'var(--bg-card)',
-                borderRadius: '8px',
-                border: '1px solid var(--border-color)',
-                alignItems: 'center'
+                gap: '8px',
+                borderBottom: '1px solid var(--border-color)',
+                paddingBottom: '10px',
+                marginBottom: '1rem'
               }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 180px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
-                    {language === 'ar' ? 'تصفية حسب الرحلة:' : 'Filter by Trip:'}
-                  </label>
-                  <select
-                    value={tripFilter}
-                    onChange={e => setTripFilter(e.target.value)}
-                    style={{
-                      backgroundColor: 'var(--bg-secondary)',
-                      border: '1px solid var(--border-color)',
-                      color: 'var(--text-primary)',
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      outline: 'none',
-                      fontSize: '0.85rem'
-                    }}
-                  >
-                    <option value="ALL">{language === 'ar' ? '🔍 جميع الرحلات والمؤتمرات' : 'All Trips & Conferences'}</option>
-                    {Array.from(new Set(allTripBookings.map(b => b.event?.titleAr).filter(Boolean))).map((title: any) => (
-                      <option key={title} value={title}>{title}</option>
-                    ))}
-                  </select>
+                <h3 style={{ color: 'var(--accent-gold)', margin: 0, fontSize: '1.1rem' }}>
+                  📋 {language === 'ar' ? 'سجل طلبات واشتراكات الرحلات' : 'Trip Bookings & Submissions'}
+                </h3>
+                
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: '4px', backgroundColor: 'rgba(226,183,20,0.15)', color: 'var(--accent-gold)', fontWeight: 'bold' }}>
+                    {language === 'ar' ? `قيد المراجعة: ${allTripBookings.filter(b => b.status === 'PENDING').length}` : `Pending: ${allTripBookings.filter(b => b.status === 'PENDING').length}`}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: '4px', backgroundColor: 'rgba(46,204,113,0.15)', color: '#2ecc71', fontWeight: 'bold' }}>
+                    {language === 'ar' ? `مؤكد: ${allTripBookings.filter(b => b.status === 'CONFIRMED').length}` : `Confirmed: ${allTripBookings.filter(b => b.status === 'CONFIRMED').length}`}
+                  </span>
                 </div>
+              </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 140px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
-                    {language === 'ar' ? 'حالة الحجز:' : 'Status:'}
-                  </label>
-                  <select
-                    value={tripStatusFilter}
-                    onChange={e => setTripStatusFilter(e.target.value)}
-                    style={{
-                      backgroundColor: 'var(--bg-secondary)',
-                      border: '1px solid var(--border-color)',
-                      color: 'var(--text-primary)',
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      outline: 'none',
-                      fontSize: '0.85rem'
-                    }}
-                  >
-                    <option value="ALL">{language === 'ar' ? 'جميع الحالات' : 'All Statuses'}</option>
-                    <option value="PENDING">{language === 'ar' ? 'قيد المراجعة' : 'Pending'}</option>
-                    <option value="APPROVED">{language === 'ar' ? 'تم التأكيد' : 'Approved'}</option>
-                    <option value="REJECTED">{language === 'ar' ? 'مرفوض' : 'Rejected'}</option>
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 180px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
-                    {language === 'ar' ? 'بحث بالاسم أو الهاتف:' : 'Search Name / Phone:'}
-                  </label>
+              {/* Mobile Filter Bar */}
+              {allTripBookings.length > 0 && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  marginBottom: '1.2rem',
+                  padding: '10px',
+                  backgroundColor: 'var(--bg-card)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  width: '100%',
+                  boxSizing: 'border-box'
+                }}>
+                  {/* Search input */}
                   <input
                     type="text"
                     value={tripSearchFilter}
                     onChange={e => setTripSearchFilter(e.target.value)}
-                    placeholder={language === 'ar' ? 'اسم المشترك أو الهاتف...' : 'Name or phone...'}
+                    placeholder={language === 'ar' ? '🔍 بحث باسم المشترك، الهاتف، أو اسم الرحلة...' : 'Search by name, phone or trip...'}
                     style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
                       backgroundColor: 'var(--bg-secondary)',
                       border: '1px solid var(--border-color)',
                       color: 'var(--text-primary)',
-                      padding: '8px 12px',
+                      padding: '10px 12px',
                       borderRadius: '6px',
                       outline: 'none',
-                      fontSize: '0.85rem'
+                      fontSize: '0.88rem'
                     }}
                   />
+
+                  {/* Filters row: Trip dropdown + Status dropdown */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))',
+                    gap: '8px'
+                  }}>
+                    <select
+                      value={tripFilter}
+                      onChange={e => setTripFilter(e.target.value)}
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-primary)',
+                        padding: '9px 10px',
+                        borderRadius: '6px',
+                        outline: 'none',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      <option value="ALL">{language === 'ar' ? 'جميع الرحلات والمؤتمرات' : 'All Trips & Conferences'}</option>
+                      {Array.from(new Set(allTripBookings.map(b => b.event?.titleAr).filter(Boolean))).map((title: any) => (
+                        <option key={title} value={title}>{title}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={tripStatusFilter}
+                      onChange={e => setTripStatusFilter(e.target.value)}
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-primary)',
+                        padding: '9px 10px',
+                        borderRadius: '6px',
+                        outline: 'none',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      <option value="ALL">{language === 'ar' ? 'جميع الحالات' : 'All Statuses'}</option>
+                      <option value="PENDING">{language === 'ar' ? 'قيد المراجعة ⏳' : 'Pending'}</option>
+                      <option value="APPROVED">{language === 'ar' ? 'تم التأكيد ✓' : 'Confirmed'}</option>
+                      <option value="REJECTED">{language === 'ar' ? 'مرفوض ✕' : 'Rejected'}</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {allTripBookings.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {allTripBookings
-                  .filter(b => {
-                    const matchesTrip = tripFilter === 'ALL' || b.event?.titleAr === tripFilter || b.eventId === tripFilter;
-                    const matchesStatus = tripStatusFilter === 'ALL' || b.status === tripStatusFilter;
-                    const matchesSearch = !tripSearchFilter ||
-                      b.fullName?.toLowerCase().includes(tripSearchFilter.toLowerCase()) ||
-                      b.phone?.includes(tripSearchFilter) ||
-                      b.event?.titleAr?.toLowerCase().includes(tripSearchFilter.toLowerCase());
-                    return matchesTrip && matchesStatus && matchesSearch;
-                  })
-                  .map(b => (
-                  <div key={b.id} className="responsive-card-row">
-                    <div style={{ flex: 1, minWidth: 'min(100%, 200px)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
-                          👤 {b.fullName}
+              {/* Booking Cards Stream */}
+              {allTripBookings.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
+                  {allTripBookings
+                    .filter(b => {
+                      const matchesTrip = tripFilter === 'ALL' || b.event?.titleAr === tripFilter || b.eventId === tripFilter;
+                      const matchesStatus = tripStatusFilter === 'ALL' || b.status === tripStatusFilter;
+                      const matchesSearch = !tripSearchFilter ||
+                        b.fullName?.toLowerCase().includes(tripSearchFilter.toLowerCase()) ||
+                        b.phone?.includes(tripSearchFilter) ||
+                        b.event?.titleAr?.toLowerCase().includes(tripSearchFilter.toLowerCase());
+                      return matchesTrip && matchesStatus && matchesSearch;
+                    })
+                    .map(b => (
+                    <div
+                      key={b.id}
+                      style={{
+                        backgroundColor: 'var(--bg-card)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '10px',
+                        padding: '1.1rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        boxShadow: 'var(--shadow-sm)'
+                      }}
+                    >
+                      {/* Top Row: Name, Clickable Phone, Status Badge */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                        <div>
+                          <div style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                            👤 {b.fullName}
+                          </div>
+                          <a
+                            href={`tel:${b.phone}`}
+                            style={{
+                              fontSize: '0.82rem',
+                              color: 'var(--accent-gold)',
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              marginTop: '2px',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            📞 {b.phone}
+                          </a>
+                        </div>
+
+                        {/* Status Badge */}
+                        <span style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '0.78rem',
+                          fontWeight: 'bold',
+                          backgroundColor: b.status === 'CONFIRMED' ? 'rgba(46, 204, 113, 0.15)' : b.status === 'REJECTED' ? 'rgba(229, 9, 20, 0.15)' : 'rgba(226, 183, 20, 0.15)',
+                          color: b.status === 'CONFIRMED' ? '#2ecc71' : b.status === 'REJECTED' ? '#ff4d4d' : 'var(--accent-gold)',
+                          border: `1px solid ${b.status === 'CONFIRMED' ? 'rgba(46, 204, 113, 0.3)' : b.status === 'REJECTED' ? 'rgba(229, 9, 20, 0.3)' : 'rgba(226, 183, 20, 0.3)'}`
+                        }}>
+                          {b.status === 'CONFIRMED' 
+                            ? '✓ ' + (language === 'ar' ? 'مؤكد ومقبول' : 'Confirmed') 
+                            : b.status === 'REJECTED'
+                            ? '✕ ' + (language === 'ar' ? 'مرفوض' : 'Rejected')
+                            : '⏳ ' + (language === 'ar' ? 'قيد المراجعة' : 'Pending')}
                         </span>
-                        <a href={`tel:${b.phone}`} style={{ fontSize: '0.85rem', color: 'var(--accent-gold)', textDecoration: 'none' }}>
-                          📞 {b.phone}
-                        </a>
                       </div>
 
-                      <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                        🎫 <b>{language === 'ar' ? b.event?.titleAr : b.event?.titleEn}</b>
+                      {/* Event Title */}
+                      <div style={{
+                        fontSize: '0.92rem',
+                        color: 'var(--accent-gold)',
+                        fontWeight: 'bold',
+                        padding: '6px 10px',
+                        backgroundColor: 'rgba(226, 183, 20, 0.05)',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(226, 183, 20, 0.15)'
+                      }}>
+                        🎫 {language === 'ar' ? b.event?.titleAr : b.event?.titleEn}
                       </div>
 
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                        <span>💰 {language === 'ar' ? 'المبلغ الكلي:' : 'Total:'} <b>{b.totalAmount} {language === 'ar' ? 'ج.م' : 'EGP'}</b></span>
-                        <span>
+                      {/* Payment & Amount Details Chips */}
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))',
+                        gap: '6px',
+                        fontSize: '0.82rem',
+                        color: 'var(--text-secondary)'
+                      }}>
+                        <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+                          💰 {language === 'ar' ? 'المبلغ:' : 'Amount:'} <b style={{ color: 'var(--text-primary)' }}>{b.totalAmount} {language === 'ar' ? 'ج.م' : 'EGP'}</b>
+                        </div>
+                        <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
                           💳 {b.paymentMethod === 'INSTALLMENT' 
-                            ? (language === 'ar' ? `تقسيط (القسط الأول: ${b.firstInstallment} ج.م)` : `Installment (First: ${b.firstInstallment} EGP)`)
+                            ? (language === 'ar' ? `تقسيط (${b.firstInstallment} ج.م)` : `Installment (${b.firstInstallment} EGP)`)
                             : (language === 'ar' ? 'دفع كامل' : 'Full Payment')}
-                        </span>
-                        <span>
-                          💵 {b.paymentChannel === 'INSTAPAY' ? 'InstaPay (إنستاباي)' : (language === 'ar' ? 'كاش لمسؤول الرحلة' : 'Cash')}
-                        </span>
+                        </div>
+                        <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+                          💵 {b.paymentChannel === 'INSTAPAY' ? 'InstaPay (إنستاباي)' : (language === 'ar' ? 'كاش للمسؤول' : 'Cash')}
+                        </div>
+                        <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+                          📅 {new Date(b.createdAt).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
+                        </div>
                       </div>
 
+                      {/* Member Notes */}
                       {b.notes && (
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '6px', fontStyle: 'italic' }}>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontStyle: 'italic', backgroundColor: 'rgba(255,255,255,0.02)', padding: '6px 10px', borderRadius: '4px' }}>
                           📝 {b.notes}
                         </div>
                       )}
 
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '6px' }}>
-                        📅 {new Date(b.createdAt).toLocaleString(language === 'ar' ? 'ar-EG' : 'en-US')}
-                      </div>
-                    </div>
-
-                    <div className="responsive-card-actions">
-                      {/* InstaPay Receipt screenshot if available */}
+                      {/* InstaPay Receipt Preview Button */}
                       {b.receiptImageUrl && (
                         <button
                           type="button"
@@ -2652,39 +2667,33 @@ export default function DashboardPage() {
                             backgroundColor: 'rgba(226, 183, 20, 0.1)',
                             border: '1px solid var(--accent-gold)',
                             color: 'var(--accent-gold)',
-                            padding: '6px 12px',
-                            borderRadius: '4px',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
                             cursor: 'pointer',
-                            fontSize: '0.8rem',
+                            fontSize: '0.85rem',
                             fontWeight: 'bold',
-                            textAlign: 'center'
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            width: '100%',
+                            minHeight: '40px'
                           }}
                         >
-                          🔍 {language === 'ar' ? 'معاينة إيصال إنستاباي' : 'View Receipt'}
+                          🔍 {language === 'ar' ? 'معاينة إيصال تحويل إنستاباي' : 'View InstaPay Receipt'}
                         </button>
                       )}
 
-                      {/* Status Badge */}
-                      <span style={{
-                        padding: '6px 12px',
-                        borderRadius: '4px',
-                        fontSize: '0.8rem',
-                        fontWeight: 'bold',
-                        textAlign: 'center',
-                        backgroundColor: b.status === 'CONFIRMED' ? 'rgba(46, 204, 113, 0.15)' : b.status === 'REJECTED' ? 'rgba(229, 9, 20, 0.15)' : 'rgba(226, 183, 20, 0.15)',
-                        color: b.status === 'CONFIRMED' ? '#2ecc71' : b.status === 'REJECTED' ? '#ff4d4d' : 'var(--accent-gold)',
-                        border: `1px solid ${b.status === 'CONFIRMED' ? 'var(--accent-green)' : b.status === 'REJECTED' ? 'var(--accent-red)' : 'var(--accent-gold)'}`
-                      }}>
-                        {b.status === 'CONFIRMED' 
-                          ? (language === 'ar' ? 'مؤكد ومقبول' : 'Confirmed') 
-                          : b.status === 'REJECTED'
-                          ? (language === 'ar' ? 'مرفوض' : 'Rejected')
-                          : (language === 'ar' ? 'قيد المراجعة' : 'Pending')}
-                      </span>
-
-                      {/* Status Action Buttons */}
+                      {/* Decision Action Buttons for PENDING */}
                       {b.status === 'PENDING' && (
-                        <div className="action-btns-group" style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr',
+                          gap: '8px',
+                          marginTop: '4px',
+                          paddingTop: '8px',
+                          borderTop: '1px dashed var(--border-color)'
+                        }}>
                           <button
                             type="button"
                             onClick={() => handleUpdateTripBookingStatus(b.id, 'CONFIRMED')}
@@ -2692,11 +2701,16 @@ export default function DashboardPage() {
                               backgroundColor: '#2ecc71',
                               color: '#ffffff',
                               border: 'none',
-                              padding: '8px 14px',
-                              borderRadius: '4px',
+                              padding: '10px 14px',
+                              borderRadius: '6px',
                               cursor: 'pointer',
-                              fontSize: '0.8rem',
-                              fontWeight: 'bold'
+                              fontSize: '0.85rem',
+                              fontWeight: 'bold',
+                              minHeight: '44px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px'
                             }}
                           >
                             ✓ {language === 'ar' ? 'تأكيد الحجز' : 'Confirm'}
@@ -2708,11 +2722,16 @@ export default function DashboardPage() {
                               backgroundColor: '#ff4d4d',
                               color: '#ffffff',
                               border: 'none',
-                              padding: '8px 14px',
-                              borderRadius: '4px',
+                              padding: '10px 14px',
+                              borderRadius: '6px',
                               cursor: 'pointer',
-                              fontSize: '0.8rem',
-                              fontWeight: 'bold'
+                              fontSize: '0.85rem',
+                              fontWeight: 'bold',
+                              minHeight: '44px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px'
                             }}
                           >
                             ✕ {language === 'ar' ? 'رفض' : 'Reject'}
@@ -2720,15 +2739,480 @@ export default function DashboardPage() {
                         </div>
                       )}
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center', padding: '2rem 1rem' }}>
+                  {language === 'ar' ? 'لا توجد طلبات اشتراك في الرحلات حتى الآن.' : 'No trip bookings submitted yet.'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* SUBTAB 2: CURRENT TRIPS LIST */}
+          {/* ======================================================== */}
+          {tripSubTab === 'trips' && (
+            <div className="dashboard-panel" style={{ width: '100%', boxSizing: 'border-box' }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '8px',
+                borderBottom: '1px solid var(--border-color)',
+                paddingBottom: '10px',
+                marginBottom: '1rem'
+              }}>
+                <h3 style={{ color: 'var(--accent-gold)', margin: 0, fontSize: '1.1rem' }}>
+                  📋 {language === 'ar' ? 'قائمة الرحلات والمؤتمرات المضافة' : 'Current Trips & Conferences'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingTripId(null);
+                    setTripTitleAr('');
+                    setTripTitleEn('');
+                    setTripDescAr('');
+                    setTripDescEn('');
+                    setTripLocationAr('');
+                    setTripLocationEn('');
+                    setTripDate('');
+                    setTripPrice('0');
+                    setTripType('TRIP');
+                    setTripSubTab('form');
+                  }}
+                  style={{
+                    backgroundColor: 'var(--accent-gold)',
+                    color: '#000000',
+                    border: 'none',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ➕ {language === 'ar' ? 'إضافة فعالية جديدة' : 'Add New'}
+                </button>
               </div>
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
-                {language === 'ar' ? 'لا توجد حجوزات رحلات مسجلة حتى الآن.' : 'No trip bookings submitted yet.'}
-              </p>
-            )}
-          </div>
+
+              {tripsList.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', boxSizing: 'border-box' }}>
+                  {tripsList.map(t => (
+                    <div
+                      key={t.id}
+                      style={{
+                        backgroundColor: 'var(--bg-card)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '10px',
+                        padding: '1.1rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px',
+                        boxShadow: 'var(--shadow-sm)',
+                        width: '100%',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      {/* Top: Type badge + Title */}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                          <span style={{
+                            fontSize: '0.75rem',
+                            padding: '3px 8px',
+                            backgroundColor: t.type === 'TRIP' ? 'rgba(52, 152, 219, 0.15)' : 'rgba(155, 89, 182, 0.15)',
+                            color: t.type === 'TRIP' ? 'var(--accent-blue)' : '#9b59b6',
+                            border: `1px solid ${t.type === 'TRIP' ? 'rgba(52, 152, 219, 0.3)' : 'rgba(155, 89, 182, 0.3)'}`,
+                            borderRadius: '4px',
+                            fontWeight: 'bold'
+                          }}>
+                            {t.type === 'TRIP' ? (language === 'ar' ? '✈️ رحلة كنسية' : 'Trip') : (language === 'ar' ? '🏛️ مؤتمر كنسي' : 'Conference')}
+                          </span>
+                        </div>
+                        <h4 style={{ fontWeight: 'bold', fontSize: '1.15rem', color: 'var(--text-primary)', margin: 0, lineHeight: 1.4 }}>
+                          {language === 'ar' ? t.titleAr : t.titleEn}
+                        </h4>
+                      </div>
+
+                      {/* Chips row */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        <span style={{ backgroundColor: 'rgba(255,255,255,0.03)', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+                          📅 {new Date(t.date).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
+                        </span>
+                        <span style={{ backgroundColor: 'rgba(255,255,255,0.03)', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+                          📍 {language === 'ar' ? t.locationAr : t.locationEn}
+                        </span>
+                        <span style={{ backgroundColor: 'rgba(226,183,20,0.1)', color: 'var(--accent-gold)', padding: '4px 8px', borderRadius: '4px', border: '1px solid rgba(226,183,20,0.25)', fontWeight: 'bold' }}>
+                          💰 {t.price} {language === 'ar' ? 'ج.م للفرد' : 'EGP'}
+                        </span>
+                      </div>
+
+                      {/* Description */}
+                      {t.descriptionAr && (
+                        <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+                          {language === 'ar' ? t.descriptionAr : t.descriptionEn}
+                        </p>
+                      )}
+
+                      {/* Action buttons */}
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '8px',
+                        paddingTop: '8px',
+                        borderTop: '1px solid var(--border-color)'
+                      }}>
+                        <button 
+                          onClick={() => {
+                            setEditingTripId(t.id);
+                            setTripTitleAr(t.titleAr);
+                            setTripTitleEn(t.titleEn);
+                            setTripDescAr(t.descriptionAr || '');
+                            setTripDescEn(t.descriptionEn || '');
+                            setTripLocationAr(t.locationAr || '');
+                            setTripLocationEn(t.locationEn || '');
+                            setTripDate(t.date ? t.date.split('T')[0] : '');
+                            setTripPrice(String(t.price));
+                            setTripType(t.type);
+                            setTripSubTab('form');
+                          }}
+                          style={{
+                            backgroundColor: 'var(--accent-gold)',
+                            color: '#000000',
+                            border: 'none',
+                            padding: '10px 14px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold',
+                            minHeight: '42px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          ✏️ {language === 'ar' ? 'تعديل الفعالية' : 'Edit Event'}
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteTrip(t.id)}
+                          style={{
+                            backgroundColor: 'rgba(255, 77, 77, 0.1)',
+                            border: '1px solid rgba(255, 77, 77, 0.3)',
+                            color: '#ff4d4d',
+                            padding: '10px 14px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold',
+                            minHeight: '42px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          🗑️ {language === 'ar' ? 'حذف' : 'Delete'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', textAlign: 'center', padding: '2rem 1rem' }}>
+                  {language === 'ar' ? 'لا توجد رحلات أو مؤتمرات مضافة حالياً.' : 'No trips or conferences added yet.'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* SUBTAB 3: ADD / EDIT TRIP FORM */}
+          {/* ======================================================== */}
+          {tripSubTab === 'form' && (
+            <div className="dashboard-panel" id="trip-form-card" style={{ width: '100%', boxSizing: 'border-box' }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '8px',
+                borderBottom: '1px solid var(--border-color)',
+                paddingBottom: '10px',
+                marginBottom: '1rem'
+              }}>
+                <h3 style={{ color: 'var(--accent-gold)', margin: 0, fontSize: '1.1rem' }}>
+                  ✈️ {editingTripId 
+                    ? (language === 'ar' ? 'تعديل بيانات الرحلة / المؤتمر' : 'Edit Trip / Conference') 
+                    : (language === 'ar' ? 'إضافة رحلة أو مؤتمر جديد' : 'Add New Trip / Conference')}
+                </h3>
+
+                {editingTripId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingTripId(null);
+                      setTripTitleAr('');
+                      setTripTitleEn('');
+                      setTripDescAr('');
+                      setTripDescEn('');
+                      setTripLocationAr('');
+                      setTripLocationEn('');
+                      setTripDate('');
+                      setTripPrice('0');
+                      setTripType('TRIP');
+                      setTripSubTab('trips');
+                    }}
+                    style={{
+                      background: 'none',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-secondary)',
+                      padding: '5px 10px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem'
+                    }}
+                  >
+                    ✕ {language === 'ar' ? 'إلغاء والعودة' : 'Cancel'}
+                  </button>
+                )}
+              </div>
+
+              {tripMsg && (
+                <div style={{
+                  padding: '10px 14px',
+                  backgroundColor: 'rgba(226, 183, 20, 0.1)',
+                  border: '1px solid var(--accent-gold)',
+                  color: 'var(--accent-gold)',
+                  borderRadius: '6px',
+                  marginBottom: '1.2rem',
+                  fontSize: '0.85rem'
+                }}>
+                  {tripMsg}
+                </div>
+              )}
+
+              <form onSubmit={handleSaveTrip} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%', boxSizing: 'border-box' }}>
+                
+                {/* Event Type Selector */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
+                    {language === 'ar' ? 'نوع الفعالية *' : 'Event Type *'}
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setTripType('TRIP')}
+                      style={{
+                        padding: '10px',
+                        borderRadius: '6px',
+                        border: tripType === 'TRIP' ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                        backgroundColor: tripType === 'TRIP' ? 'rgba(226, 183, 20, 0.15)' : 'var(--bg-card)',
+                        color: tripType === 'TRIP' ? 'var(--accent-gold)' : 'var(--text-primary)',
+                        fontWeight: 'bold',
+                        fontSize: '0.88rem',
+                        cursor: 'pointer',
+                        minHeight: '44px'
+                      }}
+                    >
+                      ✈️ {language === 'ar' ? 'رحلة كنسية' : 'Church Trip'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTripType('CONFERENCE')}
+                      style={{
+                        padding: '10px',
+                        borderRadius: '6px',
+                        border: tripType === 'CONFERENCE' ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                        backgroundColor: tripType === 'CONFERENCE' ? 'rgba(226, 183, 20, 0.15)' : 'var(--bg-card)',
+                        color: tripType === 'CONFERENCE' ? 'var(--accent-gold)' : 'var(--text-primary)',
+                        fontWeight: 'bold',
+                        fontSize: '0.88rem',
+                        cursor: 'pointer',
+                        minHeight: '44px'
+                      }}
+                    >
+                      🏛️ {language === 'ar' ? 'مؤتمر كنسي' : 'Conference'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Title (Arabic & English) */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '10px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ar' ? 'عنوان الفعالية (عربي) *' : 'Title (Arabic) *'}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder={language === 'ar' ? 'مثال: رحلة إلى دير مارمينا بمريوط' : 'Arabic Title'}
+                      value={tripTitleAr}
+                      onChange={e => setTripTitleAr(e.target.value)}
+                      className={styles.formInput}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ar' ? 'عنوان الفعالية (إنجليزي) *' : 'Title (English) *'}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Trip to St. Mina Monastery"
+                      value={tripTitleEn}
+                      onChange={e => setTripTitleEn(e.target.value)}
+                      className={styles.formInput}
+                    />
+                  </div>
+                </div>
+
+                {/* Location (Arabic & English) */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '10px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ar' ? 'الموقع / المكان (عربي)' : 'Location (Arabic)'}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={language === 'ar' ? 'مثال: كينج مريوط - الإسكندرية' : 'Location in Arabic'}
+                      value={tripLocationAr}
+                      onChange={e => setTripLocationAr(e.target.value)}
+                      className={styles.formInput}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ar' ? 'الموقع / المكان (إنجليزي)' : 'Location (English)'}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Alexandria"
+                      value={tripLocationEn}
+                      onChange={e => setTripLocationEn(e.target.value)}
+                      className={styles.formInput}
+                    />
+                  </div>
+                </div>
+
+                {/* Date & Price */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: '10px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ar' ? 'التاريخ *' : 'Date *'}
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={tripDate}
+                      onChange={e => setTripDate(e.target.value)}
+                      className={styles.formInput}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ar' ? 'سعر الفرد (ج.م)' : 'Price (EGP)'}
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="0"
+                      value={tripPrice}
+                      onChange={e => setTripPrice(e.target.value)}
+                      className={styles.formInput}
+                    />
+                  </div>
+                </div>
+
+                {/* Description (Arabic & English) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    {language === 'ar' ? 'تفاصيل وبرنامج الرحلة (عربي)' : 'Program Details (Arabic)'}
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder={language === 'ar' ? 'تفاصيل التجمع، البرنامج الروحي والترفيهي...' : 'Details in Arabic'}
+                    value={tripDescAr}
+                    onChange={e => setTripDescAr(e.target.value)}
+                    className={styles.formInput}
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    {language === 'ar' ? 'تفاصيل البرنامج (إنجليزي)' : 'Program Details (English)'}
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Program description in English..."
+                    value={tripDescEn}
+                    onChange={e => setTripDescEn(e.target.value)}
+                    className={styles.formInput}
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '6px' }}>
+                  <button 
+                    type="submit" 
+                    className={`${styles.bookBtn} ${savedTrip ? 'btn-saved-success' : ''}`} 
+                    style={{ 
+                      width: '100%',
+                      backgroundColor: savedTrip ? '#2ecc71' : undefined,
+                      color: savedTrip ? '#fff' : undefined,
+                      transition: 'all 0.3s ease',
+                      minHeight: '48px',
+                      fontSize: '0.95rem',
+                      fontWeight: 'bold',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {savedTrip ? '✓ تم الحفظ بنجاح!' : (editingTripId ? (language === 'ar' ? 'حفظ التعديلات' : 'Save Changes') : (language === 'ar' ? 'إضافة الفعالية' : 'Add Event'))}
+                  </button>
+
+                  {editingTripId && (
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setEditingTripId(null);
+                        setTripTitleAr('');
+                        setTripTitleEn('');
+                        setTripDescAr('');
+                        setTripDescEn('');
+                        setTripLocationAr('');
+                        setTripLocationEn('');
+                        setTripDate('');
+                        setTripPrice('0');
+                        setTripType('TRIP');
+                        setTripSubTab('trips');
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        backgroundColor: 'transparent',
+                        color: 'var(--text-primary)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '0.9rem',
+                        minHeight: '44px'
+                      }}
+                    >
+                      {language === 'ar' ? 'إلغاء والعودة للقائمة' : 'Cancel'}
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+          )}
+
         </div>
       )}
 

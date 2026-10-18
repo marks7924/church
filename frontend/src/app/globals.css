@@ -147,6 +147,7 @@ html, body {
 /* Interactive elements */
 button, select, input, textarea {
   font-family: inherit;
+  box-sizing: border-box;
 }
 
 a {
