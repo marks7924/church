@@ -138,9 +138,11 @@ router.post('/feedback', async (req: Request, res: Response) => {
   }
 });
 
+import { getBudgetStatus } from '../utils/aiBudget';
+
 /**
  * 3. GET /api/ai/admin/settings
- * Admin: Get current AI status and configuration (Secret keys masked)
+ * Admin: Get current AI status and configuration (Secret keys strictly masked)
  */
 router.get(
   '/admin/settings',
@@ -149,15 +151,25 @@ router.get(
   async (req: AuthRequest, res: Response) => {
     try {
       const dbSettings = await ChurchKnowledgeRetriever.getAiSystemSettings();
-      const apiKey = process.env.AI_API_KEY?.trim() || '';
+      const geminiKey = process.env.GEMINI_API_KEY?.trim() || '';
+      const groqKey = process.env.GROQ_API_KEY?.trim() || '';
 
       const settings = {
-        provider: process.env.AI_PROVIDER || 'groq',
-        model: process.env.AI_MODEL || (process.env.AI_PROVIDER === 'groq' ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini'),
-        hasApiKey: apiKey.length > 0,
-        maskedApiKey: apiKey.length > 6 ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : (apiKey ? '****' : null),
+        primaryProvider: process.env.AI_PROVIDER || 'gemini',
+        primaryModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+        hasGeminiKey: geminiKey.length > 0,
+        maskedGeminiKey: geminiKey.length > 6 ? `${geminiKey.slice(0, 4)}...${geminiKey.slice(-4)}` : (geminiKey ? '****' : null),
+
+        fallbackProvider: process.env.AI_FALLBACK_PROVIDER || 'groq',
+        fallbackModel: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+        hasGroqKey: groqKey.length > 0,
+        maskedGroqKey: groqKey.length > 6 ? `${groqKey.slice(0, 4)}...${groqKey.slice(-4)}` : (groqKey ? '****' : null),
+
         maxTokens: parseInt(process.env.AI_MAX_OUTPUT_TOKENS || '1024', 10),
         timeoutMs: parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '25000', 10),
+        dailyBudgetLimitUSD: parseFloat(process.env.AI_DAILY_BUDGET_LIMIT || '10.00'),
+        budgetStatus: getBudgetStatus(),
+
         enabled: dbSettings.ai_enabled !== 'false',
         defaultLanguage: dbSettings.ai_default_language || 'ar',
         escalationPhone: dbSettings.ai_escalation_phone || '+20 100 000 0002',
@@ -297,7 +309,8 @@ router.get(
           eventsAndTrips: eventCount,
           status: 'HEALTHY',
           lastSync: new Date().toISOString()
-        }
+        },
+        budgetStatus: getBudgetStatus()
       };
 
       return res.status(200).json(analytics);

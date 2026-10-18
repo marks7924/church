@@ -1,5 +1,5 @@
 import prisma from '../db';
-import { Role } from '@prisma/client';
+import { isBudgetExceeded, recordTokenUsage, getBudgetStatus } from '../utils/aiBudget';
 
 export interface AiChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -21,6 +21,15 @@ export interface AiChatResponse {
   tokensUsed: number;
   provider: string;
   model: string;
+  fallbackTriggered?: boolean;
+}
+
+export interface ProviderResult {
+  success: boolean;
+  text?: string;
+  tokensUsed?: number;
+  isTransient?: boolean;
+  errorMessage?: string;
 }
 
 // Church static authoritative identity constants
@@ -50,7 +59,7 @@ export const CHURCH_INFO = {
 };
 
 /**
- * Normalizes text for robust intent recognition (Arabic diacritics, letters normalization, Egyptian Arabic)
+ * Normalizes text for robust intent recognition (Arabic diacritics, Egyptian Arabic variants)
  */
 export function normalizeQuery(query: string): string {
   if (!query) return '';
@@ -98,6 +107,8 @@ export function invalidateKnowledgeCache(): void {
 
 /**
  * Read-only RAG Data Retrieval Tools
+ * Strictly parameterized queries with explicit field selection.
+ * Zero access to private member records, confession notes, or payment receipts.
  */
 export class ChurchKnowledgeRetriever {
   /**
@@ -108,6 +119,15 @@ export class ChurchKnowledgeRetriever {
       let schedules = getCached<any[]>('mass_schedules');
       if (!schedules) {
         schedules = await prisma.massSchedule.findMany({
+          select: {
+            id: true,
+            dayAr: true,
+            dayEn: true,
+            timeAr: true,
+            timeEn: true,
+            eventTypeAr: true,
+            eventTypeEn: true
+          },
           orderBy: { createdAt: 'asc' }
         });
         setCached('mass_schedules', schedules);
@@ -141,6 +161,18 @@ export class ChurchKnowledgeRetriever {
         }
         events = await prisma.event.findMany({
           where,
+          select: {
+            id: true,
+            titleAr: true,
+            titleEn: true,
+            descriptionAr: true,
+            descriptionEn: true,
+            type: true,
+            date: true,
+            locationAr: true,
+            locationEn: true,
+            price: true
+          },
           orderBy: { date: 'asc' },
           take: 10
         });
@@ -194,6 +226,18 @@ export class ChurchKnowledgeRetriever {
       let allSermons = getCached<any[]>('all_sermons');
       if (!allSermons) {
         allSermons = await prisma.sermon.findMany({
+          select: {
+            id: true,
+            titleAr: true,
+            titleEn: true,
+            priestNameAr: true,
+            priestNameEn: true,
+            topicAr: true,
+            topicEn: true,
+            date: true,
+            youtubeUrl: true,
+            thumbnailUrl: true
+          },
           orderBy: { date: 'desc' },
           take: 20
         });
@@ -290,7 +334,186 @@ export class ChurchKnowledgeRetriever {
 }
 
 /**
- * Main AI Assistant Service
+ * Google Gemini Dedicated Provider Client
+ * Uses official Google Generative Language API contract
+ */
+async function callGeminiProvider(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  history: AiChatMessage[],
+  userMessage: string,
+  maxTokens: number,
+  timeoutMs: number
+): Promise<ProviderResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    // Build Gemini contents array
+    const contents: any[] = [];
+    history.slice(-4).forEach(h => {
+      contents.push({
+        role: h.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: h.content }]
+      });
+    });
+    contents.push({
+      role: 'user',
+      parts: [{ text: userMessage }]
+    });
+
+    const bodyPayload = {
+      systemInstruction: {
+        parts: [{ text: systemPrompt }]
+      },
+      contents,
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: maxTokens
+      }
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(bodyPayload),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      const status = response.status;
+      // 429 = Rate Limit/Quota; 500, 502, 503, 504 = Server errors
+      const isTransient = status === 429 || (status >= 500 && status <= 504);
+      return {
+        success: false,
+        isTransient,
+        errorMessage: `Gemini HTTP ${status}: ${errText.slice(0, 200)}`
+      };
+    }
+
+    const data = (await response.json()) as any;
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!text || typeof text !== 'string') {
+      return {
+        success: false,
+        isTransient: true,
+        errorMessage: 'Gemini returned empty or malformed candidate part'
+      };
+    }
+
+    const tokensUsed = data?.usageMetadata?.totalTokenCount || Math.round(text.length / 4);
+
+    return {
+      success: true,
+      text,
+      tokensUsed
+    };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    const isTimeout = err.name === 'AbortError' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT';
+    return {
+      success: false,
+      isTransient: isTimeout || true,
+      errorMessage: err.message || 'Gemini connection failure'
+    };
+  }
+}
+
+/**
+ * Groq Dedicated Fallback Provider Client
+ * Uses official Groq OpenAI-compatible contract (with strictly non-deprecated model)
+ */
+async function callGroqProvider(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  history: AiChatMessage[],
+  userMessage: string,
+  maxTokens: number,
+  timeoutMs: number
+): Promise<ProviderResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  // Guard against deprecated llama-3.3-70b-versatile
+  const safeModel = model === 'llama-3.3-70b-versatile' ? 'llama-3.1-8b-instant' : model;
+
+  try {
+    const url = 'https://api.groq.com/openai/v1/chat/completions';
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-4).map(h => ({ role: h.role, content: h.content })),
+      { role: 'user', content: userMessage }
+    ];
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: safeModel,
+        messages,
+        temperature: 0.3,
+        max_tokens: maxTokens
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      const status = response.status;
+      const isTransient = status === 429 || (status >= 500 && status <= 504);
+      return {
+        success: false,
+        isTransient,
+        errorMessage: `Groq HTTP ${status}: ${errText.slice(0, 200)}`
+      };
+    }
+
+    const data = (await response.json()) as any;
+    const text = data?.choices?.[0]?.message?.content;
+
+    if (!text || typeof text !== 'string') {
+      return {
+        success: false,
+        isTransient: true,
+        errorMessage: 'Groq returned empty content'
+      };
+    }
+
+    const tokensUsed = data?.usage?.total_tokens || Math.round(text.length / 4);
+
+    return {
+      success: true,
+      text,
+      tokensUsed
+    };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    const isTimeout = err.name === 'AbortError' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT';
+    return {
+      success: false,
+      isTransient: isTimeout || true,
+      errorMessage: err.message || 'Groq connection failure'
+    };
+  }
+}
+
+/**
+ * Main Church AI Service with Dual Provider & Bounded Fallback
  */
 export class ChurchAiService {
   /**
@@ -420,7 +643,7 @@ CRITICAL OPERATIONAL RULES:
 5. Direct Helpful Links:
    - Always conclude with direct markdown links to the relevant website pages:
      * Mass Schedules: [جدول القداسات](/schedule)
-     * Confession Booking: [حجز اعتراف](/ #booking)
+     * Confession Booking: [حجز اعتراف](/)
      * Sermons: [مكتبة العظات](/sermons)
      * Ministries: [الخدمات الكنسية](/ministries)
      * Trips: [الرحلات والمؤتمرات](/schedule)
@@ -430,13 +653,13 @@ CRITICAL OPERATIONAL RULES:
   }
 
   /**
-   * Intelligent Rule-based Grounded Engine (Guaranteed 100% uptime fallback)
+   * High-fidelity Grounded Fallback Engine
    */
   static generateGroundedResponse(query: string, language: 'ar' | 'en', context: { knowledgeText: string, sources: AiSourceReference[] }): { text: string; matchedSources: AiSourceReference[]; suggested: string[] } {
     const q = normalizeQuery(query);
     const isAr = language === 'ar';
 
-    // 1. Liturgy / Mass schedule questions
+    // 1. Liturgy / Mass schedule
     if (q.includes('قداس') || q.includes('مواعيد') || q.includes('صلاه') || q.includes('mass') || q.includes('liturgy') || q.includes('schedule') || q.includes('جمعه') || q.includes('احد') || q.includes('اربع')) {
       let text = isAr
         ? `بنعمة ربنا، هذه هي مواعيد القداسات الإلهية الأسبوعية بالكنيسة:\n\n` +
@@ -551,7 +774,7 @@ CRITICAL OPERATIONAL RULES:
       };
     }
 
-    // 5. Donations & Giving
+    // 5. Donations
     if (q.includes('تبرع') || q.includes('حساب') || q.includes('بنك') || q.includes('فلوس') || q.includes('عشور') || q.includes('donate') || q.includes('donation') || q.includes('bank') || q.includes('account')) {
       let text = isAr
         ? `نشكر محبتكم ودعمكم لبيوت الله وأعمال الرحمة والرعاية.\n\n` +
@@ -578,7 +801,7 @@ CRITICAL OPERATIONAL RULES:
       };
     }
 
-    // 6. Membership registration
+    // 6. Membership
     if (q.includes('عضو') || q.includes('استمار') || q.includes('تسجيل') || q.includes('اسر') || q.includes('member') || q.includes('register') || q.includes('family')) {
       let text = isAr
         ? `لتسجيل استمارة العضوية الكنسية للأسرة:\n\n` +
@@ -603,74 +826,7 @@ CRITICAL OPERATIONAL RULES:
       };
     }
 
-    // 7. Live Stream
-    if (q.includes('بث') || q.includes('مباشر') || q.includes('لايف') || q.includes('يوتيوب') || q.includes('live') || q.includes('stream') || q.includes('broadcast')) {
-      let text = isAr
-        ? `يمكنك متابعة الصلوات والقداسات والعظات عبر البث المباشر الرسمي للكنيسة:\n\n` +
-          `لمشاهدة البث الحالي أو معرفة مواعيد إذاعة الصلوات القادمة، تفضل بزيارة [قسم البث المباشر والعظات](/sermons).`
-        : `You can watch prayers, Divine Liturgies, and sermons through the church's official live broadcast:\n\n` +
-          `To tune in or check upcoming broadcast schedules, visit [Live Stream & Sermons](/sermons).`;
-
-      return {
-        text,
-        matchedSources: context.sources.filter(s => s.type === 'live'),
-        suggested: isAr
-          ? ['مواعيد القداسات', 'العظات المسجلة', 'العنوان والتواصل']
-          : ['Mass schedule', 'Recorded sermons', 'Church address']
-      };
-    }
-
-    // 8. Location & Contacts
-    if (q.includes('عنوان') || q.includes('مكان') || q.includes('موقع') || q.includes('تليفون') || q.includes('اتصال') || q.includes('ارقام') || q.includes('address') || q.includes('location') || q.includes('phone') || q.includes('contact')) {
-      let text = isAr
-        ? `يسعدنا دائماً تواصلكم وزيارتكم لبيت الله:\n\n` +
-          `📍 **العنوان:** ${CHURCH_INFO.addressAr}\n` +
-          `📞 **أرقام الهواتف:** ${CHURCH_INFO.phoneNumbers.join(' - ')}\n` +
-          `✉️ **البريد الإلكتروني:** ${CHURCH_INFO.email}\n` +
-          `⏰ **مواعيد فتح الكنيسة:** ${CHURCH_INFO.openingHoursAr}\n\n` +
-          `لإرسال استفسار مباشر للإدارة أو الكهنة، تفضل بزيارة [صفحة اتصل بنا](/contact).`
-        : `We warmly welcome your visit and communication with the church:\n\n` +
-          `📍 **Address:** ${CHURCH_INFO.addressEn}\n` +
-          `📞 **Phones:** ${CHURCH_INFO.phoneNumbers.join(' - ')}\n` +
-          `✉️ **Email:** ${CHURCH_INFO.email}\n` +
-          `⏰ **Opening Hours:** ${CHURCH_INFO.openingHoursEn}\n\n` +
-          `To send a direct inquiry to church administrators or clergy, visit [Contact Us](/contact).`;
-
-      return {
-        text,
-        matchedSources: context.sources.filter(s => s.type === 'contact'),
-        suggested: isAr
-          ? ['مواعيد القداسات', 'حجز موعد اعتراف', 'ما هي خدمات الكنيسة؟']
-          : ['Mass schedule', 'Book confession', 'Church ministries']
-      };
-    }
-
-    // 9. Ministries & Sunday School
-    if (q.includes('خدم') || q.includes('مدارس الاحد') || q.includes('كشافه') || q.includes('كورال') || q.includes('شباب') || q.includes('ministr') || q.includes('sunday school') || q.includes('choir') || q.includes('youth')) {
-      let text = isAr
-        ? `تضم كنيسة الشهيد العظيم أبي سيفين خدمات وأنشطة روحية مباركة لجميع الأعمار:\n\n` +
-          `• **خدمة مدارس الأحد:** مراحل الحضانة، الابتدائي، الإعدادي، والثانوي (كل جمعة بعد القداس الثاني الساعة 10:30 ص).\n` +
-          `• **اجتماع الشباب والخريجين:** رعاية روحية وثقافية أسبوعية (كل خميس الساعة 7:00 م بالمسرح الكبير).\n` +
-          `• **كورال وألحان الكنيسة:** تعليم الألحان والتسبحة والأصوات (كل سبت الساعة 5:00 م).\n` +
-          `• **خدمة الرعاية الاجتماعية والرحمة:** مساعدة ودعم أخوة الرب يومياً.\n\n` +
-          `للتعرف على مواعيد وأهداف كل خدمة، تفضل بزيارة [صفحة الخدمات الكنسية](/ministries).`
-        : `Our church hosts various blessed spiritual ministries for all ages:\n\n` +
-          `• **Sunday School:** Pre-school, Primary, Preparatory, and Secondary (Every Friday 10:30 AM after 2nd Liturgy).\n` +
-          `• **Youth & Graduates Ministry:** Spiritual and cultural discussions (Every Thursday 7:00 PM).\n` +
-          `• **Choir & Authentic Coptic Hymns:** Learning hymns and tasbeha (Every Saturday 5:00 PM).\n` +
-          `• **Social Care & Mercy Ministry:** Daily support for families in need.\n\n` +
-          `Explore all ministries at [Church Ministries](/ministries).`;
-
-      return {
-        text,
-        matchedSources: context.sources.filter(s => s.type === 'ministry'),
-        suggested: isAr
-          ? ['مواعيد القداسات', 'حجز موعد اعتراف', 'الرحلات القادمة']
-          : ['Mass schedule', 'Book confession', 'Upcoming trips']
-      };
-    }
-
-    // 10. General / Greeting / Fallback
+    // 7. General Welcome
     const welcome = isAr
       ? `أهلاً ومرحباً بك في كنيسة الشهيد العظيم أبي سيفين بحدائق القبة ❤️\n\n` +
         `أنا المساعد الكنسي الذكي، وموجود لمساعدتك في كل ما يخص كنيستنا المباركة:\n` +
@@ -699,7 +855,7 @@ CRITICAL OPERATIONAL RULES:
   }
 
   /**
-   * Process chat request through LLM Provider or Grounded Engine
+   * Process chat request through Dual Provider Architecture (Gemini Primary -> Groq Fallback -> Grounded Engine)
    */
   static async processChat(
     userMessage: string,
@@ -709,26 +865,100 @@ CRITICAL OPERATIONAL RULES:
     const startTime = Date.now();
     const lang = preferredLanguage || detectLanguage(userMessage);
 
-    // 1. Retrieve Church RAG Context
+    // 1. Retrieve Grounded Context
     const { knowledgeText, sources } = await ChurchAiService.buildContext(userMessage, lang);
 
-    // 2. Read Provider Configuration
-    const apiKey = process.env.AI_API_KEY?.trim();
-    const provider = process.env.AI_PROVIDER || 'groq';
-    const model = process.env.AI_MODEL || (provider === 'groq' ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini');
+    // 2. Read Configuration
+    const geminiKey = process.env.GEMINI_API_KEY?.trim() || '';
+    const geminiModel = process.env.GEMINI_MODEL?.trim() || 'gemini-1.5-flash';
+
+    const groqKey = process.env.GROQ_API_KEY?.trim() || '';
+    // Ensure Groq model is strictly supported and never the deprecated model
+    let groqModel = process.env.GROQ_MODEL?.trim() || 'llama-3.1-8b-instant';
+    if (groqModel === 'llama-3.3-70b-versatile') {
+      groqModel = 'llama-3.1-8b-instant';
+    }
+
+    const primaryProvider = (process.env.AI_PROVIDER || 'gemini').toLowerCase();
+    const fallbackProvider = (process.env.AI_FALLBACK_PROVIDER || 'groq').toLowerCase();
     const maxTokens = parseInt(process.env.AI_MAX_OUTPUT_TOKENS || '1024', 10);
     const timeoutMs = parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '25000', 10);
 
-    // Base URL resolution
-    let baseUrl = process.env.AI_BASE_URL;
-    if (!baseUrl) {
-      if (provider === 'groq') baseUrl = 'https://api.groq.com/openai/v1';
-      else if (provider === 'gemini') baseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai';
-      else baseUrl = 'https://api.openai.com/v1';
+    const systemPrompt = `${ChurchAiService.getSystemPrompt(lang)}\n\n=== VERIFIED CHURCH KNOWLEDGE BASE ===\n${knowledgeText}`;
+
+    // 3. Shared Budget Check
+    if (isBudgetExceeded()) {
+      console.warn('AI shared daily budget limit reached. Serving via verified local knowledge engine.');
+      const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources });
+      return {
+        response: fallback.text,
+        sources: fallback.matchedSources,
+        suggestedQuestions: fallback.suggested,
+        latencyMs: Date.now() - startTime,
+        tokensUsed: 0,
+        provider: 'local-knowledge-engine (budget-cap-active)',
+        model: 'church-grounded-v1'
+      };
     }
 
-    // If no API key configured, use high-fidelity grounded rule-based engine directly
-    if (!apiKey) {
+    // 4. Dual Provider Execution Strategy
+    let primarySuccess = false;
+    let chosenText = '';
+    let chosenProvider = '';
+    let chosenModel = '';
+    let chosenTokens = 0;
+    let fallbackTriggered = false;
+
+    // A. Attempt Primary Provider
+    if (primaryProvider === 'gemini' && geminiKey) {
+      const geminiRes = await callGeminiProvider(geminiKey, geminiModel, systemPrompt, history, userMessage, maxTokens, timeoutMs);
+      if (geminiRes.success && geminiRes.text) {
+        primarySuccess = true;
+        chosenText = geminiRes.text;
+        chosenProvider = 'gemini';
+        chosenModel = geminiModel;
+        chosenTokens = geminiRes.tokensUsed || 0;
+      } else {
+        console.warn(`Primary provider (Gemini) failed: ${geminiRes.errorMessage}`);
+        // Check if transient and eligible for fallback to Groq
+        if (geminiRes.isTransient && groqKey && fallbackProvider === 'groq') {
+          console.warn('Transient failure on Gemini. Switching safely to fallback provider (Groq)...');
+          fallbackTriggered = true;
+          const groqRes = await callGroqProvider(groqKey, groqModel, systemPrompt, history, userMessage, maxTokens, timeoutMs);
+          if (groqRes.success && groqRes.text) {
+            chosenText = groqRes.text;
+            chosenProvider = 'groq (fallback)';
+            chosenModel = groqModel;
+            chosenTokens = groqRes.tokensUsed || 0;
+          } else {
+            console.warn(`Fallback provider (Groq) also failed: ${groqRes.errorMessage}`);
+          }
+        }
+      }
+    } else if (primaryProvider === 'groq' && groqKey) {
+      // Groq configured as primary
+      const groqRes = await callGroqProvider(groqKey, groqModel, systemPrompt, history, userMessage, maxTokens, timeoutMs);
+      if (groqRes.success && groqRes.text) {
+        primarySuccess = true;
+        chosenText = groqRes.text;
+        chosenProvider = 'groq';
+        chosenModel = groqModel;
+        chosenTokens = groqRes.tokensUsed || 0;
+      } else if (groqRes.isTransient && geminiKey && fallbackProvider === 'gemini') {
+        console.warn('Transient failure on Groq. Switching to fallback provider (Gemini)...');
+        fallbackTriggered = true;
+        const geminiRes = await callGeminiProvider(geminiKey, geminiModel, systemPrompt, history, userMessage, maxTokens, timeoutMs);
+        if (geminiRes.success && geminiRes.text) {
+          chosenText = geminiRes.text;
+          chosenProvider = 'gemini (fallback)';
+          chosenModel = geminiModel;
+          chosenTokens = geminiRes.tokensUsed || 0;
+        }
+      }
+    }
+
+    // B. If neither external provider generated a response (keys missing, permanent error, or both down)
+    if (!chosenText) {
       const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources });
       const latencyMs = Date.now() - startTime;
       return {
@@ -737,99 +967,41 @@ CRITICAL OPERATIONAL RULES:
         suggestedQuestions: fallback.suggested,
         latencyMs,
         tokensUsed: Math.round(fallback.text.length / 4),
-        provider: 'local-rag-engine',
-        model: 'church-grounded-v1'
+        provider: 'local-knowledge-engine',
+        model: 'church-grounded-v1',
+        fallbackTriggered
       };
     }
 
-    // 3. Make server-side call to external LLM provider
-    try {
-      const systemPrompt = ChurchAiService.getSystemPrompt(lang);
-      const messages: AiChatMessage[] = [
-        { role: 'system', content: `${systemPrompt}\n\n=== VERIFIED CHURCH KNOWLEDGE BASE ===\n${knowledgeText}` },
-        ...history.slice(-6),
-        { role: 'user', content: userMessage }
-      ];
+    // Record token usage for budget governance
+    recordTokenUsage(chosenTokens, chosenProvider);
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    // Determine matching source badges
+    const norm = normalizeQuery(userMessage);
+    const matchedSources = sources.filter(s => {
+      if (norm.includes('قداس') || norm.includes('ميعاد') || norm.includes('mass')) return s.type === 'schedule';
+      if (norm.includes('اعتراف') || norm.includes('كاهن') || norm.includes('priest')) return s.type === 'clergy';
+      if (norm.includes('عظه') || norm.includes('sermon')) return s.type === 'sermon';
+      if (norm.includes('رحل') || norm.includes('مؤتمر') || norm.includes('trip')) return s.type === 'event';
+      if (norm.includes('تبرع') || norm.includes('donate')) return s.type === 'donation';
+      if (norm.includes('عضو') || norm.includes('member')) return s.type === 'membership';
+      if (norm.includes('بث') || norm.includes('live')) return s.type === 'live';
+      return true;
+    }).slice(0, 4);
 
-      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: 0.3,
-          max_tokens: maxTokens
-        }),
-        signal: controller.signal
-      });
+    const suggested = lang === 'ar'
+      ? ['مواعيد قداسات الأسبوع', 'كيف أحجز موعد اعتراف؟', 'ما هي رحلات ومؤتمرات الكنيسة؟']
+      : ['This week\'s liturgy schedule', 'How to book confession?', 'What upcoming trips are available?'];
 
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.warn(`AI Provider returned error ${response.status}:`, errorText);
-        // Graceful fallback to grounded engine
-        const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources });
-        return {
-          response: fallback.text,
-          sources: fallback.matchedSources,
-          suggestedQuestions: fallback.suggested,
-          latencyMs: Date.now() - startTime,
-          tokensUsed: 0,
-          provider: `${provider}-fallback`,
-          model
-        };
-      }
-
-      const data = (await response.json()) as any;
-      const assistantText = data?.choices?.[0]?.message?.content || '';
-      const tokensUsed = data?.usage?.total_tokens || Math.round(assistantText.length / 4);
-
-      // Determine matching sources relevant to query
-      const norm = normalizeQuery(userMessage);
-      const matchedSources = sources.filter(s => {
-        if (norm.includes('قداس') || norm.includes('ميعاد') || norm.includes('mass')) return s.type === 'schedule';
-        if (norm.includes('اعتراف') || norm.includes('كاهن') || norm.includes('priest')) return s.type === 'clergy';
-        if (norm.includes('عظه') || norm.includes('sermon')) return s.type === 'sermon';
-        if (norm.includes('رحل') || norm.includes('مؤتمر') || norm.includes('trip')) return s.type === 'event';
-        if (norm.includes('تبرع') || norm.includes('donate')) return s.type === 'donation';
-        if (norm.includes('عضو') || norm.includes('member')) return s.type === 'membership';
-        if (norm.includes('بث') || norm.includes('live')) return s.type === 'live';
-        return true;
-      }).slice(0, 4);
-
-      const suggested = lang === 'ar'
-        ? ['مواعيد قداسات الأسبوع', 'كيف أحجز موعد اعتراف؟', 'ما هي رحلات ومؤتمرات الكنيسة؟']
-        : ['This week\'s liturgy schedule', 'How to book confession?', 'What upcoming trips are available?'];
-
-      return {
-        response: assistantText,
-        sources: matchedSources.length > 0 ? matchedSources : sources.slice(0, 3),
-        suggestedQuestions: suggested,
-        latencyMs: Date.now() - startTime,
-        tokensUsed,
-        provider,
-        model
-      };
-    } catch (err: any) {
-      console.error('Error during AI provider request:', err.message || err);
-      // Graceful fallback
-      const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources });
-      return {
-        response: fallback.text,
-        sources: fallback.matchedSources,
-        suggestedQuestions: fallback.suggested,
-        latencyMs: Date.now() - startTime,
-        tokensUsed: 0,
-        provider: 'local-rag-fallback',
-        model: 'church-grounded-v1'
-      };
-    }
+    return {
+      response: chosenText,
+      sources: matchedSources.length > 0 ? matchedSources : sources.slice(0, 3),
+      suggestedQuestions: suggested,
+      latencyMs: Date.now() - startTime,
+      tokensUsed: chosenTokens,
+      provider: chosenProvider,
+      model: chosenModel,
+      fallbackTriggered
+    };
   }
 }

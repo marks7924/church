@@ -13,12 +13,25 @@ interface AdminAiManagerProps {
 }
 
 interface AiSettings {
-  provider: string;
-  model: string;
-  hasApiKey: boolean;
-  maskedApiKey: string | null;
+  primaryProvider: string;
+  primaryModel: string;
+  hasGeminiKey: boolean;
+  maskedGeminiKey: string | null;
+  fallbackProvider: string;
+  fallbackModel: string;
+  hasGroqKey: boolean;
+  maskedGroqKey: string | null;
   maxTokens: number;
   timeoutMs: number;
+  dailyBudgetLimitUSD: number;
+  budgetStatus: {
+    day: string;
+    totalTokensToday: number;
+    totalQueriesToday: number;
+    estimatedCostTodayUSD: number;
+    dailyBudgetLimitUSD: number;
+    isExceeded: boolean;
+  };
   enabled: boolean;
   defaultLanguage: string;
   escalationPhone: string;
@@ -379,30 +392,55 @@ export default function AdminAiManager({ token, language }: AdminAiManagerProps)
           >
             <h3 style={{ fontSize: '1.05rem', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Shield size={18} style={{ color: 'var(--accent-gold)' }} />
-              {isAr ? 'حالة محرك الذكاء الاصطناعي' : 'AI Engine & Provider Status'}
+              {isAr ? 'المزود المزدوج وإدارة الميزانية' : 'Dual Providers & Budget Governance'}
             </h3>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.85rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{isAr ? 'مزود الخدمة (Provider):' : 'Provider:'}</span>
-                <span style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>{settings?.provider?.toUpperCase() || 'GROQ / OPENAI'}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
+              {/* Primary Provider: Gemini */}
+              <div style={{ backgroundColor: 'var(--bg-card)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--accent-gold)' }}>
+                    ⭐ {isAr ? 'المزود الأساسي: Google Gemini' : 'Primary: Google Gemini'}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: settings?.hasGeminiKey ? '#2ecc71' : '#e67e22', fontWeight: 600 }}>
+                    {settings?.hasGeminiKey ? (settings.maskedGeminiKey || 'مفعل') : (isAr ? 'مفتاح غير مدخل' : 'Key missing')}
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  {isAr ? 'النموذج:' : 'Model:'} <strong>{settings?.primaryModel || 'gemini-1.5-flash'}</strong>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{isAr ? 'النموذج النشط (Model):' : 'Model:'}</span>
-                <span style={{ fontWeight: 600 }}>{settings?.model || 'llama-3.3-70b-versatile'}</span>
+              {/* Fallback Provider: Groq */}
+              <div style={{ backgroundColor: 'var(--bg-card)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                    🔄 {isAr ? 'المزود الاحتياطي: Groq (Failover)' : 'Fallback: Groq (Failover)'}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: settings?.hasGroqKey ? '#2ecc71' : '#e67e22', fontWeight: 600 }}>
+                    {settings?.hasGroqKey ? (settings.maskedGroqKey || 'مفعل') : (isAr ? 'اختياري (غير مدخل)' : 'Optional (Not set)')}
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  {isAr ? 'النموذج:' : 'Model:'} <strong>{settings?.fallbackModel || 'llama-3.1-8b-instant'}</strong>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{isAr ? 'مفتاح API الخارجي:' : 'API Key Status:'}</span>
-                <span style={{ color: settings?.hasApiKey ? '#2ecc71' : '#e67e22', fontWeight: 600 }}>
-                  {settings?.hasApiKey 
-                    ? `مُهيأ (${settings.maskedApiKey})` 
-                    : (isAr ? 'غير مدخل (يعمل بالمحرك المحلي المعتمد 100%)' : 'Not set (Local RAG engine active)')}
-                </span>
+              {/* Shared Daily Budget Control */}
+              <div style={{ backgroundColor: 'var(--bg-card)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{isAr ? 'حد الميزانية اليومية المشتركة:' : 'Shared Daily Budget Limit:'}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--accent-gold)' }}>${settings?.dailyBudgetLimitUSD?.toFixed(2) || '10.00'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{isAr ? 'الاستهلاك المقدر اليوم:' : 'Estimated Today:'}</span>
+                  <span style={{ color: settings?.budgetStatus?.isExceeded ? '#e74c3c' : '#2ecc71', fontWeight: 600 }}>
+                    ${settings?.budgetStatus?.estimatedCostTodayUSD?.toFixed(4) || '0.0000'} ({settings?.budgetStatus?.totalTokensToday || 0} tokens)
+                  </span>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-color)', paddingTop: '6px' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>{isAr ? 'أقصى حد للرموز (Max Tokens):' : 'Max Output Tokens:'}</span>
                 <span>{settings?.maxTokens || 1024} tokens</span>
               </div>
