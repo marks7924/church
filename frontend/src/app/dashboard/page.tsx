@@ -8,7 +8,7 @@ import { API_URL } from '../../config';
 import { formatTimeSlot, formatDateTime } from '../../utils/format';
 import { 
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
-  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown, Scissors 
+  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown, Scissors, Clock 
 } from 'lucide-react';
 import PriestScheduleManager from '../../components/PriestScheduleManager';
 import ImageCropModal from '../../components/ImageCropModal';
@@ -2379,7 +2379,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="grid-2-col" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+              <div className="grid-2-col" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'التاريخ *' : 'Date *'}</label>
                   <input type="date" required value={tripDate} onChange={e => setTripDate(e.target.value)} className={styles.formInput} />
@@ -2444,7 +2444,7 @@ export default function DashboardPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {tripsList.map(t => (
                   <div key={t.id} className="responsive-card-row">
-                    <div style={{ flex: 1, minWidth: '220px' }}>
+                    <div style={{ flex: 1, minWidth: 'min(100%, 200px)' }}>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.75rem', padding: '2px 6px', backgroundColor: 'rgba(226,183,20,0.1)', color: 'var(--accent-gold)', borderRadius: '4px', fontWeight: 'bold' }}>
                           {t.type === 'TRIP' ? (language === 'ar' ? 'رحلة' : 'Trip') : (language === 'ar' ? 'مؤتمر' : 'Conference')}
@@ -2605,7 +2605,7 @@ export default function DashboardPage() {
                   })
                   .map(b => (
                   <div key={b.id} className="responsive-card-row">
-                    <div style={{ flex: 1, minWidth: '220px' }}>
+                    <div style={{ flex: 1, minWidth: 'min(100%, 200px)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
                           👤 {b.fullName}
@@ -2828,105 +2828,89 @@ export default function DashboardPage() {
 
           {/* List of current admin roles */}
           <div className="dashboard-panel">
-            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.2rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
               👥 {language === 'ar' ? 'سجل أصحاب الرتب والمسؤولين' : 'Administrative Roles Directory'}
             </h3>
 
             {adminUsers.length > 0 ? (
-              <>
-                {/* Desktop View (>= 769px) */}
-                <div className="desktop-only-table">
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'start' }}>
-                      <thead>
-                        <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--accent-gold)' }}>
-                          <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الاسم بالكامل' : 'Full Name'}</th>
-                          <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'البريد الإلكتروني' : 'Email'}</th>
-                          <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الرتبة' : 'Role'}</th>
-                          <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الهاتف' : 'Phone'}</th>
-                          <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الرقم القومي' : 'National ID'}</th>
-                          <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الإجراءات' : 'Actions'}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {adminUsers.map(u => (
-                          <tr key={u.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                            <td style={{ padding: '10px', fontWeight: 'bold' }}>{u.fullName}</td>
-                            <td style={{ padding: '10px' }}>{u.email}</td>
-                            <td style={{ padding: '10px', fontWeight: 'bold', color: 'var(--accent-gold)' }}>{u.role}</td>
-                            <td style={{ padding: '10px' }}>{u.phone || 'N/A'}</td>
-                            <td style={{ padding: '10px' }}>{u.nationalId || 'N/A'}</td>
-                            <td style={{ padding: '10px' }}>
-                              {['SUPER_ADMIN', 'DEVELOPER'].includes(user?.role) && u.id !== user?.id && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleImpersonate(u.id, u.fullName)}
-                                  style={{
-                                    backgroundColor: 'rgba(226, 183, 20, 0.1)',
-                                    color: 'var(--accent-gold)',
-                                    border: '1px solid var(--accent-gold)',
-                                    padding: '5px 12px',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.8rem',
-                                    fontWeight: 'bold',
-                                    whiteSpace: 'nowrap',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                  }}
-                                  title={language === 'ar' ? `تسجيل الدخول بحساب ${u.fullName}` : `Login as ${u.fullName}`}
-                                >
-                                  <span>🔑</span>
-                                  <span>{language === 'ar' ? 'دخول كـ' : 'Login as'}</span>
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
+                gap: '12px',
+                width: '100%',
+                boxSizing: 'border-box'
+              }}>
+                {adminUsers.map(u => {
+                  const getRoleBadgeStyle = (role: string) => {
+                    switch (role) {
+                      case 'BISHOP':
+                        return { bg: 'rgba(155, 89, 182, 0.15)', color: '#9b59b6', border: 'rgba(155, 89, 182, 0.3)' };
+                      case 'PRIEST':
+                        return { bg: 'rgba(226, 183, 20, 0.15)', color: 'var(--accent-gold)', border: 'rgba(226, 183, 20, 0.3)' };
+                      case 'SUPER_ADMIN':
+                      case 'DEVELOPER':
+                        return { bg: 'rgba(231, 76, 60, 0.15)', color: '#e74c3c', border: 'rgba(231, 76, 60, 0.3)' };
+                      case 'TRIP_MANAGER':
+                        return { bg: 'rgba(46, 204, 113, 0.15)', color: '#2ecc71', border: 'rgba(46, 204, 113, 0.3)' };
+                      case 'SECRETARY':
+                        return { bg: 'rgba(230, 126, 34, 0.15)', color: '#e67e22', border: 'rgba(230, 126, 34, 0.3)' };
+                      default:
+                        return { bg: 'rgba(52, 152, 219, 0.15)', color: '#3498db', border: 'rgba(52, 152, 219, 0.3)' };
+                    }
+                  };
+                  const roleStyle = getRoleBadgeStyle(u.role);
 
-                {/* Mobile View (< 769px) */}
-                <div className="mobile-only-cards">
-                  {adminUsers.map(u => (
+                  return (
                     <div
                       key={u.id}
                       style={{
                         backgroundColor: 'var(--bg-card)',
                         border: '1px solid var(--border-color)',
-                        borderRadius: '8px',
-                        padding: '1rem',
+                        borderRadius: '10px',
+                        padding: '1.1rem',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '8px',
-                        boxShadow: 'var(--shadow-sm)'
+                        justifyContent: 'space-between',
+                        gap: '10px',
+                        boxShadow: 'var(--shadow-sm)',
+                        boxSizing: 'border-box',
+                        width: '100%'
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-                        <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-primary)' }}>
-                          👤 {u.fullName}
-                        </span>
-                        <span style={{
-                          fontWeight: 'bold',
-                          fontSize: '0.78rem',
-                          padding: '3px 8px',
-                          borderRadius: '4px',
-                          backgroundColor: 'rgba(226, 183, 20, 0.15)',
-                          color: 'var(--accent-gold)'
-                        }}>
-                          {u.role}
-                        </span>
+                      <div>
+                        {/* Top Row: User Name + Role Badge */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                          <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                            👤 {u.fullName}
+                          </span>
+                          <span style={{
+                            fontWeight: 'bold',
+                            fontSize: '0.78rem',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            backgroundColor: roleStyle.bg,
+                            color: roleStyle.color,
+                            border: `1px solid ${roleStyle.border}`
+                          }}>
+                            {u.role}
+                          </span>
+                        </div>
+
+                        {/* Contact details */}
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <div style={{ wordBreak: 'break-all' }}>
+                            ✉️ <a href={`mailto:${u.email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{u.email}</a>
+                          </div>
+                          {u.phone && (
+                            <div>
+                              📞 <a href={`tel:${u.phone}`} style={{ color: 'var(--accent-gold)', textDecoration: 'none', fontWeight: 'bold' }}>{u.phone}</a>
+                            </div>
+                          )}
+                          {u.nationalId && <div>🪪 {u.nationalId}</div>}
+                        </div>
                       </div>
 
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '2px' }}>
-                        <div style={{ wordBreak: 'break-word' }}>✉️ {u.email}</div>
-                        {u.phone && <div>📞 {u.phone}</div>}
-                        {u.nationalId && <div>🪪 {u.nationalId}</div>}
-                      </div>
-
+                      {/* Impersonate button if authorized */}
                       {['SUPER_ADMIN', 'DEVELOPER'].includes(user?.role) && u.id !== user?.id && (
                         <button
                           type="button"
@@ -2935,8 +2919,8 @@ export default function DashboardPage() {
                             backgroundColor: 'rgba(226, 183, 20, 0.1)',
                             color: 'var(--accent-gold)',
                             border: '1px solid var(--accent-gold)',
-                            padding: '8px 12px',
-                            borderRadius: '4px',
+                            padding: '9px 12px',
+                            borderRadius: '6px',
                             cursor: 'pointer',
                             fontSize: '0.85rem',
                             fontWeight: 'bold',
@@ -2945,7 +2929,8 @@ export default function DashboardPage() {
                             justifyContent: 'center',
                             gap: '6px',
                             width: '100%',
-                            marginTop: '4px'
+                            marginTop: '8px',
+                            minHeight: '40px'
                           }}
                         >
                           <span>🔑</span>
@@ -2953,9 +2938,9 @@ export default function DashboardPage() {
                         </button>
                       )}
                     </div>
-                  ))}
-                </div>
-              </>
+                  );
+                })}
+              </div>
             ) : (
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
                 {language === 'ar' ? 'لا يوجد أصحاب رتب مسجلين.' : 'No admin roles registered.'}
@@ -2967,55 +2952,48 @@ export default function DashboardPage() {
 
       {/* Tab: Action Logs */}
       {activeTab === 'action-logs' && (
-        <div className="dashboard-panel">
-          <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
-            📋 {language === 'ar' ? 'سجل العمليات والعمليات الإدارية' : 'System Operations Action Log'}
-          </h3>
+        <div className="dashboard-panel" style={{ width: '100%', boxSizing: 'border-box' }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '10px',
+            borderBottom: '1px solid var(--border-color)',
+            paddingBottom: '10px',
+            marginBottom: '1.2rem'
+          }}>
+            <h3 style={{ color: 'var(--accent-gold)', margin: 0 }}>
+              📋 {language === 'ar' ? 'سجل العمليات والعمليات الإدارية' : 'System Operations Action Log'}
+            </h3>
+            <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', backgroundColor: 'var(--bg-card)', padding: '4px 10px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+              {language === 'ar' ? `${actionLogs.length} عملية مسجلة` : `${actionLogs.length} logs recorded`}
+            </span>
+          </div>
 
           {actionLogs.length > 0 ? (
-            <>
-              {/* Desktop View (>= 769px) */}
-              <div className="desktop-only-table">
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'start' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--accent-gold)' }}>
-                        <th style={{ padding: '8px', textAlign: 'inherit', width: '160px' }}>{language === 'ar' ? 'التوقيت' : 'Time'}</th>
-                        <th style={{ padding: '8px', textAlign: 'inherit', width: '180px' }}>{language === 'ar' ? 'المسؤول' : 'User'}</th>
-                        <th style={{ padding: '8px', textAlign: 'inherit', width: '160px' }}>{language === 'ar' ? 'العملية' : 'Action'}</th>
-                        <th style={{ padding: '8px', textAlign: 'inherit' }}>{language === 'ar' ? 'التفاصيل' : 'Details'}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {actionLogs.map(l => (
-                        <tr key={l.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '8px', color: 'var(--text-secondary)' }}>{formatDateTime(l.createdAt, language)}</td>
-                          <td style={{ padding: '8px' }}>
-                            <b>{l.userName}</b> <br />
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{l.userEmail}</span>
-                          </td>
-                          <td style={{ padding: '8px', fontWeight: 'bold' }}>
-                            <span style={{ 
-                              fontSize: '0.75rem', 
-                              padding: '2px 6px', 
-                              backgroundColor: l.action.startsWith('AUTO_') ? 'rgba(52, 152, 219, 0.1)' : 'rgba(226, 183, 20, 0.1)', 
-                              color: l.action.startsWith('AUTO_') ? 'var(--accent-blue)' : 'var(--accent-gold)', 
-                              borderRadius: '4px' 
-                            }}>
-                              {l.action}
-                            </span>
-                          </td>
-                          <td style={{ padding: '8px', color: 'var(--text-primary)' }}>{l.details}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
+              {actionLogs.map(l => {
+                const isAuto = l.action.startsWith('AUTO_') || l.action.includes('BACKUP');
+                const isDanger = l.action.includes('DELETE') || l.action.includes('REJECT');
+                const isSuccess = l.action.includes('CREATE') || l.action.includes('CONFIRM') || l.action.includes('APPROVE');
 
-              {/* Mobile View (< 769px) */}
-              <div className="mobile-only-cards">
-                {actionLogs.map(l => (
+                const badgeBg = isAuto 
+                  ? 'rgba(52, 152, 219, 0.15)' 
+                  : isDanger 
+                  ? 'rgba(231, 76, 60, 0.15)' 
+                  : isSuccess 
+                  ? 'rgba(46, 204, 113, 0.15)' 
+                  : 'rgba(226, 183, 20, 0.15)';
+                const badgeColor = isAuto 
+                  ? 'var(--accent-blue)' 
+                  : isDanger 
+                  ? '#ff4d4d' 
+                  : isSuccess 
+                  ? '#2ecc71' 
+                  : 'var(--accent-gold)';
+
+                return (
                   <div
                     key={l.id}
                     style={{
@@ -3026,38 +3004,56 @@ export default function DashboardPage() {
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '8px',
-                      boxShadow: 'var(--shadow-sm)'
+                      boxShadow: 'var(--shadow-sm)',
+                      boxSizing: 'border-box',
+                      width: '100%'
                     }}
                   >
+                    {/* Top Row: Action Badge + Timestamp */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                       <span style={{ 
                         fontSize: '0.75rem', 
-                        padding: '2px 8px', 
-                        backgroundColor: l.action.startsWith('AUTO_') ? 'rgba(52, 152, 219, 0.15)' : 'rgba(226, 183, 20, 0.15)', 
-                        color: l.action.startsWith('AUTO_') ? 'var(--accent-blue)' : 'var(--accent-gold)', 
+                        padding: '3px 8px', 
+                        backgroundColor: badgeBg, 
+                        color: badgeColor, 
+                        border: `1px solid ${badgeColor}`,
                         borderRadius: '4px',
-                        fontWeight: 'bold' 
+                        fontWeight: 'bold',
+                        letterSpacing: '0.3px'
                       }}>
                         {l.action}
                       </span>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        {formatDateTime(l.createdAt, language)}
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Clock size={12} />
+                        <span>{formatDateTime(l.createdAt, language)}</span>
                       </span>
                     </div>
 
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                      <b>{l.userName}</b> • <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{l.userEmail}</span>
+                    {/* Middle Row: User identity */}
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      <b>👤 {l.userName}</b>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>({l.userEmail})</span>
                     </div>
 
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', backgroundColor: 'rgba(255,255,255,0.03)', padding: '8px 10px', borderRadius: '4px', wordBreak: 'break-word', lineHeight: 1.5 }}>
+                    {/* Bottom: Details block */}
+                    <div style={{
+                      fontSize: '0.85rem',
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'rgba(255,255,255,0.02)',
+                      border: '1px solid rgba(255,255,255,0.05)',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      wordBreak: 'break-word',
+                      lineHeight: 1.5
+                    }}>
                       {l.details}
                     </div>
                   </div>
-                ))}
-              </div>
-            </>
+                );
+              })}
+            </div>
           ) : (
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center', padding: '2rem 1rem' }}>
               {language === 'ar' ? 'سجل العمليات فارغ حالياً.' : 'No operations logged yet.'}
             </p>
           )}
