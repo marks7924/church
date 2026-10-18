@@ -22,13 +22,13 @@ export default function DonationsPage() {
   ];
 
   return (
-    <div className="container" style={{ padding: '3rem 1rem', maxWidth: '800px' }}>
+    <div className="container" style={{ padding: 'clamp(1.5rem, 4vw, 3rem) clamp(0.8rem, 3vw, 1.5rem)', maxWidth: '800px' }}>
       <h1 style={{ 
         textAlign: 'center', 
-        fontSize: '2.2rem', 
+        fontSize: 'clamp(1.5rem, 5vw, 2.2rem)', 
         fontWeight: '800', 
         color: 'var(--accent-gold)',
-        marginBottom: '1rem'
+        marginBottom: '1.2rem'
       }}>
         {t('nav_donations')}
       </h1>
@@ -38,18 +38,18 @@ export default function DonationsPage() {
         backgroundColor: 'rgba(229, 9, 20, 0.05)',
         border: '1px solid var(--accent-red)',
         borderRadius: '8px',
-        padding: '1.5rem',
-        marginBottom: '2.5rem',
+        padding: 'clamp(1rem, 3vw, 1.5rem)',
+        marginBottom: '2rem',
         display: 'flex',
         gap: '12px',
         alignItems: 'flex-start'
       }}>
         <ShieldAlert size={24} style={{ color: 'var(--accent-red)', flexShrink: 0, marginTop: '2px' }} />
-        <div>
-          <h4 style={{ color: 'var(--text-primary)', marginBottom: '6px', fontWeight: 'bold' }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <h4 style={{ color: 'var(--text-primary)', marginBottom: '6px', fontWeight: 'bold', fontSize: 'clamp(0.95rem, 3vw, 1.05rem)' }}>
             ⚠️ {language === 'ar' ? 'تنبيه أمني هام' : 'Important Security Notice'}
           </h4>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: '1.5' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: '1.6', wordBreak: 'break-word' }}>
             {t('donation_desc')}
           </p>
         </div>
@@ -60,7 +60,7 @@ export default function DonationsPage() {
         backgroundColor: 'var(--bg-secondary)',
         border: '1px solid var(--border-color)',
         borderRadius: '8px',
-        padding: '2rem',
+        padding: 'clamp(1rem, 3vw, 2rem)',
         boxShadow: 'var(--shadow-lg)',
         marginBottom: '2rem'
       }}>
@@ -108,9 +108,11 @@ export default function DonationsPage() {
                 backgroundColor: 'var(--bg-card)',
                 border: '1px solid var(--border-color)',
                 borderRadius: '6px',
-                padding: '1rem',
+                padding: 'clamp(0.8rem, 2.5vw, 1rem)',
                 cursor: 'pointer',
                 transition: 'all var(--transition-fast)',
+                flexWrap: 'wrap',
+                gap: '10px'
               }}
               onMouseOver={(e) => e.currentTarget.style.borderColor = 'var(--accent-gold)'}
               onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}

@@ -30,7 +30,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // 2. Add New Event (Trip Manager can manage TRIP and CONFERENCE types)
-router.post('/', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {
+router.post('/', requireAuth, requireRoles([Role.DEVELOPER, Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.SECRETARY, Role.TRIP_MANAGER]), async (req: AuthRequest, res: Response) => {
   const { titleAr, titleEn, descriptionAr, descriptionEn, type, date, locationAr, locationEn, price } = req.body;
 
   if (!titleAr || !titleEn || !type || !date) {
@@ -81,7 +81,7 @@ router.post('/', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETARY, R
 });
 
 // 3. Edit Event (Trip Manager can manage TRIP and CONFERENCE types)
-router.patch('/:id', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {
+router.patch('/:id', requireAuth, requireRoles([Role.DEVELOPER, Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.SECRETARY, Role.TRIP_MANAGER]), async (req: AuthRequest, res: Response) => {
   const eventId = req.params.id;
   const { titleAr, titleEn, descriptionAr, descriptionEn, type, date, locationAr, locationEn, price } = req.body;
   const user = req.user!;
@@ -132,7 +132,7 @@ router.patch('/:id', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETAR
 });
 
 // 4. Delete Event (Trip Manager can ONLY delete TRIP and CONFERENCE types)
-router.delete('/:id', requireAuth, requireRoles([Role.TRIP_MANAGER, Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {
+router.delete('/:id', requireAuth, requireRoles([Role.DEVELOPER, Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.SECRETARY, Role.TRIP_MANAGER]), async (req: AuthRequest, res: Response) => {
   const eventId = req.params.id;
 
   try {

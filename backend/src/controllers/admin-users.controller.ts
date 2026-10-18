@@ -4,7 +4,11 @@ import { requireAuth, requireRoles } from '../middleware/auth.middleware';
 import { Role } from '@prisma/client';
 import { AuthRequest } from '../types';
 import * as bcrypt from 'bcrypt';
+import * as jwt from 'jsonwebtoken';
 import { logAction } from '../utils/logger';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_church_jwt_secret_key';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'super_secret_church_jwt_refresh_secret_key';
 
 const router = Router();
 
@@ -153,6 +157,68 @@ router.get('/action-logs', requireAuth, requireRoles([Role.SUPER_ADMIN, Role.DEV
   } catch (error) {
     console.error('Error retrieving action logs:', error);
     return res.status(500).json({ error: 'Server error retrieving logs.' });
+  }
+});
+
+// 4. Impersonate User (Super Admin / Developer can enter any priest or admin account)
+router.post('/impersonate', requireAuth, requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER]), async (req: AuthRequest, res: Response) => {
+  const { targetUserId, targetEmail } = req.body;
+  const caller = req.user!;
+
+  if (!targetUserId && !targetEmail) {
+    return res.status(400).json({ error: 'targetUserId or targetEmail is required.' });
+  }
+
+  try {
+    const targetUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          ...(targetUserId ? [{ id: targetUserId }] : []),
+          ...(targetEmail ? [{ email: targetEmail }] : [])
+        ]
+      },
+      include: { familyProfile: true }
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Target user not found.' });
+    }
+
+    const payload = {
+      userId: targetUser.id,
+      email: targetUser.email,
+      role: targetUser.role,
+      fullName: targetUser.fullName,
+      isVerified: targetUser.isVerified
+    };
+    const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+    const refreshToken = jwt.sign({ userId: targetUser.id }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+
+    await logAction(
+      caller.userId,
+      caller.email,
+      caller.fullName,
+      'IMPERSONATE_USER',
+      `Super Admin logged in as user ${targetUser.email} (${targetUser.fullName}, ${targetUser.role})`
+    );
+
+    return res.status(200).json({
+      message: `Successfully logged in as ${targetUser.fullName}`,
+      user: {
+        id: targetUser.id,
+        email: targetUser.email,
+        fullName: targetUser.fullName,
+        role: targetUser.role,
+        isVerified: targetUser.isVerified,
+        hasFamilyProfile: !!targetUser.familyProfile,
+        familyProfileStatus: targetUser.familyProfile?.status || null
+      },
+      accessToken,
+      refreshToken
+    });
+  } catch (error) {
+    console.error('Error during impersonation:', error);
+    return res.status(500).json({ error: 'Server error during impersonation.' });
   }
 });
 

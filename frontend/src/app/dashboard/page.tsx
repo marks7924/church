@@ -1346,6 +1346,74 @@ export default function DashboardPage() {
     }
   };
 
+  // Impersonation state (check if currently impersonating another account)
+  const [impersonatorBackup, setImpersonatorBackup] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const backup = localStorage.getItem('church-impersonator-backup');
+      if (backup) {
+        try {
+          setImpersonatorBackup(JSON.parse(backup));
+        } catch (e) {
+          setImpersonatorBackup(null);
+        }
+      }
+    }
+  }, []);
+
+  const handleImpersonate = async (targetUserId: string, targetName: string) => {
+    if (!confirm(language === 'ar' ? `هل أنت متأكد من تسجيل الدخول بهوية "${targetName}"؟` : `Are you sure you want to log in as "${targetName}"?`)) return;
+    try {
+      const res = await fetch(`${API_URL}/admin-users/impersonate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ targetUserId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (!localStorage.getItem('church-impersonator-backup')) {
+          localStorage.setItem('church-impersonator-backup', JSON.stringify({
+            token,
+            refreshToken: localStorage.getItem('church-refresh-token') || '',
+            user
+          }));
+        }
+        localStorage.setItem('church-token', data.accessToken);
+        localStorage.setItem('church-refresh-token', data.refreshToken);
+        localStorage.setItem('church-user', JSON.stringify(data.user));
+        window.dispatchEvent(new Event('auth-change'));
+        window.location.href = '/dashboard';
+      } else {
+        alert(data.error || 'Failed to impersonate user.');
+      }
+    } catch (err) {
+      alert('Failed to connect to server.');
+    }
+  };
+
+  const handleRevertImpersonation = () => {
+    if (typeof window === 'undefined') return;
+    const backup = localStorage.getItem('church-impersonator-backup');
+    if (backup) {
+      try {
+        const data = JSON.parse(backup);
+        localStorage.setItem('church-token', data.token);
+        localStorage.setItem('church-refresh-token', data.refreshToken);
+        localStorage.setItem('church-user', JSON.stringify(data.user));
+        localStorage.removeItem('church-impersonator-backup');
+        window.dispatchEvent(new Event('auth-change'));
+        window.location.href = '/dashboard';
+      } catch (e) {
+        localStorage.removeItem('church-impersonator-backup');
+        window.location.reload();
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="container" style={{ padding: '4rem 1rem', textAlign: 'center' }}>
@@ -1355,8 +1423,57 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="container" style={{ padding: '3rem 1rem' }}>
+    <div className="container" style={{ padding: 'clamp(1.5rem, 4vw, 3rem) clamp(0.8rem, 3vw, 1.5rem)' }}>
       
+      {/* Impersonation Alert Banner */}
+      {impersonatorBackup && (
+        <div style={{
+          backgroundColor: 'rgba(226, 183, 20, 0.12)',
+          border: '2px solid var(--accent-gold)',
+          borderRadius: '8px',
+          padding: '12px 18px',
+          marginBottom: '2rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+          boxShadow: 'var(--shadow-md)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '1.4rem' }}>🛡️</span>
+            <div>
+              <div style={{ fontWeight: 'bold', fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+                {language === 'ar' ? 'أنت تتصفح النظام حالياً بهوية: ' : 'You are currently logged in as: '}
+                <span style={{ color: 'var(--accent-gold)' }}>{user?.fullName} ({user?.role})</span>
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                {language === 'ar' ? 'جلسة السوبر أدمن الأصلية محفوظة ومؤمنة' : 'Original Super Admin session is safely retained'}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={handleRevertImpersonation}
+            style={{
+              backgroundColor: 'var(--accent-gold)',
+              color: '#000000',
+              fontWeight: 'bold',
+              border: 'none',
+              padding: '8px 18px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.88rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <span>↩️</span>
+            <span>{language === 'ar' ? 'العودة لحساب السوبر أدمن' : 'Return to Super Admin'}</span>
+          </button>
+        </div>
+      )}
+
       {/* Header Info */}
       <div style={{
         display: 'flex',
@@ -1369,7 +1486,7 @@ export default function DashboardPage() {
         gap: '1rem'
       }}>
         <div>
-          <h1 style={{ fontSize: '2rem', fontWeight: '800' }}>
+          <h1 style={{ fontSize: 'clamp(1.6rem, 5vw, 2.2rem)', fontWeight: '800' }}>
             {t('nav_dashboard')}
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
@@ -2621,7 +2738,7 @@ export default function DashboardPage() {
 
             {adminUsers.length > 0 ? (
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'start' }}>
+                <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'start' }}>
                   <thead>
                     <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--accent-gold)' }}>
                       <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الاسم بالكامل' : 'Full Name'}</th>
@@ -2629,16 +2746,43 @@ export default function DashboardPage() {
                       <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الرتبة' : 'Role'}</th>
                       <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الهاتف' : 'Phone'}</th>
                       <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الرقم القومي' : 'National ID'}</th>
+                      <th style={{ padding: '10px', textAlign: 'inherit' }}>{language === 'ar' ? 'الإجراءات' : 'Actions'}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {adminUsers.map(u => (
                       <tr key={u.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <td style={{ padding: '10px' }}>{u.fullName}</td>
+                        <td style={{ padding: '10px', fontWeight: 'bold' }}>{u.fullName}</td>
                         <td style={{ padding: '10px' }}>{u.email}</td>
                         <td style={{ padding: '10px', fontWeight: 'bold', color: 'var(--accent-gold)' }}>{u.role}</td>
                         <td style={{ padding: '10px' }}>{u.phone || 'N/A'}</td>
                         <td style={{ padding: '10px' }}>{u.nationalId || 'N/A'}</td>
+                        <td style={{ padding: '10px' }}>
+                          {['SUPER_ADMIN', 'DEVELOPER'].includes(user?.role) && u.id !== user?.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleImpersonate(u.id, u.fullName)}
+                              style={{
+                                backgroundColor: 'rgba(226, 183, 20, 0.1)',
+                                color: 'var(--accent-gold)',
+                                border: '1px solid var(--accent-gold)',
+                                padding: '5px 12px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.8rem',
+                                fontWeight: 'bold',
+                                whiteSpace: 'nowrap',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                              title={language === 'ar' ? `تسجيل الدخول بحساب ${u.fullName}` : `Login as ${u.fullName}`}
+                            >
+                              <span>🔑</span>
+                              <span>{language === 'ar' ? 'دخول كـ' : 'Login as'}</span>
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -2662,7 +2806,7 @@ export default function DashboardPage() {
 
           {actionLogs.length > 0 ? (
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'start' }}>
+              <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'start' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--accent-gold)' }}>
                     <th style={{ padding: '8px', textAlign: 'inherit', width: '160px' }}>{language === 'ar' ? 'التوقيت' : 'Time'}</th>
@@ -2865,26 +3009,50 @@ export default function DashboardPage() {
             </form>
           </div>
 
-          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 2rem)' }}>
             <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
               ⛪ {language === 'ar' ? 'الآباء الكهنة الحاليين' : 'Current Priests & Bishops'}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               {allPriests.map(p => (
-                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '15px', borderBottom: '1px solid var(--border-color)', alignItems: 'center', backgroundColor: 'var(--bg-card)', borderRadius: '6px' }}>
-                  <div>
+                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '15px', borderBottom: '1px solid var(--border-color)', alignItems: 'center', backgroundColor: 'var(--bg-card)', borderRadius: '6px', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ minWidth: 'min(100%, 240px)', flex: 1 }}>
                     <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
                       {language === 'ar' ? `${p.titleAr} ${p.nameAr}` : `${p.titleEn} ${p.nameEn}`}
                     </span>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px', wordBreak: 'break-word' }}>
                       ✉️ {p.email} • 📞 {p.phone || 'N/A'} • 🪪 {p.nationalId || 'N/A'}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={() => handleEditPriestClick(p)} style={{ backgroundColor: 'var(--accent-gold)', color: '#000', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {['SUPER_ADMIN', 'DEVELOPER'].includes(user?.role) && p.userId !== user?.id && (
+                      <button
+                        type="button"
+                        onClick={() => handleImpersonate(p.userId, language === 'ar' ? `${p.titleAr} ${p.nameAr}` : `${p.titleEn} ${p.nameEn}`)}
+                        style={{
+                          backgroundColor: 'rgba(52, 152, 219, 0.15)',
+                          color: 'var(--accent-blue)',
+                          border: '1px solid var(--accent-blue)',
+                          padding: '6px 12px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '0.8rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          whiteSpace: 'nowrap'
+                        }}
+                        title={language === 'ar' ? 'دخول بحساب الكاهن ومواعيده' : 'Login as priest'}
+                      >
+                        <span>🔑</span>
+                        <span>{language === 'ar' ? 'دخول ككاهن' : 'Login as Priest'}</span>
+                      </button>
+                    )}
+                    <button onClick={() => handleEditPriestClick(p)} style={{ backgroundColor: 'var(--accent-gold)', color: '#000', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>
                       {language === 'ar' ? 'تعديل' : 'Edit'}
                     </button>
-                    <button onClick={() => handleDeletePriest(p.id)} style={{ backgroundColor: '#ff4d4d', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                    <button onClick={() => handleDeletePriest(p.id)} style={{ backgroundColor: '#ff4d4d', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>
                       {language === 'ar' ? 'حذف' : 'Delete'}
                     </button>
                   </div>

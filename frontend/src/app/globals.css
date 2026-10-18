@@ -232,7 +232,7 @@ a {
   border-color: var(--accent-gold);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .dashboard-tabs-desktop {
     display: none !important;
   }

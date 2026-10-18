@@ -259,7 +259,7 @@ export default function RegisterMemberPage() {
   }
 
   return (
-    <div className="container" style={{ padding: '3rem 1rem', maxWidth: '850px' }}>
+    <div className="container" style={{ padding: 'clamp(1.5rem, 4vw, 3rem) clamp(0.8rem, 3vw, 1.5rem)', maxWidth: '850px' }}>
       {/* Return button */}
       <button onClick={() => router.push('/')} style={{
         background: 'none',
@@ -276,7 +276,7 @@ export default function RegisterMemberPage() {
         <span>{t('back')}</span>
       </button>
 
-      <h1 style={{ fontSize: '2.1rem', color: 'var(--accent-gold)', marginBottom: '1rem' }}>
+      <h1 style={{ fontSize: 'clamp(1.25rem, 5.5vw, 2rem)', lineHeight: 1.3, color: 'var(--accent-gold)', marginBottom: '1.2rem', fontWeight: 800 }}>
         {t('membership_title')}
       </h1>
 
@@ -326,15 +326,15 @@ export default function RegisterMemberPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmitProfile} style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+      <form onSubmit={handleSubmitProfile} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         
         {/* Section 1: Family Head */}
-        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
-          <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
+        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+          <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
             1. {t('family_head')}
           </h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.2rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1.2rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('fullName')} *</label>
               <input type="text" required value={fullName} onChange={e => setFullName(e.target.value)} style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }} />
@@ -394,12 +394,12 @@ export default function RegisterMemberPage() {
 
         {/* Section 2: Wife Details (Only if married) */}
         {socialStatus === 'MARRIED' && (
-          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
-            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
+          <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
               2. {t('wife_details')}
             </h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.2rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1.2rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('wife_details')} (الاسم الكامل) *</label>
                 <input type="text" required value={wifeName} onChange={e => setWifeName(e.target.value)} style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }} />
@@ -429,9 +429,9 @@ export default function RegisterMemberPage() {
         )}
 
         {/* Section 3: Children (Dynamic List) */}
-        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem' }}>
-            <h3 style={{ color: 'var(--accent-gold)' }}>3. {t('children_list')}</h3>
+        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
+            <h3 style={{ color: 'var(--accent-gold)', fontSize: '1.15rem' }}>3. {t('children_list')}</h3>
             <button type="button" onClick={addChild} style={{
               backgroundColor: 'rgba(226, 183, 20, 0.1)',
               color: 'var(--accent-gold)',
@@ -439,7 +439,8 @@ export default function RegisterMemberPage() {
               padding: '6px 12px',
               borderRadius: '4px',
               cursor: 'pointer',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              fontSize: '0.85rem'
             }}>
               {t('add_child')}
             </button>
@@ -454,7 +455,7 @@ export default function RegisterMemberPage() {
               {children.map((child, index) => (
                 <div key={index} style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr)) 40px',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr)) auto',
                   gap: '1rem',
                   alignItems: 'end',
                   backgroundColor: 'var(--bg-card)',
@@ -479,11 +480,12 @@ export default function RegisterMemberPage() {
                     <input type="text" value={child.phone} onChange={e => updateChild(index, 'phone', e.target.value)} style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }} />
                   </div>
                   <button type="button" onClick={() => removeChild(index)} style={{
-                    backgroundColor: 'none',
+                    backgroundColor: 'transparent',
                     border: 'none',
                     color: '#ff4d4d',
-                    padding: '8px 0',
-                    cursor: 'pointer'
+                    padding: '8px',
+                    cursor: 'pointer',
+                    alignSelf: 'center'
                   }}>
                     <Trash2 size={18} />
                   </button>
@@ -494,9 +496,9 @@ export default function RegisterMemberPage() {
         </div>
 
         {/* Section 4: Relatives in home (Dynamic List) */}
-        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem' }}>
-            <h3 style={{ color: 'var(--accent-gold)' }}>4. {t('relatives_list')}</h3>
+        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
+            <h3 style={{ color: 'var(--accent-gold)', fontSize: '1.15rem' }}>4. {t('relatives_list')}</h3>
             <button type="button" onClick={addRelative} style={{
               backgroundColor: 'rgba(226, 183, 20, 0.1)',
               color: 'var(--accent-gold)',
@@ -504,7 +506,8 @@ export default function RegisterMemberPage() {
               padding: '6px 12px',
               borderRadius: '4px',
               cursor: 'pointer',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              fontSize: '0.85rem'
             }}>
               {t('add_relative')}
             </button>
@@ -519,7 +522,7 @@ export default function RegisterMemberPage() {
               {relatives.map((rel, index) => (
                 <div key={index} style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr)) 40px',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr)) auto',
                   gap: '1rem',
                   alignItems: 'end',
                   backgroundColor: 'var(--bg-card)',
@@ -540,11 +543,12 @@ export default function RegisterMemberPage() {
                     <input type="text" required value={rel.relationshipType} onChange={e => updateRelative(index, 'relationshipType', e.target.value)} placeholder="مثال: جدة / عم" style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }} />
                   </div>
                   <button type="button" onClick={() => removeRelative(index)} style={{
-                    backgroundColor: 'none',
+                    backgroundColor: 'transparent',
                     border: 'none',
                     color: '#ff4d4d',
-                    padding: '8px 0',
-                    cursor: 'pointer'
+                    padding: '8px',
+                    cursor: 'pointer',
+                    alignSelf: 'center'
                   }}>
                     <Trash2 size={18} />
                   </button>
@@ -555,9 +559,9 @@ export default function RegisterMemberPage() {
         </div>
 
         {/* Section 5: Servants visiting the family (Name only) */}
-        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem' }}>
-            <h3 style={{ color: 'var(--accent-gold)' }}>5. {t('servants_list')}</h3>
+        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
+            <h3 style={{ color: 'var(--accent-gold)', fontSize: '1.15rem' }}>5. {t('servants_list')}</h3>
             <button type="button" onClick={addServant} style={{
               backgroundColor: 'rgba(226, 183, 20, 0.1)',
               color: 'var(--accent-gold)',
@@ -565,7 +569,8 @@ export default function RegisterMemberPage() {
               padding: '6px 12px',
               borderRadius: '4px',
               cursor: 'pointer',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              fontSize: '0.85rem'
             }}>
               {t('add_servant')}
             </button>
@@ -604,7 +609,7 @@ export default function RegisterMemberPage() {
         </div>
 
         {/* Notes & Submit */}
-        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '2rem' }}>
+        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '1.5rem' }}>
             <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t('family_notes')}</label>
             <textarea

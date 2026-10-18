@@ -109,7 +109,7 @@ export default function PriestScheduleManager({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', backgroundColor: 'var(--bg-card)', padding: '1.5rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', backgroundColor: 'var(--bg-card)', padding: 'clamp(0.9rem, 3vw, 1.5rem)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
       <h4 style={{ color: 'var(--accent-gold)', marginBottom: '0.5rem', fontSize: '1.1rem' }}>
         📅 {language === 'ar' ? 'إدارة مواعيد الاعترافات' : 'Confession Schedule Management'}
       </h4>
@@ -125,7 +125,7 @@ export default function PriestScheduleManager({
           <input type="number" required min="0" value={bufferMinutes} onChange={e => onBufferMinutesChange(e.target.value)} className={styles.formInput} />
         </div>
       </div>
-      <p style={{ fontSize: '0.8rem', color: 'var(--accent-gold)' }}>
+      <p style={{ fontSize: '0.8rem', color: 'var(--accent-gold)', lineHeight: 1.5 }}>
         {language === 'ar' 
           ? 'ملاحظة: سيقوم النظام بحساب عدد الأشخاص المتاح استقبالهم أوتوماتيكياً وتقسيم الفترات الزمنية بناءً على المدة والراحة.' 
           : 'Note: The system will automatically calculate max capacity and split timeslots based on duration and break time.'}
@@ -135,7 +135,7 @@ export default function PriestScheduleManager({
       <div>
         <h5 style={{ marginBottom: '10px', fontSize: '0.95rem' }}>{language === 'ar' ? 'المواعيد الثابتة أسبوعياً' : 'Weekly Recurring Schedule'}</h5>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '15px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '120px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 min(100%, 130px)' }}>
             <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'اليوم' : 'Day'}</label>
             <select value={newRecDay} onChange={e => setNewRecDay(Number(e.target.value))} className={styles.formInput}>
               {DAYS_EN.map((dayEn, i) => (
@@ -143,15 +143,15 @@ export default function PriestScheduleManager({
               ))}
             </select>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '120px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 min(100%, 110px)' }}>
             <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'من الساعة' : 'From Time'}</label>
             <input type="time" value={newRecStart} onChange={e => setNewRecStart(e.target.value)} className={styles.formInput} />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '120px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 min(100%, 110px)' }}>
             <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'إلى الساعة' : 'To Time'}</label>
             <input type="time" value={newRecEnd} onChange={e => setNewRecEnd(e.target.value)} className={styles.formInput} />
           </div>
-          <button type="button" onClick={addRecurring} style={{ backgroundColor: 'var(--accent-blue)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', height: '40px' }}>
+          <button type="button" onClick={addRecurring} style={{ backgroundColor: 'var(--accent-blue)', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '4px', cursor: 'pointer', height: '42px', flex: '1 1 min(100%, 90px)', fontWeight: 'bold' }}>
             {language === 'ar' ? 'إضافة' : 'Add'}
           </button>
         </div>
@@ -159,11 +159,11 @@ export default function PriestScheduleManager({
         {/* List Recurring */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {schedule.recurring.map((item, idx) => (
-            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: '8px 12px', borderRadius: '4px' }}>
+            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: '8px 12px', borderRadius: '4px', flexWrap: 'wrap', gap: '8px' }}>
               <span style={{ fontSize: '0.9rem' }}>
                 <b style={{ color: 'var(--accent-gold)' }}>{language === 'ar' ? DAYS_AR[item.day] : DAYS_EN[item.day]}</b>: {item.startTime} - {item.endTime}
               </span>
-              <button type="button" onClick={() => removeRecurring(idx)} style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+              <button type="button" onClick={() => removeRecurring(idx)} style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer', fontWeight: 'bold', padding: '4px 8px' }}>✕</button>
             </div>
           ))}
           {schedule.recurring.length === 0 && <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'لا يوجد مواعيد ثابتة.' : 'No recurring schedules.'}</span>}
@@ -174,19 +174,19 @@ export default function PriestScheduleManager({
       <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
         <h5 style={{ marginBottom: '10px', fontSize: '0.95rem' }}>{language === 'ar' ? 'مواعيد استثنائية (تواريخ محددة)' : 'Specific Dates (Exceptions)'}</h5>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '15px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '120px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 min(100%, 130px)' }}>
             <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'التاريخ' : 'Date'}</label>
             <input type="date" value={newSpecDate} onChange={e => setNewSpecDate(e.target.value)} className={styles.formInput} />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '120px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 min(100%, 110px)' }}>
             <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'من الساعة' : 'From Time'}</label>
             <input type="time" value={newSpecStart} onChange={e => setNewSpecStart(e.target.value)} className={styles.formInput} />
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '120px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 min(100%, 110px)' }}>
             <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'إلى الساعة' : 'To Time'}</label>
             <input type="time" value={newSpecEnd} onChange={e => setNewSpecEnd(e.target.value)} className={styles.formInput} />
           </div>
-          <button type="button" onClick={addSpecific} style={{ backgroundColor: 'var(--accent-blue)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', height: '40px' }}>
+          <button type="button" onClick={addSpecific} style={{ backgroundColor: 'var(--accent-blue)', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: '4px', cursor: 'pointer', height: '42px', flex: '1 1 min(100%, 90px)', fontWeight: 'bold' }}>
             {language === 'ar' ? 'إضافة' : 'Add'}
           </button>
         </div>

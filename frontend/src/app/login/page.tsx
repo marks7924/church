@@ -130,7 +130,7 @@ export default function LoginPage() {
     { nameAr: 'عضو', nameEn: 'Member', email: 'member@church.org' },
     { nameAr: 'سكرتير', nameEn: 'Secretary', email: 'secretary@church.org' },
     { nameAr: 'مسؤول الرحلات', nameEn: 'Trip Manager', email: 'tripmanager@church.org' },
-    { nameAr: 'كاهن الكنيسة', nameEn: 'Priest', email: 'priest@church.org' },
+    { nameAr: 'كاهن الكنيسة (أبونا مينا)', nameEn: 'Priest (Fr. Mina)', email: 'fr.mina@church.org' },
     { nameAr: 'الأنبا اثناسيوس (الأسقف)', nameEn: 'Bishop', email: 'bishop@church.org' },
     { nameAr: 'مسؤول الكنيسة', nameEn: 'Church Admin', email: 'admin@church.org' },
     { nameAr: 'مدير النظام', nameEn: 'Super Admin', email: 'superadmin@church.org' },
