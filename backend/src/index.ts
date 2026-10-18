@@ -16,6 +16,7 @@ import settingsRouter from './controllers/settings.controller';
 import newsRouter from './controllers/news.controller';
 import adminUsersRouter from './controllers/admin-users.controller';
 import contactRouter from './controllers/contact.controller';
+import aiRouter from './controllers/ai.controller';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -97,6 +98,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/news', newsRouter);
 app.use('/api/admin-users', adminUsersRouter);
 app.use('/api/contact', contactRouter);
+app.use('/api/ai', aiRouter);
 
 // Error Handling Middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

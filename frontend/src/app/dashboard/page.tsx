@@ -8,10 +8,11 @@ import { API_URL } from '../../config';
 import { formatTimeSlot, formatDateTime } from '../../utils/format';
 import { 
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
-  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown, Scissors, Clock 
+  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown, Scissors, Clock, Sparkles 
 } from 'lucide-react';
 import PriestScheduleManager from '../../components/PriestScheduleManager';
 import ImageCropModal from '../../components/ImageCropModal';
+import AdminAiManager from '../../components/AdminAiManager';
 
 interface Booking {
   id: string;
@@ -375,6 +376,13 @@ export default function DashboardPage() {
           icon: <FileText size={16} />
         });
       }
+
+      tabs.push({
+        id: 'ai-assistant',
+        labelAr: language === 'ar' ? 'المساعد الذكي (AI)' : 'AI Assistant',
+        labelEn: language === 'ar' ? 'المساعد الذكي (AI)' : 'AI Assistant',
+        icon: <Sparkles size={16} />
+      });
     }
 
     // Settings and messages visible to SuperAdmin, Developer, Admin, Secretary, Priest, Bishop
@@ -4326,6 +4334,11 @@ export default function DashboardPage() {
             </p>
           )}
         </div>
+      )}
+
+      {/* Tab: AI Assistant Administration & Safe Testing Playground */}
+      {activeTab === 'ai-assistant' && (
+        <AdminAiManager token={token} language={language} />
       )}
 
       {/* InstaPay Receipt Preview Modal */}

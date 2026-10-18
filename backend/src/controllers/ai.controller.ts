@@ -1,0 +1,360 @@
+import { Router, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
+import prisma from '../db';
+import { ChurchAiService, ChurchKnowledgeRetriever, CHURCH_INFO } from '../services/ai.service';
+import { requireAuth, requireRoles } from '../middleware/auth.middleware';
+import { AuthRequest } from '../types';
+import { Role } from '@prisma/client';
+import { logAction } from '../utils/logger';
+
+const router = Router();
+
+// In-memory rate limiter: max 20 requests per minute per IP / User
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(identifier: string, limit = 20, windowMs = 60000): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(identifier);
+
+  if (!entry || now > entry.resetTime) {
+    rateLimitMap.set(identifier, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+
+  if (entry.count >= limit) {
+    return false;
+  }
+
+  entry.count += 1;
+  return true;
+}
+
+// Helper to extract optional auth user without failing
+function getOptionalUser(req: Request): { id: string; email: string; fullName: string; role: string } | null {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+    const token = authHeader.split(' ')[1];
+    const secret = process.env.JWT_SECRET || 'secret';
+    const decoded = jwt.verify(token, secret) as any;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 1. POST /api/ai/chat
+ * Public or Authenticated chat endpoint
+ */
+router.post('/chat', async (req: Request, res: Response) => {
+  try {
+    const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'anonymous';
+    const user = getOptionalUser(req);
+    const identifier = user ? `user:${user.id}` : `ip:${clientIp}`;
+
+    // Rate limiting check
+    if (!checkRateLimit(identifier, 20, 60000)) {
+      return res.status(429).json({
+        error: 'Too many requests. Please wait a moment before sending another message.',
+        errorAr: 'تم تجاوز الحد المسموح به من الرسائل مؤقتاً. يرجى الانتظار دقيقة والمحاولة مرة أخرى.'
+      });
+    }
+
+    const { message, history, language, conversationId } = req.body;
+
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message content is required.' });
+    }
+
+    // Safety length check (max 1200 chars per message)
+    const sanitizedMessage = message.trim().slice(0, 1200);
+
+    // Process through AI Service
+    const aiResult = await ChurchAiService.processChat(
+      sanitizedMessage,
+      Array.isArray(history) ? history : [],
+      language === 'en' ? 'en' : 'ar'
+    );
+
+    // Log query in ActionLog (anonymized if visitor)
+    logAction(
+      user ? user.id : 'ANONYMOUS',
+      user ? user.email : 'visitor@church.org',
+      user ? user.fullName : 'زائر / Visitor',
+      'AI_QUERY',
+      JSON.stringify({
+        query: sanitizedMessage.slice(0, 120),
+        latencyMs: aiResult.latencyMs,
+        tokensUsed: aiResult.tokensUsed,
+        provider: aiResult.provider,
+        model: aiResult.model,
+        clientIp: clientIp.replace(/:\d+$/, '') // basic privacy
+      })
+    );
+
+    return res.status(200).json({
+      response: aiResult.response,
+      sources: aiResult.sources,
+      suggestedQuestions: aiResult.suggestedQuestions,
+      latencyMs: aiResult.latencyMs,
+      conversationId: conversationId || `conv-${Date.now()}`
+    });
+  } catch (error: any) {
+    console.error('Error handling AI chat:', error);
+    return res.status(500).json({
+      error: 'An internal error occurred while processing your question.',
+      errorAr: 'حدث خطأ مؤقت أثناء معالجة السؤال. يرجى المحاولة مرة أخرى أو مراجعة سكرتارية الكنيسة.'
+    });
+  }
+});
+
+/**
+ * 2. POST /api/ai/feedback
+ * Collect user satisfaction feedback
+ */
+router.post('/feedback', async (req: Request, res: Response) => {
+  try {
+    const { isPositive, comment, query, response } = req.body;
+    const user = getOptionalUser(req);
+
+    await logAction(
+      user ? user.id : 'ANONYMOUS',
+      user ? user.email : 'feedback@church.org',
+      user ? user.fullName : 'Feedback User',
+      'AI_FEEDBACK',
+      JSON.stringify({
+        isPositive: Boolean(isPositive),
+        comment: comment ? String(comment).slice(0, 300) : null,
+        query: query ? String(query).slice(0, 100) : null,
+        response: response ? String(response).slice(0, 100) : null
+      })
+    );
+
+    return res.status(200).json({ success: true, message: 'Thank you for your feedback!' });
+  } catch (error) {
+    console.error('Error recording AI feedback:', error);
+    return res.status(500).json({ error: 'Failed to record feedback.' });
+  }
+});
+
+/**
+ * 3. GET /api/ai/admin/settings
+ * Admin: Get current AI status and configuration (Secret keys masked)
+ */
+router.get(
+  '/admin/settings',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const dbSettings = await ChurchKnowledgeRetriever.getAiSystemSettings();
+      const apiKey = process.env.AI_API_KEY?.trim() || '';
+
+      const settings = {
+        provider: process.env.AI_PROVIDER || 'groq',
+        model: process.env.AI_MODEL || (process.env.AI_PROVIDER === 'groq' ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini'),
+        hasApiKey: apiKey.length > 0,
+        maskedApiKey: apiKey.length > 6 ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : (apiKey ? '****' : null),
+        maxTokens: parseInt(process.env.AI_MAX_OUTPUT_TOKENS || '1024', 10),
+        timeoutMs: parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '25000', 10),
+        enabled: dbSettings.ai_enabled !== 'false',
+        defaultLanguage: dbSettings.ai_default_language || 'ar',
+        escalationPhone: dbSettings.ai_escalation_phone || '+20 100 000 0002',
+        escalationEmail: dbSettings.ai_escalation_email || 'contact@church.org',
+        churchNameAr: CHURCH_INFO.nameAr,
+        churchNameEn: CHURCH_INFO.nameEn
+      };
+
+      return res.status(200).json(settings);
+    } catch (error) {
+      console.error('Error fetching AI admin settings:', error);
+      return res.status(500).json({ error: 'Failed to retrieve AI settings.' });
+    }
+  }
+);
+
+/**
+ * 4. PATCH /api/ai/admin/settings
+ * Admin: Update configurable AI settings in SystemConfig
+ */
+router.patch(
+  '/admin/settings',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { enabled, defaultLanguage, escalationPhone, escalationEmail } = req.body;
+
+      const updates: { key: string; value: string }[] = [];
+      if (typeof enabled === 'boolean') {
+        updates.push({ key: 'ai_enabled', value: enabled ? 'true' : 'false' });
+      }
+      if (defaultLanguage && ['ar', 'en'].includes(defaultLanguage)) {
+        updates.push({ key: 'ai_default_language', value: defaultLanguage });
+      }
+      if (escalationPhone) {
+        updates.push({ key: 'ai_escalation_phone', value: String(escalationPhone).slice(0, 30) });
+      }
+      if (escalationEmail) {
+        updates.push({ key: 'ai_escalation_email', value: String(escalationEmail).slice(0, 60) });
+      }
+
+      await Promise.all(
+        updates.map(u =>
+          prisma.systemConfig.upsert({
+            where: { key: u.key },
+            update: { value: u.value },
+            create: { key: u.key, value: u.value }
+          })
+        )
+      );
+
+      return res.status(200).json({ message: 'AI settings updated successfully.' });
+    } catch (error) {
+      console.error('Error updating AI settings:', error);
+      return res.status(500).json({ error: 'Failed to update AI settings.' });
+    }
+  }
+);
+
+/**
+ * 5. GET /api/ai/admin/analytics
+ * Admin: Aggregated metrics & knowledge base health
+ */
+router.get(
+  '/admin/analytics',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      // 1. Fetch action logs for AI
+      const aiLogs = await prisma.actionLog.findMany({
+        where: { action: { in: ['AI_QUERY', 'AI_FEEDBACK'] } },
+        orderBy: { createdAt: 'desc' },
+        take: 100
+      });
+
+      let totalQueries = 0;
+      let totalLatency = 0;
+      let totalTokens = 0;
+      let positiveFeedback = 0;
+      let negativeFeedback = 0;
+      const recentQueries: any[] = [];
+
+      aiLogs.forEach(log => {
+        if (log.action === 'AI_QUERY') {
+          totalQueries += 1;
+          try {
+            const data = JSON.parse(log.details);
+            if (data.latencyMs) totalLatency += data.latencyMs;
+            if (data.tokensUsed) totalTokens += data.tokensUsed;
+            if (recentQueries.length < 15) {
+              recentQueries.push({
+                id: log.id,
+                user: log.userName,
+                query: data.query || '—',
+                latencyMs: data.latencyMs,
+                provider: data.provider,
+                createdAt: log.createdAt
+              });
+            }
+          } catch {}
+        } else if (log.action === 'AI_FEEDBACK') {
+          try {
+            const data = JSON.parse(log.details);
+            if (data.isPositive) positiveFeedback += 1;
+            else negativeFeedback += 1;
+          } catch {}
+        }
+      });
+
+      // 2. Fetch knowledge base record counts
+      const [scheduleCount, priestCount, sermonCount, eventCount] = await Promise.all([
+        prisma.massSchedule.count(),
+        prisma.priestProfile.count(),
+        prisma.sermon.count(),
+        prisma.event.count()
+      ]);
+
+      const analytics = {
+        totalQueries,
+        avgLatencyMs: totalQueries > 0 ? Math.round(totalLatency / totalQueries) : 0,
+        estimatedTokens: totalTokens,
+        feedback: {
+          positive: positiveFeedback,
+          negative: negativeFeedback,
+          satisfactionRate:
+            positiveFeedback + negativeFeedback > 0
+              ? Math.round((positiveFeedback / (positiveFeedback + negativeFeedback)) * 100)
+              : 100
+        },
+        recentQueries,
+        knowledgeBase: {
+          massSchedules: scheduleCount,
+          priests: priestCount,
+          sermons: sermonCount,
+          eventsAndTrips: eventCount,
+          status: 'HEALTHY',
+          lastSync: new Date().toISOString()
+        }
+      };
+
+      return res.status(200).json(analytics);
+    } catch (error) {
+      console.error('Error fetching AI analytics:', error);
+      return res.status(500).json({ error: 'Failed to retrieve AI analytics.' });
+    }
+  }
+);
+
+/**
+ * 6. POST /api/ai/admin/reindex
+ * Refresh and sync church knowledge cache
+ */
+router.post(
+  '/admin/reindex',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { invalidateKnowledgeCache } = await import('../services/ai.service');
+      invalidateKnowledgeCache();
+      return res.status(200).json({ success: true, message: 'Knowledge base cache refreshed successfully.' });
+    } catch (error) {
+      console.error('Error refreshing knowledge cache:', error);
+      return res.status(500).json({ error: 'Failed to refresh knowledge base cache.' });
+    }
+  }
+);
+
+/**
+ * 7. POST /api/ai/admin/test
+ * Admin Safe Testing Playground
+ */
+router.post(
+  '/admin/test',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { query, language } = req.body;
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ error: 'Query is required for testing.' });
+      }
+
+      const result = await ChurchAiService.processChat(
+        query.slice(0, 500),
+        [],
+        language === 'en' ? 'en' : 'ar'
+      );
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error('Error in AI test playground:', error);
+      return res.status(500).json({ error: 'Error running test query.' });
+    }
+  }
+);
+
+export default router;

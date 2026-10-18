@@ -3,6 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "../components/ThemeContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import ChurchAiAssistant from "../components/ChurchAiAssistant";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -29,6 +30,7 @@ export default function RootLayout({
             {children}
           </main>
           <Footer />
+          <ChurchAiAssistant />
         </ThemeProvider>
       </body>
     </html>
