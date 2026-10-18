@@ -6,8 +6,7 @@
   display: flex;
   align-items: center;
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(11, 12, 16, 0.4) 0%, rgba(11, 12, 16, 0.95) 100%), 
-              url('https://images.unsplash.com/photo-1548625361-155deee223cb?q=80&w=1600') center/cover no-repeat;
+  background: radial-gradient(circle at 50% 30%, rgba(226, 183, 20, 0.08) 0%, rgba(11, 12, 16, 0.95) 75%), #0b0c10;
 }
 
 .heroBgSlide {
@@ -278,10 +277,28 @@
   border: 1px solid var(--border-color);
   width: 100%;
   max-width: 500px;
+  max-height: 88vh;
+  overflow-y: auto;
   border-radius: 8px;
   padding: 2rem;
   position: relative;
   box-shadow: var(--shadow-lg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.modalContent::-webkit-scrollbar {
+  width: 6px;
+}
+.modalContent::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modalContent::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 3px;
+}
+.modalContent::-webkit-scrollbar-thumb:hover {
+  background-color: var(--accent-gold);
 }
 
 .closeBtn {

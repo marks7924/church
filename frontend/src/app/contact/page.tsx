@@ -95,8 +95,8 @@ export default function ContactPage() {
             <div>
               <h4 style={{ fontWeight: 'bold' }}>{language === 'ar' ? 'رقم الهاتف والتليفون' : 'Phone Numbers'}</h4>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                +20 2 2574 8839 <br />
-                +20 100 000 0001
+                <span dir="ltr" className="phone-ltr">+20 2 2574 8839</span> <br />
+                <span dir="ltr" className="phone-ltr">+20 100 000 0001</span>
               </p>
             </div>
           </div>

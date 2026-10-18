@@ -48,7 +48,7 @@ export default function Footer() {
           <h4 style={{ color: 'var(--text-primary)', marginBottom: '1rem' }}>{t('nav_contact')}</h4>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.8' }}>
             📍 حدائق القبة، القاهرة، مصر / Hadayek Al Koba, Cairo, Egypt<br />
-            📞 +20 2 2574 8839<br />
+            📞 <span dir="ltr" className="phone-ltr">+20 2 2574 8839</span><br />
             ✉️ contact@church.org
           </p>
         </div>

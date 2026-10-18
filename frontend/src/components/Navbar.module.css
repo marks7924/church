@@ -55,8 +55,10 @@
 .linksList {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: clamp(10px, 1.3vw, 20px);
   list-style: none;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .navLink {
@@ -65,6 +67,7 @@
   color: var(--text-secondary);
   transition: color var(--transition-fast);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .navLink:hover {
@@ -79,7 +82,9 @@
 .controlsArea {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: clamp(8px, 1vw, 14px);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .controlBtn {
@@ -94,6 +99,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .controlBtn:hover {
@@ -112,6 +119,8 @@
   font-weight: bold;
   font-size: 0.8rem;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .liveDot {
@@ -119,6 +128,7 @@
   height: 8px;
   background-color: #ffffff;
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .fontScalerContainer {
@@ -128,6 +138,8 @@
   border: 1px solid var(--border-color);
   padding: 6px 10px;
   border-radius: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .sliderLabel {
@@ -177,13 +189,13 @@
 }
 
 /* Mobile responsive breakpoints */
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
   .fontScalerContainer {
     display: none;
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1050px) {
   .mobileMenuBtn {
     display: block;
   }

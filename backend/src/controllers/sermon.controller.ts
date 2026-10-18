@@ -56,6 +56,22 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// 1.1 Get Single Sermon by ID
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const sermon = await prisma.sermon.findUnique({
+      where: { id: req.params.id }
+    });
+    if (!sermon) {
+      return res.status(404).json({ error: 'Sermon not found.' });
+    }
+    return res.status(200).json(sermon);
+  } catch (error: any) {
+    console.error('Error fetching single sermon:', error);
+    return res.status(500).json({ error: 'Server error fetching sermon.' });
+  }
+});
+
 // 2. Upload / Register New Sermon (Admins, Secretaries)
 router.post('/', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: Request, res: Response) => {
   const { titleAr, titleEn, priestNameAr, priestNameEn, topicAr, topicEn, date, youtubeUrl } = req.body;

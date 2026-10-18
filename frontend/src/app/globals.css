@@ -314,5 +314,37 @@ a {
   border-color: var(--accent-gold);
 }
 
+/* Save Success Animation */
+@keyframes saveSuccessPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.04); background-color: #2ecc71 !important; color: #ffffff !important; box-shadow: 0 0 20px rgba(46, 204, 113, 0.6); }
+  100% { transform: scale(1); }
+}
+
+.btn-saved-success {
+  animation: saveSuccessPop 0.8s ease-in-out;
+}
+
+/* Edit Target Highlight & Scroll Animation */
+@keyframes editHighlightGlow {
+  0% { box-shadow: 0 0 0px rgba(226, 183, 20, 0); transform: scale(1); }
+  25% { box-shadow: 0 0 30px rgba(226, 183, 20, 0.7); border-color: var(--accent-gold) !important; transform: scale(1.015); }
+  60% { box-shadow: 0 0 18px rgba(226, 183, 20, 0.4); border-color: var(--accent-gold) !important; }
+  100% { box-shadow: none; transform: scale(1); }
+}
+
+.edit-highlight-target {
+  animation: editHighlightGlow 2s ease-in-out !important;
+  border-color: var(--accent-gold) !important;
+}
+
+/* Fix RTL Phone number rendering */
+.phone-ltr {
+  direction: ltr !important;
+  display: inline-block !important;
+  unicode-bidi: embed !important;
+}
+
+
 
 

@@ -39,6 +39,28 @@ router.get('/priests', async (req: AuthRequest, res: Response) => {
       noFixedSchedule: p.noFixedSchedule || false
     }));
 
+    const priestOrder = [
+      'اثناسيوس',
+      'مينا عزت',
+      'فيلوباتير',
+      'يوحنا',
+      'كاراس',
+      'مايكل',
+      'موسى'
+    ];
+
+    const getPriestRank = (p: any) => {
+      if (p.role === 'BISHOP') return -100;
+      for (let i = 0; i < priestOrder.length; i++) {
+        if (p.nameAr.includes(priestOrder[i]) || p.nameEn.toLowerCase().includes(priestOrder[i].toLowerCase())) {
+          return i;
+        }
+      }
+      return 999;
+    };
+
+    formatted.sort((a, b) => getPriestRank(a) - getPriestRank(b));
+
     return res.status(200).json(formatted);
   } catch (error) {
     console.error('Error fetching priests:', error);

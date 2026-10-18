@@ -8,9 +8,10 @@ import { API_URL } from '../../config';
 import { formatTimeSlot, formatDateTime } from '../../utils/format';
 import { 
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
-  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown 
+  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown, Scissors 
 } from 'lucide-react';
 import PriestScheduleManager from '../../components/PriestScheduleManager';
+import ImageCropModal from '../../components/ImageCropModal';
 
 interface Booking {
   id: string;
@@ -171,9 +172,49 @@ export default function DashboardPage() {
   const [myConfessionDuration, setMyConfessionDuration] = useState('15');
   const [myScheduleMsg, setMyScheduleMsg] = useState<string | null>(null);
 
-  // Trip Bookings State (for Trip Manager & Admins)
+  // Trip Bookings State & Filters (for Trip Manager & Admins)
   const [allTripBookings, setAllTripBookings] = useState<any[]>([]);
   const [viewingReceiptUrl, setViewingReceiptUrl] = useState<string | null>(null);
+  const [tripFilter, setTripFilter] = useState('ALL');
+  const [tripStatusFilter, setTripStatusFilter] = useState('ALL');
+  const [tripSearchFilter, setTripSearchFilter] = useState('');
+
+  // Save Animations feedback states
+  const [savedPriest, setSavedPriest] = useState(false);
+  const [savedMySchedule, setSavedMySchedule] = useState(false);
+  const [savedLive, setSavedLive] = useState(false);
+  const [savedSiteInfo, setSavedSiteInfo] = useState(false);
+  const [savedNews, setSavedNews] = useState(false);
+  const [savedTrip, setSavedTrip] = useState(false);
+
+  // Image Cropper Modal states
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropTargetImage, setCropTargetImage] = useState('');
+  const [cropPreset, setCropPreset] = useState<'1:1' | '16:9' | '4:3' | 'free'>('free');
+  const [cropCallback, setCropCallback] = useState<(croppedUrl: string) => void>(() => () => {});
+
+  const openImageCropper = (imageUrl: string, preset: '1:1' | '16:9' | '4:3' | 'free', onDone: (url: string) => void) => {
+    if (!imageUrl) {
+      alert(language === 'ar' ? 'يرجى اختيار صورة أولاً لقصها.' : 'Please select an image first to crop.');
+      return;
+    }
+    setCropTargetImage(imageUrl);
+    setCropPreset(preset);
+    setCropCallback(() => onDone);
+    setCropModalOpen(true);
+  };
+
+  const triggerEditScrollAndHighlight = (elementId: string) => {
+    setTimeout(() => {
+      const el = document.getElementById(elementId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.remove('edit-highlight-target');
+        void el.offsetWidth;
+        el.classList.add('edit-highlight-target');
+      }
+    }, 100);
+  };
 
   // Super Admin Site Images States
   const [imgHeroBg, setImgHeroBg] = useState('');
@@ -197,6 +238,7 @@ export default function DashboardPage() {
   const [churchServices, setChurchServices] = useState<any[]>([]);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [serviceSlug, setServiceSlug] = useState('');
+  const [serviceCategory, setServiceCategory] = useState<'تربية كنسية' | 'ألحان' | 'كشافة' | 'كورال' | 'أخرى' | string>('تربية كنسية');
   const [serviceNameAr, setServiceNameAr] = useState('');
   const [serviceNameEn, setServiceNameEn] = useState('');
   const [serviceGoalAr, setServiceGoalAr] = useState('');
@@ -204,6 +246,12 @@ export default function DashboardPage() {
   const [serviceScheduleAr, setServiceScheduleAr] = useState('');
   const [serviceScheduleEn, setServiceScheduleEn] = useState('');
   const [serviceImage, setServiceImage] = useState('');
+  const [serviceStages, setServiceStages] = useState<any[]>([]);
+  const [newStageNameAr, setNewStageNameAr] = useState('');
+  const [newStageNameEn, setNewStageNameEn] = useState('');
+  const [newStageScheduleAr, setNewStageScheduleAr] = useState('');
+  const [newStageScheduleEn, setNewStageScheduleEn] = useState('');
+  const [newStageLocationAr, setNewStageLocationAr] = useState('');
 
   // Services Intro & Title States
   const [servicesTitleAr, setServicesTitleAr] = useState('الخدمات الكنسية');
@@ -713,7 +761,9 @@ export default function DashboardPage() {
       });
 
       if (res.ok) {
-        setLiveMsg(language === 'ar' ? 'تم تحديث إعدادات البث بنجاح!' : 'Live settings updated successfully!');
+        setSavedLive(true);
+        setTimeout(() => setSavedLive(false), 2000);
+        setLiveMsg(language === 'ar' ? '✓ تم تحديث إعدادات البث بنجاح!' : '✓ Live settings updated successfully!');
       } else {
         setLiveMsg('Failed to update live settings.');
       }
@@ -828,7 +878,9 @@ export default function DashboardPage() {
 
       const result = await res.json();
       if (res.ok) {
-        setPriestMsg(language === 'ar' ? 'تم حفظ بيانات الكاهن بنجاح!' : 'Priest saved successfully!');
+        setSavedPriest(true);
+        setTimeout(() => setSavedPriest(false), 2000);
+        setPriestMsg(language === 'ar' ? '✓ تم حفظ بيانات الكاهن بنجاح!' : '✓ Priest saved successfully!');
         // Refresh
         fetch(`${API_URL}/priests`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -863,6 +915,7 @@ export default function DashboardPage() {
     setPriestConfessionStatus(priest.confessionStatus || 'ACTIVE');
     setPriestConfessionStatusNote(priest.confessionStatusNote || '');
     setPriestNoFixedSchedule(priest.noFixedSchedule || false);
+    triggerEditScrollAndHighlight('priest-form-card');
   };
 
   const handleDeletePriest = async (id: string) => {
@@ -933,7 +986,9 @@ export default function DashboardPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMyScheduleMsg(language === 'ar' ? 'تم حفظ وتحديث مواعيدك وحالتك بنجاح!' : 'Your schedule and status have been updated successfully!');
+        setSavedMySchedule(true);
+        setTimeout(() => setSavedMySchedule(false), 2000);
+        setMyScheduleMsg(language === 'ar' ? '✓ تم حفظ وتحديث مواعيدك وحالتك بنجاح!' : '✓ Your schedule and status have been updated successfully!');
       } else {
         setMyScheduleMsg(data.error || 'Failed to update schedule.');
       }
@@ -994,7 +1049,9 @@ export default function DashboardPage() {
       });
 
       if (res.ok) {
-        setImagesMsg(language === 'ar' ? 'تم تحديث بيانات ومحتوى الموقع والخدمات بنجاح!' : 'Site content, services and configurations saved successfully!');
+        setSavedSiteInfo(true);
+        setTimeout(() => setSavedSiteInfo(false), 2000);
+        setImagesMsg(language === 'ar' ? '✓ تم تحديث بيانات ومحتوى الموقع والخدمات بنجاح!' : '✓ Site content, services and configurations saved successfully!');
       } else {
         setImagesMsg('Failed to update settings.');
       }
@@ -1020,21 +1077,25 @@ export default function DashboardPage() {
   };
 
   const handleAddOrUpdateService = () => {
-    if (!serviceSlug || !serviceNameAr || !serviceNameEn) {
-      alert(language === 'ar' ? 'يرجى إدخال Slug واسم الخدمة ثنائي اللغة.' : 'Please enter Slug and bilingual service name.');
+    if (!serviceNameAr || !serviceNameEn) {
+      alert(language === 'ar' ? 'يرجى إدخال اسم الخدمة ثنائي اللغة.' : 'Please enter bilingual service name.');
       return;
     }
 
     const payload = {
       id: editingServiceId || Math.random().toString(36).substr(2, 9),
-      slug: serviceSlug,
+      slug: serviceSlug || serviceCategory.toLowerCase().replace(/\s+/g, '-'),
+      category: serviceCategory,
       nameAr: serviceNameAr,
       nameEn: serviceNameEn,
+      summaryAr: serviceGoalAr,
+      summaryEn: serviceGoalEn,
       goalAr: serviceGoalAr,
       goalEn: serviceGoalEn,
       scheduleAr: serviceScheduleAr,
       scheduleEn: serviceScheduleEn,
-      image: serviceImage || 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=400'
+      image: serviceImage || 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?q=80&w=600',
+      stages: serviceStages
     };
 
     if (editingServiceId) {
@@ -1045,6 +1106,7 @@ export default function DashboardPage() {
 
     setEditingServiceId(null);
     setServiceSlug('');
+    setServiceCategory('تربية كنسية');
     setServiceNameAr('');
     setServiceNameEn('');
     setServiceGoalAr('');
@@ -1052,18 +1114,22 @@ export default function DashboardPage() {
     setServiceScheduleAr('');
     setServiceScheduleEn('');
     setServiceImage('');
+    setServiceStages([]);
   };
 
   const handleEditServiceClick = (service: any) => {
     setEditingServiceId(service.id);
-    setServiceSlug(service.slug);
-    setServiceNameAr(service.nameAr);
-    setServiceNameEn(service.nameEn);
-    setServiceGoalAr(service.goalAr);
-    setServiceGoalEn(service.goalEn);
-    setServiceScheduleAr(service.scheduleAr);
-    setServiceScheduleEn(service.scheduleEn);
+    setServiceSlug(service.slug || '');
+    setServiceCategory(service.category || 'تربية كنسية');
+    setServiceNameAr(service.nameAr || '');
+    setServiceNameEn(service.nameEn || '');
+    setServiceGoalAr(service.summaryAr || service.goalAr || '');
+    setServiceGoalEn(service.summaryEn || service.goalEn || '');
+    setServiceScheduleAr(service.scheduleAr || '');
+    setServiceScheduleEn(service.scheduleEn || '');
     setServiceImage(service.image || '');
+    setServiceStages(Array.isArray(service.stages) ? service.stages : []);
+    triggerEditScrollAndHighlight('service-form-card');
   };
 
   const handleDeleteServiceClick = (id: string) => {
@@ -1163,9 +1229,11 @@ export default function DashboardPage() {
 
       const result = await res.json();
       if (res.ok) {
+        setSavedTrip(true);
+        setTimeout(() => setSavedTrip(false), 2000);
         setTripMsg(editingTripId 
-          ? (language === 'ar' ? 'تم تعديل الفعالية بنجاح!' : 'Event updated successfully!')
-          : (language === 'ar' ? 'تمت إضافة الفعالية بنجاح!' : 'Event created successfully!')
+          ? (language === 'ar' ? '✓ تم تعديل الفعالية بنجاح!' : '✓ Event updated successfully!')
+          : (language === 'ar' ? '✓ تمت إضافة الفعالية بنجاح!' : '✓ Event created successfully!')
         );
         setEditingTripId(null);
         setTripTitleAr('');
@@ -1239,9 +1307,11 @@ export default function DashboardPage() {
       });
 
       if (res.ok) {
+        setSavedNews(true);
+        setTimeout(() => setSavedNews(false), 2000);
         setNewsMsg(editingNewsId 
-          ? (language === 'ar' ? 'تم تعديل الخبر بنجاح!' : 'News updated successfully!')
-          : (language === 'ar' ? 'تم نشر الخبر بنجاح!' : 'News published successfully!')
+          ? (language === 'ar' ? '✓ تم تعديل الخبر بنجاح!' : '✓ News updated successfully!')
+          : (language === 'ar' ? '✓ تم نشر الخبر بنجاح!' : '✓ News published successfully!')
         );
         setNewsContent('');
         setNewsImageUrl('');
@@ -1546,18 +1616,20 @@ export default function DashboardPage() {
                     </span>
                   </label>
 
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 14px', borderRadius: '6px', backgroundColor: myConfessionStatus === 'TRAVELING' ? 'rgba(226, 183, 20, 0.15)' : 'transparent', border: `1px solid ${myConfessionStatus === 'TRAVELING' ? 'var(--accent-gold)' : 'var(--border-color)'}` }}>
-                    <input
-                      type="radio"
-                      name="myConfessionStatus"
-                      value="TRAVELING"
-                      checked={myConfessionStatus === 'TRAVELING'}
-                      onChange={() => setMyConfessionStatus('TRAVELING')}
-                    />
-                    <span style={{ fontWeight: myConfessionStatus === 'TRAVELING' ? 'bold' : 'normal', color: myConfessionStatus === 'TRAVELING' ? 'var(--accent-gold)' : 'var(--text-primary)' }}>
-                      ✈️ {language === 'ar' ? 'مسافر خارج مصر' : 'Traveling Abroad'}
-                    </span>
-                  </label>
+                  {(user?.fullName?.includes('مايكل') || user?.priestProfile?.nameAr?.includes('مايكل') || user?.email?.includes('michael')) && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 14px', borderRadius: '6px', backgroundColor: myConfessionStatus === 'TRAVELING' ? 'rgba(226, 183, 20, 0.15)' : 'transparent', border: `1px solid ${myConfessionStatus === 'TRAVELING' ? 'var(--accent-gold)' : 'var(--border-color)'}` }}>
+                      <input
+                        type="radio"
+                        name="myConfessionStatus"
+                        value="TRAVELING"
+                        checked={myConfessionStatus === 'TRAVELING'}
+                        onChange={() => setMyConfessionStatus('TRAVELING')}
+                      />
+                      <span style={{ fontWeight: myConfessionStatus === 'TRAVELING' ? 'bold' : 'normal', color: myConfessionStatus === 'TRAVELING' ? 'var(--accent-gold)' : 'var(--text-primary)' }}>
+                        ✈️ {language === 'ar' ? 'خارج مصر' : 'Abroad'}
+                      </span>
+                    </label>
+                  )}
 
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 14px', borderRadius: '6px', backgroundColor: myConfessionStatus === 'INACTIVE' ? 'rgba(229, 9, 20, 0.15)' : 'transparent', border: `1px solid ${myConfessionStatus === 'INACTIVE' ? 'var(--accent-red)' : 'var(--border-color)'}` }}>
                     <input
@@ -1583,7 +1655,7 @@ export default function DashboardPage() {
                       className={styles.formInput}
                       value={myConfessionStatusNote}
                       onChange={e => setMyConfessionStatusNote(e.target.value)}
-                      placeholder={language === 'ar' ? 'مثال: أبونا مسافر في زيارة رعوية خارج مصر حتى أول الشهر' : 'e.g. Father is abroad on pastoral duty until next month'}
+                      placeholder={language === 'ar' ? 'مثال: خارج مصر في زيارة رعوية حتى أول الشهر' : 'e.g. Abroad on pastoral duty until next month'}
                     />
                   </div>
                 )}
@@ -1628,8 +1700,19 @@ export default function DashboardPage() {
               )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
-                <button type="submit" className={styles.bookBtn} style={{ width: 'auto', padding: '12px 36px', fontSize: '1rem' }}>
-                  💾 {language === 'ar' ? 'حفظ إعدادات المواعيد والحالة' : 'Save Schedule & Status'}
+                <button 
+                  type="submit" 
+                  className={`${styles.bookBtn} ${savedMySchedule ? 'btn-saved-success' : ''}`} 
+                  style={{ 
+                    width: 'auto', 
+                    padding: '12px 36px', 
+                    fontSize: '1rem',
+                    backgroundColor: savedMySchedule ? '#2ecc71' : undefined,
+                    color: savedMySchedule ? '#fff' : undefined,
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {savedMySchedule ? '✓ تم الحفظ بنجاح!' : `💾 ${language === 'ar' ? 'حفظ إعدادات المواعيد والحالة' : 'Save Schedule & Status'}`}
                 </button>
               </div>
             </form>
@@ -1932,8 +2015,17 @@ export default function DashboardPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button type="submit" className={styles.bookBtn} style={{ flex: 1 }}>
-                {t('save')}
+              <button 
+                type="submit" 
+                className={`${styles.bookBtn} ${savedLive ? 'btn-saved-success' : ''}`} 
+                style={{ 
+                  flex: 1,
+                  backgroundColor: savedLive ? '#2ecc71' : undefined,
+                  color: savedLive ? '#fff' : undefined,
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                {savedLive ? '✓ تم الحفظ بنجاح!' : t('save')}
               </button>
               <button type="button" onClick={handleEndLiveStream} style={{ flex: 1, backgroundColor: '#ff4d4d', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
                 {language === 'ar' ? 'إنهاء البث' : 'End Live'}
@@ -2023,7 +2115,7 @@ export default function DashboardPage() {
       {activeTab === 'trips' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
           {/* Create/Edit Trip/Conference Form */}
-          <div className="dashboard-panel">
+          <div className="dashboard-panel" id="trip-form-card">
             <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
               ✈️ {editingTripId 
                 ? (language === 'ar' ? 'تعديل الرحلة/المؤتمر' : 'Edit Trip/Conference') 
@@ -2089,8 +2181,17 @@ export default function DashboardPage() {
               </div>
 
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button type="submit" className={styles.bookBtn} style={{ width: '180px' }}>
-                  {editingTripId ? (language === 'ar' ? 'حفظ التعديلات' : 'Save Changes') : (language === 'ar' ? 'إضافة الفعالية' : 'Add Event')}
+                <button 
+                  type="submit" 
+                  className={`${styles.bookBtn} ${savedTrip ? 'btn-saved-success' : ''}`} 
+                  style={{ 
+                    width: '180px',
+                    backgroundColor: savedTrip ? '#2ecc71' : undefined,
+                    color: savedTrip ? '#fff' : undefined,
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {savedTrip ? '✓ تم الحفظ بنجاح!' : (editingTripId ? (language === 'ar' ? 'حفظ التعديلات' : 'Save Changes') : (language === 'ar' ? 'إضافة الفعالية' : 'Add Event'))}
                 </button>
                 {editingTripId && (
                   <button 
@@ -2156,7 +2257,7 @@ export default function DashboardPage() {
                           setTripDate(t.date.split('T')[0]);
                           setTripPrice(String(t.price));
                           setTripType(t.type);
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          triggerEditScrollAndHighlight('trip-form-card');
                         }}
                         style={{ backgroundColor: 'var(--accent-gold)', color: '#000000', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
                       >
@@ -2185,9 +2286,103 @@ export default function DashboardPage() {
               📋 {language === 'ar' ? 'سجل طلبات الحجز والاشتراك في الرحلات' : 'Trip Bookings & Payment Submissions'}
             </h3>
 
+            {/* Filter bar for trip bookings */}
+            {allTripBookings.length > 0 && (
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                flexWrap: 'wrap',
+                marginBottom: '1.5rem',
+                padding: '1rem',
+                backgroundColor: 'var(--bg-card)',
+                borderRadius: '8px',
+                border: '1px solid var(--border-color)',
+                alignItems: 'center'
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
+                    {language === 'ar' ? 'تصفية حسب الرحلة:' : 'Filter by Trip:'}
+                  </label>
+                  <select
+                    value={tripFilter}
+                    onChange={e => setTripFilter(e.target.value)}
+                    style={{
+                      backgroundColor: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      outline: 'none',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    <option value="ALL">{language === 'ar' ? '🔍 جميع الرحلات والمؤتمرات' : 'All Trips & Conferences'}</option>
+                    {Array.from(new Set(allTripBookings.map(b => b.event?.titleAr).filter(Boolean))).map((title: any) => (
+                      <option key={title} value={title}>{title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '150px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
+                    {language === 'ar' ? 'حالة الحجز:' : 'Status:'}
+                  </label>
+                  <select
+                    value={tripStatusFilter}
+                    onChange={e => setTripStatusFilter(e.target.value)}
+                    style={{
+                      backgroundColor: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      outline: 'none',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    <option value="ALL">{language === 'ar' ? 'جميع الحالات' : 'All Statuses'}</option>
+                    <option value="PENDING">{language === 'ar' ? 'قيد المراجعة' : 'Pending'}</option>
+                    <option value="APPROVED">{language === 'ar' ? 'تم التأكيد' : 'Approved'}</option>
+                    <option value="REJECTED">{language === 'ar' ? 'مرفوض' : 'Rejected'}</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '180px' }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
+                    {language === 'ar' ? 'بحث بالاسم أو الهاتف:' : 'Search Name / Phone:'}
+                  </label>
+                  <input
+                    type="text"
+                    value={tripSearchFilter}
+                    onChange={e => setTripSearchFilter(e.target.value)}
+                    placeholder={language === 'ar' ? 'اسم المشترك أو الهاتف...' : 'Name or phone...'}
+                    style={{
+                      backgroundColor: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      outline: 'none',
+                      fontSize: '0.85rem'
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
             {allTripBookings.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {allTripBookings.map(b => (
+                {allTripBookings
+                  .filter(b => {
+                    const matchesTrip = tripFilter === 'ALL' || b.event?.titleAr === tripFilter || b.eventId === tripFilter;
+                    const matchesStatus = tripStatusFilter === 'ALL' || b.status === tripStatusFilter;
+                    const matchesSearch = !tripSearchFilter ||
+                      b.fullName?.toLowerCase().includes(tripSearchFilter.toLowerCase()) ||
+                      b.phone?.includes(tripSearchFilter) ||
+                      b.event?.titleAr?.toLowerCase().includes(tripSearchFilter.toLowerCase());
+                    return matchesTrip && matchesStatus && matchesSearch;
+                  })
+                  .map(b => (
                   <div key={b.id} style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -2512,7 +2707,7 @@ export default function DashboardPage() {
       {/* Tab: Super Admin Priest Management */}
       {activeTab === 'manage-priests' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-          <div className="dashboard-panel">
+          <div className="dashboard-panel" id="priest-form-card">
             <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
               👤 {editingPriest ? (language === 'ar' ? 'تعديل بيانات كاهن' : 'Edit Priest') : (language === 'ar' ? 'إضافة كاهن جديد' : 'Add New Priest')}
             </h3>
@@ -2579,6 +2774,16 @@ export default function DashboardPage() {
                   <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'صورة الكاهن (اختياري)' : 'Avatar Image (Optional)'}</label>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <input type="file" accept="image/*" onChange={e => handleFileChange(e, setPriestAvatarUrl)} className={styles.formInput} style={{ padding: '6px', flex: 1 }} />
+                    {priestAvatarUrl && (
+                      <button 
+                        type="button" 
+                        onClick={() => openImageCropper(priestAvatarUrl, '1:1', (cropped) => setPriestAvatarUrl(cropped))}
+                        title={language === 'ar' ? 'قص وضبط أبعاد الصورة' : 'Crop & Adjust'}
+                        style={{ padding: '6px 10px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                      >
+                        <Scissors size={14} /> {language === 'ar' ? 'قص' : 'Crop'}
+                      </button>
+                    )}
                     <button type="button" onClick={() => setPriestAvatarUrl('')} style={{ padding: '6px 10px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
                   </div>
                   {priestAvatarUrl && <img src={priestAvatarUrl} alt="Avatar Preview" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '50%', marginTop: '4px' }} />}
@@ -2598,10 +2803,12 @@ export default function DashboardPage() {
                     <input type="radio" name="adminPriestStatus" value="ACTIVE" checked={priestConfessionStatus === 'ACTIVE'} onChange={() => setPriestConfessionStatus('ACTIVE')} />
                     <span>🟢 {language === 'ar' ? 'متاح' : 'Active'}</span>
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                    <input type="radio" name="adminPriestStatus" value="TRAVELING" checked={priestConfessionStatus === 'TRAVELING'} onChange={() => setPriestConfessionStatus('TRAVELING')} />
-                    <span>✈️ {language === 'ar' ? 'مسافر خارج مصر' : 'Traveling'}</span>
-                  </label>
+                  {(priestNameAr.includes('مايكل') || priestNameEn.toLowerCase().includes('michael')) && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                      <input type="radio" name="adminPriestStatus" value="TRAVELING" checked={priestConfessionStatus === 'TRAVELING'} onChange={() => setPriestConfessionStatus('TRAVELING')} />
+                      <span>✈️ {language === 'ar' ? 'خارج مصر' : 'Abroad'}</span>
+                    </label>
+                  )}
                   <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
                     <input type="radio" name="adminPriestStatus" value="INACTIVE" checked={priestConfessionStatus === 'INACTIVE'} onChange={() => setPriestConfessionStatus('INACTIVE')} />
                     <span>⏸️ {language === 'ar' ? 'غير متاح حالياً' : 'Inactive'}</span>
@@ -2610,7 +2817,7 @@ export default function DashboardPage() {
                 {priestConfessionStatus !== 'ACTIVE' && (
                   <div style={{ marginTop: '8px' }}>
                     <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'ملاحظة الحالة' : 'Status Note'}</label>
-                    <input type="text" value={priestConfessionStatusNote} onChange={e => setPriestConfessionStatusNote(e.target.value)} className={styles.formInput} placeholder="مثال: مسافر خارج مصر حالياً" />
+                    <input type="text" value={priestConfessionStatusNote} onChange={e => setPriestConfessionStatusNote(e.target.value)} className={styles.formInput} placeholder={language === 'ar' ? 'مثال: خارج مصر حالياً' : 'e.g. Currently abroad'} />
                   </div>
                 )}
                 <div style={{ marginTop: '10px' }}>
@@ -2641,8 +2848,18 @@ export default function DashboardPage() {
                     {language === 'ar' ? 'إلغاء التعديل' : 'Cancel'}
                   </button>
                 )}
-                <button type="submit" className={styles.bookBtn} style={{ width: 'auto', padding: '10px 30px' }}>
-                  {language === 'ar' ? 'حفظ الكاهن' : 'Save Priest'}
+                <button 
+                  type="submit" 
+                  className={`${styles.bookBtn} ${savedPriest ? 'btn-saved-success' : ''}`} 
+                  style={{ 
+                    width: 'auto', 
+                    padding: '10px 30px',
+                    backgroundColor: savedPriest ? '#2ecc71' : undefined,
+                    color: savedPriest ? '#fff' : undefined,
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {savedPriest ? '✓ تم الحفظ بنجاح!' : (language === 'ar' ? 'حفظ الكاهن' : 'Save Priest')}
                 </button>
               </div>
             </form>
@@ -2838,14 +3055,31 @@ export default function DashboardPage() {
               </h3>
 
               {/* Sub-form to Add/Edit a Service */}
-              <div style={{ border: '1px solid var(--border-color)', borderRadius: '6px', padding: '1.5rem', marginBottom: '2rem', backgroundColor: 'var(--bg-card)' }}>
+              <div id="service-form-card" style={{ border: '1px solid var(--border-color)', borderRadius: '6px', padding: '1.5rem', marginBottom: '2rem', backgroundColor: 'var(--bg-card)' }}>
                 <h4 style={{ color: 'var(--accent-gold)', marginBottom: '1rem', fontSize: '1rem' }}>
                   {editingServiceId ? (language === 'ar' ? '📝 تعديل الخدمة المحددة' : '📝 Edit Selected Service') : (language === 'ar' ? '➕ إضافة خدمة جديدة' : '➕ Add New Service')}
                 </h4>
                 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Slug (Unique ID, e.g. youth, choir)</label>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ar' ? 'فئة الخدمة الكنسية *' : 'Service Category *'}
+                    </label>
+                    <select 
+                      value={serviceCategory} 
+                      onChange={e => setServiceCategory(e.target.value)} 
+                      className={styles.formInput}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <option value="تربية كنسية">تربية كنسية</option>
+                      <option value="ألحان">ألحان</option>
+                      <option value="كشافة">كشافة</option>
+                      <option value="كورال">كورال</option>
+                      <option value="أخرى">أخرى</option>
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Slug (Unique ID, e.g. sunday-school, hymns)</label>
                     <input type="text" value={serviceSlug} onChange={e => setServiceSlug(e.target.value)} className={styles.formInput} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2866,19 +3100,101 @@ export default function DashboardPage() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Service Image</label>
-                    <input type="file" accept="image/*" onChange={e => handleFileChange(e, setServiceImage)} className={styles.formInput} style={{ padding: '6px' }} />
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="file" accept="image/*" onChange={e => handleFileChange(e, setServiceImage)} className={styles.formInput} style={{ padding: '6px', flex: 1 }} />
+                      {serviceImage && (
+                        <button 
+                          type="button" 
+                          onClick={() => openImageCropper(serviceImage, '16:9', (cropped) => setServiceImage(cropped))}
+                          title={language === 'ar' ? 'قص وضبط أبعاد الصورة' : 'Crop & Adjust'}
+                          style={{ padding: '6px 10px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                        >
+                          <Scissors size={14} /> {language === 'ar' ? 'قص' : 'Crop'}
+                        </button>
+                      )}
+                    </div>
+                    {serviceImage && <img src={serviceImage} alt="Service Preview" style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px', marginTop: '4px' }} />}
                   </div>
                 </div>
 
                 <div className="grid-2-col" style={{ marginBottom: '1.2rem' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Description/Goal (Arabic)</label>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Description/Summary (Arabic)</label>
                     <textarea value={serviceGoalAr} onChange={e => setServiceGoalAr(e.target.value)} className={styles.formInput} style={{ height: '60px', resize: 'vertical' }} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Description/Goal (English)</label>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Description/Summary (English)</label>
                     <textarea value={serviceGoalEn} onChange={e => setServiceGoalEn(e.target.value)} className={styles.formInput} style={{ height: '60px', resize: 'vertical' }} />
                   </div>
+                </div>
+
+                {/* Stages & Schedule breakdown per Stage */}
+                <div style={{ backgroundColor: 'var(--bg-secondary)', padding: '1rem', borderRadius: '6px', border: '1px solid var(--border-color)', marginBottom: '1.2rem' }}>
+                  <b style={{ color: 'var(--accent-gold)', fontSize: '0.85rem', display: 'block', marginBottom: '8px' }}>
+                    📑 {language === 'ar' ? 'مراحل الخدمة وتفاصيل المواعيد (حسب المراحل الكنسية):' : 'Ministry Stages & Age Schedules:'}
+                  </b>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', alignItems: 'flex-end', marginBottom: '10px' }}>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'المرحلة (عربي)' : 'Stage (Arabic)'}</label>
+                      <input type="text" placeholder="مثال: إعدادي وثانوي" value={newStageNameAr} onChange={e => setNewStageNameAr(e.target.value)} className={styles.formInput} style={{ padding: '6px', fontSize: '0.8rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'المرحلة (إنجليزي)' : 'Stage (English)'}</label>
+                      <input type="text" placeholder="e.g. Middle & High School" value={newStageNameEn} onChange={e => setNewStageNameEn(e.target.value)} className={styles.formInput} style={{ padding: '6px', fontSize: '0.8rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الميعاد (عربي)' : 'Schedule (Arabic)'}</label>
+                      <input type="text" placeholder="مثال: الجمعة 5:00 م" value={newStageScheduleAr} onChange={e => setNewStageScheduleAr(e.target.value)} className={styles.formInput} style={{ padding: '6px', fontSize: '0.8rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الميعاد (إنجليزي)' : 'Schedule (English)'}</label>
+                      <input type="text" placeholder="e.g. Friday 5:00 PM" value={newStageScheduleEn} onChange={e => setNewStageScheduleEn(e.target.value)} className={styles.formInput} style={{ padding: '6px', fontSize: '0.8rem' }} />
+                    </div>
+                    <div>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          if (!newStageNameAr) {
+                            alert(language === 'ar' ? 'يرجى إدخال اسم المرحلة' : 'Please enter stage name');
+                            return;
+                          }
+                          setServiceStages(prev => [...prev, {
+                            nameAr: newStageNameAr,
+                            nameEn: newStageNameEn || newStageNameAr,
+                            scheduleAr: newStageScheduleAr,
+                            scheduleEn: newStageScheduleEn || newStageScheduleAr,
+                            locationAr: 'مبنى الخدمات',
+                            locationEn: 'Services Building'
+                          }]);
+                          setNewStageNameAr('');
+                          setNewStageNameEn('');
+                          setNewStageScheduleAr('');
+                          setNewStageScheduleEn('');
+                        }}
+                        style={{ padding: '7px 14px', backgroundColor: 'var(--accent-gold)', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem', cursor: 'pointer', width: '100%' }}
+                      >
+                        + {language === 'ar' ? 'إضافة مرحلة' : 'Add Stage'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {serviceStages.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                      {serviceStages.map((stg, sIdx) => (
+                        <div key={sIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-card)', padding: '6px 10px', borderRadius: '4px', fontSize: '0.8rem', border: '1px solid var(--border-color)' }}>
+                          <span><b>{language === 'ar' ? (stg.nameAr || stg.name) : (stg.nameEn || stg.name)}</b> — {language === 'ar' ? (stg.scheduleAr || stg.time) : (stg.scheduleEn || stg.time)}</span>
+                          <button 
+                            type="button" 
+                            onClick={() => setServiceStages(prev => prev.filter((_, i) => i !== sIdx))}
+                            style={{ backgroundColor: '#ff4d4d', color: '#fff', border: 'none', borderRadius: '3px', padding: '2px 8px', cursor: 'pointer', fontSize: '0.75rem' }}
+                          >
+                            ✕ {language === 'ar' ? 'حذف' : 'Remove'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
@@ -2888,6 +3204,7 @@ export default function DashboardPage() {
                       onClick={() => {
                         setEditingServiceId(null);
                         setServiceSlug('');
+                        setServiceCategory('تربية كنسية');
                         setServiceNameAr('');
                         setServiceNameEn('');
                         setServiceGoalAr('');
@@ -2895,6 +3212,7 @@ export default function DashboardPage() {
                         setServiceScheduleAr('');
                         setServiceScheduleEn('');
                         setServiceImage('');
+                        setServiceStages([]);
                       }} 
                       style={{ backgroundColor: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border-color)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}
                     >
@@ -2927,7 +3245,7 @@ export default function DashboardPage() {
                           {language === 'ar' ? s.nameAr : s.nameEn}
                         </span>
                         <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', marginInlineStart: '10px' }}>
-                          ({s.slug})
+                          ({s.category || s.slug})
                         </span>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
                           🕒 {language === 'ar' ? s.scheduleAr : s.scheduleEn}
@@ -2953,8 +3271,22 @@ export default function DashboardPage() {
             </div>
 
             {/* Bottom main save button */}
-            <button type="submit" className={styles.bookBtn} style={{ padding: '14px 40px', fontSize: '1.1rem', fontWeight: 'bold', boxShadow: '0 4px 15px rgba(226,183,20,0.3)', width: 'auto', alignSelf: 'center' }}>
-              💾 {language === 'ar' ? 'حفظ إعدادات ومحتوى الموقع بالكامل' : 'Save All Site Content'}
+            <button 
+              type="submit" 
+              className={`${styles.bookBtn} ${savedSiteInfo ? 'btn-saved-success' : ''}`} 
+              style={{ 
+                padding: '14px 40px', 
+                fontSize: '1.1rem', 
+                fontWeight: 'bold', 
+                boxShadow: '0 4px 15px rgba(226,183,20,0.3)', 
+                width: 'auto', 
+                alignSelf: 'center',
+                backgroundColor: savedSiteInfo ? '#2ecc71' : undefined,
+                color: savedSiteInfo ? '#fff' : undefined,
+                transition: 'all 0.3s ease'
+              }}
+            >
+              {savedSiteInfo ? '✓ تم الحفظ بنجاح!' : `💾 ${language === 'ar' ? 'حفظ إعدادات ومحتوى الموقع بالكامل' : 'Save All Site Content'}`}
             </button>
 
           </form>
@@ -2964,7 +3296,7 @@ export default function DashboardPage() {
       {/* Tab: Manage News */}
       {activeTab === 'manage-news' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-          <div className="dashboard-panel">
+          <div className="dashboard-panel" id="news-form-card">
             <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
               📰 {editingNewsId 
                 ? (language === 'ar' ? 'تعديل الخبر المحدد' : 'Edit Selected News') 
@@ -3001,14 +3333,34 @@ export default function DashboardPage() {
                 <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'صورة مرفقة (اختياري)' : 'Attached Image (Optional)'}</label>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <input type="file" accept="image/*" onChange={e => handleFileChange(e, setNewsImageUrl)} className={styles.formInput} style={{ padding: '8px', flex: 1 }} />
+                  {newsImageUrl && (
+                    <button 
+                      type="button" 
+                      onClick={() => openImageCropper(newsImageUrl, 'free', (cropped) => setNewsImageUrl(cropped))}
+                      title={language === 'ar' ? 'قص وضبط أبعاد الصورة' : 'Crop & Adjust'}
+                      style={{ padding: '8px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
+                    >
+                      <Scissors size={14} /> {language === 'ar' ? 'قص' : 'Crop'}
+                    </button>
+                  )}
                   <button type="button" onClick={() => setNewsImageUrl('')} style={{ padding: '8px 12px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
                 </div>
                 {newsImageUrl && <img src={newsImageUrl} alt="Preview" style={{ height: '120px', objectFit: 'contain', borderRadius: '4px', marginTop: '4px', alignSelf: 'flex-start' }} />}
               </div>
 
               <div style={{ display: 'flex', gap: '10px' }}>
-                <button type="submit" className={styles.bookBtn} style={{ marginTop: '10px', width: '200px' }}>
-                  {editingNewsId ? (language === 'ar' ? 'حفظ التعديل' : 'Save Changes') : (language === 'ar' ? 'نشر الخبر' : 'Publish News')}
+                <button 
+                  type="submit" 
+                  className={`${styles.bookBtn} ${savedNews ? 'btn-saved-success' : ''}`} 
+                  style={{ 
+                    marginTop: '10px', 
+                    width: '200px',
+                    backgroundColor: savedNews ? '#2ecc71' : undefined,
+                    color: savedNews ? '#fff' : undefined,
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {savedNews ? '✓ تم الحفظ بنجاح!' : (editingNewsId ? (language === 'ar' ? 'حفظ التعديل' : 'Save Changes') : (language === 'ar' ? 'نشر الخبر' : 'Publish News'))}
                 </button>
                 {editingNewsId && (
                   <button 
@@ -3048,7 +3400,7 @@ export default function DashboardPage() {
                         setEditingNewsId(n.id);
                         setNewsContent(n.content || '');
                         setNewsImageUrl(n.imageUrl || '');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        triggerEditScrollAndHighlight('news-form-card');
                       }} style={{ backgroundColor: 'var(--accent-gold)', color: '#000', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>
                         {language === 'ar' ? 'تعديل' : 'Edit'}
                       </button>
@@ -3140,6 +3492,18 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Image Crop & Ratio Adjustment Modal */}
+      <ImageCropModal
+        isOpen={cropModalOpen}
+        imageUrl={cropTargetImage}
+        aspectRatioPreset={cropPreset}
+        onCropComplete={(croppedDataUrl) => {
+          cropCallback(croppedDataUrl);
+          setCropModalOpen(false);
+        }}
+        onClose={() => setCropModalOpen(false)}
+      />
     </div>
   );
 }

@@ -114,7 +114,20 @@ export default function Home() {
     fetch(`${API_URL}/bookings/priests`)
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) setPriests(data);
+        if (Array.isArray(data)) {
+          const priestOrder = ['اثناسيوس', 'مينا عزت', 'فيلوباتير', 'يوحنا', 'كاراس', 'مايكل', 'موسى'];
+          const sorted = [...data].sort((a, b) => {
+            const getRank = (p: any) => {
+              if (p.role === 'BISHOP' || p.nameAr?.includes('اثناسيوس')) return -100;
+              for (let i = 0; i < priestOrder.length; i++) {
+                if (p.nameAr?.includes(priestOrder[i]) || p.nameEn?.toLowerCase().includes(priestOrder[i].toLowerCase())) return i;
+              }
+              return 999;
+            };
+            return getRank(a) - getRank(b);
+          });
+          setPriests(sorted);
+        }
       })
       .catch(err => console.log('Error fetching priests:', err));
 
@@ -204,7 +217,7 @@ export default function Home() {
   const openBookingModal = (priest: Priest) => {
     // If traveling or inactive, alert user
     if (priest.confessionStatus === 'TRAVELING') {
-      alert(priest.confessionStatusNote || (language === 'ar' ? 'أبونا مسافر خارج مصر حالياً ولا يستقبل اعترافات.' : 'Father is currently traveling abroad and not accepting confessions.'));
+      alert(priest.confessionStatusNote || (language === 'ar' ? 'أبونا خارج مصر حالياً ولا يستقبل اعترافات.' : 'Father is currently traveling abroad and not accepting confessions.'));
       return;
     }
     if (priest.confessionStatus === 'INACTIVE') {
@@ -531,12 +544,12 @@ export default function Home() {
                   {language === 'ar' ? `${p.titleAr} ${p.nameAr}` : `${p.titleEn} ${p.nameEn}`}
                 </h3>
                 <span className={styles.priestRole}>
-                  {p.role === 'BISHOP' ? (language === 'ar' ? 'شريك الخدمة الرسولية' : 'Bishop') : (language === 'ar' ? 'كاهن الكنيسة' : 'Priest')}
+                  {p.role === 'BISHOP' ? (language === 'ar' ? 'الاسقف العام لحدائق القبه' : 'General Bishop of Hadayek Al Koba') : (language === 'ar' ? 'كاهن الكنيسة' : 'Priest')}
                 </span>
                 <p className={styles.priestDays}>
                   <b>{language === 'ar' ? 'أيام التواجد:' : 'Available Days:'}</b><br />
                   {p.confessionStatus === 'TRAVELING' 
-                    ? (p.confessionStatusNote || (language === 'ar' ? 'مسافر خارج مصر حالياً' : 'Traveling abroad'))
+                    ? (p.confessionStatusNote || (language === 'ar' ? 'خارج مصر' : 'Traveling abroad'))
                     : p.confessionStatus === 'INACTIVE'
                     ? (p.confessionStatusNote || (language === 'ar' ? 'غير متاح للاعترافات حالياً' : 'Not available currently'))
                     : p.noFixedSchedule
@@ -545,7 +558,7 @@ export default function Home() {
                 </p>
                 {p.confessionStatus === 'TRAVELING' ? (
                   <button className={styles.bookBtn} style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#555' }} disabled>
-                    ✈️ {language === 'ar' ? 'أبونا مسافر خارج مصر' : 'Traveling Abroad'}
+                    ✈️ {language === 'ar' ? 'خارج مصر' : 'Traveling Abroad'}
                   </button>
                 ) : p.confessionStatus === 'INACTIVE' ? (
                   <button className={styles.bookBtn} style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#555' }} disabled>

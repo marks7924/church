@@ -36,12 +36,13 @@ export default function SermonsPage() {
   const [editingSermon, setEditingSermon] = useState<Sermon | null>(null);
   const [titleAr, setTitleAr] = useState('');
   const [titleEn, setTitleEn] = useState('');
-  const [priestNameAr, setPriestNameAr] = useState('القمص يوحنا كمال');
-  const [priestNameEn, setPriestNameEn] = useState('Fr. John Kamal');
-  const [topicAr, setTopicAr] = useState('روحيات');
-  const [topicEn, setTopicEn] = useState('Spiritual');
+  const [priestNameAr, setPriestNameAr] = useState('سيدنا الأنبا اثناسيوس');
+  const [priestNameEn, setPriestNameEn] = useState('Bishop Athanasius');
+  const [topicAr, setTopicAr] = useState('حياة الصلاة');
+  const [topicEn, setTopicEn] = useState('Prayer Life');
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [sermonDate, setSermonDate] = useState('');
+  const [isSaved, setIsSaved] = useState(false);
 
   const [message, setMessage] = useState<string | null>(null);
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
@@ -108,14 +109,16 @@ export default function SermonsPage() {
       });
 
       if (res.ok) {
+        setIsSaved(true);
         setMessage(editingSermon 
-          ? (language === 'ar' ? 'تم تعديل العظة بنجاح!' : 'Sermon updated successfully!')
-          : (language === 'ar' ? 'تم إضافة العظة ونشر الإشعارات بنجاح!' : 'Sermon created and push notifications sent!')
+          ? (language === 'ar' ? '✓ تم تعديل العظة بنجاح!' : '✓ Sermon updated successfully!')
+          : (language === 'ar' ? '✓ تم إضافة العظة ونشر الإشعارات بنجاح!' : '✓ Sermon created and push notifications sent!')
         );
         fetchSermons();
         setTimeout(() => {
+          setIsSaved(false);
           handleCloseModal();
-        }, 1500);
+        }, 1200);
       } else {
         const data = await res.json();
         setMessage(data.error || 'Error saving sermon.');
@@ -165,13 +168,14 @@ export default function SermonsPage() {
     setEditingSermon(null);
     setTitleAr('');
     setTitleEn('');
-    setPriestNameAr('القمص يوحنا كمال');
-    setPriestNameEn('Fr. John Kamal');
-    setTopicAr('روحيات');
-    setTopicEn('Spiritual');
+    setPriestNameAr('سيدنا الأنبا اثناسيوس');
+    setPriestNameEn('Bishop Athanasius');
+    setTopicAr('حياة الصلاة');
+    setTopicEn('Prayer Life');
     setYoutubeUrl('');
     setSermonDate('');
     setMessage(null);
+    setIsSaved(false);
   };
 
   // Filter logic
@@ -240,8 +244,13 @@ export default function SermonsPage() {
             style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px', outline: 'none' }}
           >
             <option value="">{language === 'ar' ? 'جميع الآباء' : 'All Priests'}</option>
-            <option value="يوحنا كمال">{language === 'ar' ? 'القمص يوحنا كمال' : 'Fr. John Kamal'}</option>
-            <option value="اثناسيوس">{language === 'ar' ? 'الأنبا اثناسيوس' : 'Bishop Athanasius'}</option>
+            <option value="اثناسيوس">{language === 'ar' ? 'سيدنا الأنبا اثناسيوس' : 'Bishop Athanasius'}</option>
+            <option value="مينا عزت">{language === 'ar' ? 'القمص مينا عزت' : 'Fr. Mina Ezzat'}</option>
+            <option value="فيلوباتير">{language === 'ar' ? 'القمص فيلوباتير عزمي' : 'Fr. Philopateer Azmy'}</option>
+            <option value="يوحنا">{language === 'ar' ? 'القس يوحنا جون' : 'Fr. Yohanna John'}</option>
+            <option value="كاراس">{language === 'ar' ? 'القس كاراس عزيز' : 'Fr. Karas Aziz'}</option>
+            <option value="مايكل">{language === 'ar' ? 'القس مايكل اسحاق' : 'Fr. Michael Isaac'}</option>
+            <option value="موسى">{language === 'ar' ? 'القس موسى عريان' : 'Fr. Moussa Erian'}</option>
           </select>
         </div>
 
@@ -362,23 +371,48 @@ export default function SermonsPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
                 <div className={styles.formGroup}>
-                  <label>اسم الكاهن (عربي) *</label>
-                  <input type="text" required value={priestNameAr} onChange={e => setPriestNameAr(e.target.value)} className={styles.formInput} />
+                  <label>اختيار الكاهن *</label>
+                  <select 
+                    value={priestNameAr} 
+                    onChange={e => {
+                      const val = e.target.value;
+                      setPriestNameAr(val);
+                      if (val.includes('اثناسيوس')) setPriestNameEn('Bishop Athanasius');
+                      else if (val.includes('مينا')) setPriestNameEn('Fr. Mina Ezzat');
+                      else if (val.includes('فيلوباتير')) setPriestNameEn('Fr. Philopateer Azmy');
+                      else if (val.includes('يوحنا')) setPriestNameEn('Fr. Yohanna John');
+                      else if (val.includes('كاراس')) setPriestNameEn('Fr. Karas Aziz');
+                      else if (val.includes('مايكل')) setPriestNameEn('Fr. Michael Isaac');
+                      else if (val.includes('موسى')) setPriestNameEn('Fr. Moussa Erian');
+                    }} 
+                    className={styles.formInput}
+                  >
+                    <option value="سيدنا الأنبا اثناسيوس">سيدنا الأنبا اثناسيوس (Bishop Athanasius)</option>
+                    <option value="القمص مينا عزت">القمص مينا عزت (Fr. Mina Ezzat)</option>
+                    <option value="القمص فيلوباتير عزمي">القمص فيلوباتير عزمي (Fr. Philopateer Azmy)</option>
+                    <option value="القس يوحنا جون">القس يوحنا جون (Fr. Yohanna John)</option>
+                    <option value="القس كاراس عزيز">القس كاراس عزيز (Fr. Karas Aziz)</option>
+                    <option value="القس مايكل اسحاق">القس مايكل اسحاق (Fr. Michael Isaac)</option>
+                    <option value="القس موسى عريان">القس موسى عريان (Fr. Moussa Erian)</option>
+                  </select>
                 </div>
                 <div className={styles.formGroup}>
-                  <label>Priest Name (En) *</label>
-                  <input type="text" required value={priestNameEn} onChange={e => setPriestNameEn(e.target.value)} className={styles.formInput} />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '10px' }}>
-                <div className={styles.formGroup}>
-                  <label>التصنيف/الموضوع (عربي) *</label>
-                  <input type="text" required value={topicAr} onChange={e => setTopicAr(e.target.value)} className={styles.formInput} />
-                </div>
-                <div className={styles.formGroup}>
-                  <label>Topic (En) *</label>
-                  <input type="text" required value={topicEn} onChange={e => setTopicEn(e.target.value)} className={styles.formInput} />
+                  <label>موضوع العظة *</label>
+                  <select 
+                    value={topicAr} 
+                    onChange={e => {
+                      const val = e.target.value;
+                      setTopicAr(val);
+                      if (val.includes('الصلاة')) setTopicEn('Prayer Life');
+                      else if (val.includes('الأسرة')) setTopicEn('Christian Family');
+                      else if (val.includes('الأسرار')) setTopicEn('Church Sacraments');
+                    }} 
+                    className={styles.formInput}
+                  >
+                    <option value="حياة الصلاة">حياة الصلاة (Prayer Life)</option>
+                    <option value="الأسرة المسيحية">الأسرة المسيحية (Christian Family)</option>
+                    <option value="الأسرار الكنسية">الأسرار الكنسية (Church Sacraments)</option>
+                  </select>
                 </div>
               </div>
 
@@ -392,8 +426,12 @@ export default function SermonsPage() {
                 <input type="date" value={sermonDate} onChange={e => setSermonDate(e.target.value)} className={styles.formInput} />
               </div>
 
-              <button type="submit" className={styles.bookBtn}>
-                {t('submit')}
+              <button 
+                type="submit" 
+                className={`${styles.bookBtn} ${isSaved ? 'btn-saved-success' : ''}`}
+                style={isSaved ? { backgroundColor: 'var(--accent-green)', color: '#ffffff', transition: 'all 0.3s' } : {}}
+              >
+                {isSaved ? (language === 'ar' ? '✓ تم الحفظ بنجاح' : '✓ Saved Successfully') : (editingSermon ? (language === 'ar' ? 'حفظ التعديلات' : 'Save Changes') : t('submit'))}
               </button>
             </form>
           </div>

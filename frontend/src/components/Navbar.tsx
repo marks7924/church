@@ -163,7 +163,9 @@ export default function Navbar() {
                 <Link href="/dashboard" className={styles.controlBtn}>
                   <LayoutDashboard size={16} />
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {user.fullName.split(' ')[0]} 
+                    {(user.role === 'BISHOP' || user.fullName?.startsWith('الأنبا') || user.fullName?.includes('اثناسيوس'))
+                      ? (language === 'ar' ? 'سيدنا' : 'Bishop')
+                      : user.fullName?.split(' ')[0]} 
                     {user.familyProfileStatus === 'APPROVED' && <UserCheck size={12} style={{ color: 'var(--accent-gold)' }} />}
                   </span>
                 </Link>
@@ -246,7 +248,7 @@ export default function Navbar() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <Link href="/dashboard" className={styles.drawerAuthBtn} onClick={() => setIsMobileMenuOpen(false)}>
                       <LayoutDashboard size={18} />
-                      <span>{t('nav_dashboard')} ({user.fullName.split(' ')[0]})</span>
+                      <span>{t('nav_dashboard')} ({(user.role === 'BISHOP' || user.fullName?.startsWith('الأنبا') || user.fullName?.includes('اثناسيوس')) ? (language === 'ar' ? 'سيدنا' : 'Bishop') : user.fullName?.split(' ')[0]})</span>
                     </Link>
                     <button className={styles.drawerLogoutBtn} onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}>
                       <LogOut size={18} />
