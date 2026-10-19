@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { API_URL } from '../config';
 import VipInvitationCard from './VipInvitationCard';
-import { Html5Qrcode } from 'html5-qrcode';
 
 interface EventsInvitationsManagerProps {
   token: string | null;
@@ -30,7 +29,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scanResult, setScanResult] = useState<any | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const html5QrCodeRef = useRef<any | null>(null);
   const isProcessingScanRef = useRef<boolean>(false);
 
   // Invitation creation states
@@ -144,7 +143,10 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
     isProcessingScanRef.current = false;
 
     try {
-      const qrScanner = new Html5Qrcode('qr-reader-container');
+      const html5QrMod = await import('html5-qrcode');
+      const Html5QrcodeClass = html5QrMod.Html5Qrcode || (html5QrMod as any).default?.Html5Qrcode;
+      if (!Html5QrcodeClass) throw new Error('Scanner module unavailable');
+      const qrScanner = new Html5QrcodeClass('qr-reader-container');
       html5QrCodeRef.current = qrScanner;
 
       await qrScanner.start(

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
 import { Crown, Sparkles, MapPin, Calendar, Clock, CheckCircle2, UserCheck, ShieldAlert } from 'lucide-react';
 
 interface VipInvitationCardProps {
@@ -32,19 +31,35 @@ export default function VipInvitationCard({ invitation, language = 'ar' }: VipIn
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
   useEffect(() => {
-    if (invitation.token) {
-      QRCode.toDataURL(invitation.token, {
-        width: 180,
-        margin: 1,
-        color: {
-          dark: '#000000',
-          light: '#ffffff'
+    if (!invitation?.token) return;
+
+    let isMounted = true;
+    import('qrcode')
+      .then((mod) => {
+        const qrFn = (mod as any).toDataURL || (mod as any).default?.toDataURL || (typeof mod === 'function' ? mod : null);
+        if (typeof qrFn === 'function') {
+          return qrFn(invitation.token, {
+            width: 180,
+            margin: 1,
+            color: { dark: '#000000', light: '#ffffff' }
+          });
         }
+        return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(invitation.token)}`;
       })
-        .then(url => setQrDataUrl(url))
-        .catch(err => console.error('Error generating QR code:', err));
-    }
-  }, [invitation.token]);
+      .then((url) => {
+        if (isMounted && url) setQrDataUrl(url);
+      })
+      .catch((err) => {
+        console.error('Error generating QR code:', err);
+        if (isMounted) {
+          setQrDataUrl(`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(invitation.token)}`);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [invitation?.token]);
 
   const isVip = invitation.isVip;
 

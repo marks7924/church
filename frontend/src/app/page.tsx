@@ -521,7 +521,7 @@ export default function Home() {
                       </span>
                     )}
                     <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border-color)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                      <span>👤 {item.author.fullName}</span>
+                      <span>👤 {item.author?.fullName || (language === 'ar' ? 'الكنيسة' : 'Church')}</span>
                       <span>📅 {new Date(item.createdAt).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}</span>
                     </div>
                   </div>
