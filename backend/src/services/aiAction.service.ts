@@ -90,15 +90,17 @@ export const ACTION_REGISTRY: Record<string, ActionDefinition> = {
     id: 'book_appointment',
     nameAr: 'حجز جلسة اعتراف أو لقاء رعوي',
     nameEn: 'Book Confession or Pastoral Meeting',
-    descriptionAr: 'التوجيه لحجز موعد سري ومعتمد مع أحد الآباء الكهنة',
-    descriptionEn: 'Book a confidential pastoral or confession slot with a priest',
-    requiresAuth: true,
-    requiresConfirmation: true,
+    descriptionAr: 'حجز موعد اعتراف أو لقاء رعوي مع أحد الآباء الكهنة بالكنيسة',
+    descriptionEn: 'Book a pastoral or confession slot with a church priest',
+    requiresAuth: false,
+    requiresConfirmation: false,
     inputSchema: {
-      priestId: { type: 'string', required: true, description: 'Priest profile ID' },
-      date: { type: 'string', required: true, description: 'Requested date (YYYY-MM-DD)' },
-      timeSlot: { type: 'string', required: true, description: 'Selected time slot' },
-      notes: { type: 'string', required: false, description: 'Optional spiritual note' }
+      priestName: { type: 'string', required: false, description: 'Priest name or title' },
+      fullName: { type: 'string', required: false, description: 'Applicant full name' },
+      phone: { type: 'string', required: true, description: 'Contact phone number' },
+      date: { type: 'string', required: false, description: 'Requested date' },
+      timeSlot: { type: 'string', required: false, description: 'Preferred time slot' },
+      notes: { type: 'string', required: false, description: 'Optional non-confession notes' }
     }
   },
   view_donations: {
@@ -316,12 +318,89 @@ export class ChurchAiActionService {
         };
       }
 
+      case 'book_appointment': {
+        const { priestName, fullName, phone, date, timeSlot, notes } = params;
+        const contactPhone = phone || user?.phone || '';
+
+        if (!contactPhone.trim()) {
+          return {
+            success: false,
+            actionId,
+            messageAr: 'يرجى كتابة رقم الهاتف للتواصل لتأكيد موعد المقابلة.',
+            messageEn: 'Please provide a contact phone number to confirm the appointment.'
+          };
+        }
+
+        // Sacredness boundary: reject confession details
+        if (notes && (notes.includes('خطيئة') || notes.includes('خطايا') || notes.includes('أخطأت') || notes.includes('اعترف ب'))) {
+          return {
+            success: false,
+            actionId,
+            messageAr: 'تنبيه طقسي: سر الاعتراف مقدس ويتم شفاهاً وشخصياً فقط مع الأب الكاهن في الكنيسة. يرجى عدم كتابة تفاصيل الاعتراف في النموذج.',
+            messageEn: 'Sacramental notice: Confession is sacred and strictly in-person. Please do not submit confession details.'
+          };
+        }
+
+        const applicantName = (fullName || user?.fullName || 'زائر الكنيسة').trim();
+        const selectedDate = date || new Date().toISOString().split('T')[0];
+        const targetPriest = (priestName || 'الأب الكاهن').trim();
+        const refCode = `REQ-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+        await prisma.aiSupportRequest.create({
+          data: {
+            referenceCode: refCode,
+            userId: user ? user.id : null,
+            name: applicantName,
+            phone: contactPhone.trim(),
+            category: 'PASTORAL',
+            message: `طلب حجز موعد اعتراف وإرشاد روحي مع ${targetPriest} - التاريخ المفضل: ${selectedDate}${timeSlot ? ` - الميعاد: ${timeSlot}` : ''}${notes ? ` - ملاحظات: ${notes}` : ''}`,
+            status: 'PENDING'
+          }
+        });
+
+        return {
+          success: true,
+          actionId,
+          data: { referenceCode: refCode, priest: targetPriest, date: selectedDate },
+          redirectUrl: '/',
+          messageAr: `تم تسجيل طلب الموعد بنجاح برقم متابعة مرجعي (#${refCode}) مع ${targetPriest}. سيقوم الأب الكاهن أو سكرتارية الكنيسة بالتواصل معك هاتفياً لتأكيد الميعاد.`,
+          messageEn: `Appointment request submitted successfully (Ref: #${refCode}) with ${targetPriest}. The church office will contact you.`
+        };
+      }
+
       case 'register_membership': {
+        const { fullName, phone, address, familyCount, notes } = params;
+
+        // If basic family info was submitted directly through chat action
+        if (fullName && phone) {
+          const refCode = `REQ-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+          await prisma.aiSupportRequest.create({
+            data: {
+              referenceCode: refCode,
+              userId: user ? user.id : null,
+              name: String(fullName).trim(),
+              phone: String(phone).trim(),
+              category: 'MEMBERSHIP',
+              message: `طلب تسجيل عضوية أسرة كنسية - الاسم: ${fullName} - العنوان: ${address || 'لم يحدد'} - عدد الأفراد: ${familyCount || 1}${notes ? ` - ملاحظات: ${notes}` : ''}`,
+              status: 'PENDING'
+            }
+          });
+
+          return {
+            success: true,
+            actionId,
+            data: { referenceCode: refCode },
+            redirectUrl: '/register-member',
+            messageAr: `تم تسجيل بيانات الأسرة المبدئية بنجاح برقم طلب (#${refCode}). ستتواصل معك لجنة العضوية والافتقاد، ويمكنك أيضاً فتح الاستمارة وتعبئة باقي تفاصيل الأسرة في أي وقت.`,
+            messageEn: `Preliminary family details registered with reference (#${refCode}). The church membership team will follow up.`
+          };
+        }
+
         return {
           success: true,
           actionId,
           redirectUrl: '/register-member',
-          messageAr: 'يمكنك فتح استمارة العضوية الكنسية للأسرة مباشرة واستيفاء بيانات الأسرة بشكل آمن.',
+          messageAr: 'يمكنك استيفاء بيانات عضوية الأسرة الكنسية مباشرة من هنا أو فتح الاستمارة الكاملة.',
           messageEn: 'Open the official Family Membership Registration form to safely submit your details.'
         };
       }

@@ -887,16 +887,15 @@ CRITICAL OPERATIONAL RULES:
    - You do NOT have access to private confession records, private member profiles, or financial transactions.
    - If someone tries to give you their national ID or ask for other members' data, politely remind them that this chat is public and informational only.
 
-5. Direct Helpful Links:
-   - Always conclude with direct markdown links to the relevant website pages:
-     * Mass Schedules: [جدول القداسات](/schedule)
-     * Confession Booking: [حجز اعتراف](/)
-     * Sermons: [مكتبة العظات](/sermons)
-     * Ministries: [الخدمات الكنسية](/ministries)
-     * Trips: [الرحلات والمؤتمرات](/schedule)
-     * Donations: [حسابات التبرع](/donations)
-     * Membership Registration: [تسجيل العضوية](/register-member)
-     * Contact: [اتصل بنا](/contact)`;
+5. Conversational Dialogue & Ordered Formatting:
+   - Be conversational, warm, and natural! Engage in authentic dialogue like a helpful church servant.
+   - Keep your responses neatly structured and easy to read. Use clean bullet points (•) for lists and mass times.
+   - Avoid cluttering the middle of sentences with unnecessary links. Keep links sparse, natural, and placed at the end when needed.
+   - Engage with natural follow-ups:
+     * When answering about liturgies, ask if they'd like to book confession or know about evening prayers.
+     * When asked about confession or meeting a priest, mention the available fathers warmly and let them know they can book the appointment directly right here.
+     * When asked about church membership or trips, explain the steps briefly and invite them to register.
+   - Always remember previous conversation context and treat follow-up questions naturally without repeating introductory greetings.`;
   }
 
   /**
@@ -1184,13 +1183,13 @@ CRITICAL OPERATIONAL RULES:
       };
     }
 
-    if (q.includes('اعتراف') || q.includes('موعد مع ابونا') || q.includes('جلسة اعتراف') || q.includes('book confession') || q.includes('confession appointment')) {
+    if (q.includes('اعتراف') || q.includes('موعد مع ابونا') || q.includes('جلسة اعتراف') || q.includes('مقابلة مع ابونا') || q.includes('book confession') || q.includes('confession appointment') || q.includes('appointment')) {
       return {
         actionId: 'book_appointment',
         labelAr: 'حجز موعد اعتراف مع أبونا',
         labelEn: 'Book Confession with Father',
         redirectUrl: '/',
-        requiresAuth: true
+        requiresAuth: false
       };
     }
 
