@@ -145,14 +145,14 @@ router.get('/diagnostics', async (req: Request, res: Response) => {
     const testGemini = async () => {
       if (!geminiKey) return { status: 'NO_KEY_DETECTED' };
       try {
-        const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(geminiKey)}`;
-        const listRes = await fetch(listUrl);
-        const listText = await listRes.text();
-        return {
-          httpStatus: listRes.status,
-          ok: listRes.ok,
-          bodyPreview: listText.slice(0, 400)
-        };
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`;
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'ping' }] }] })
+        });
+        const text = await r.text();
+        return { httpStatus: r.status, ok: r.ok, bodyPreview: text.slice(0, 300) };
       } catch (err: any) {
         return { error: err.message };
       }
