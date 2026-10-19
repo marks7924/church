@@ -925,10 +925,58 @@ CRITICAL OPERATIONAL RULES:
   static generateGroundedResponse(
     query: string,
     language: 'ar' | 'en',
-    context: { knowledgeText: string; sources: AiSourceReference[]; customFaqs?: CustomFaq[] }
+    context: { knowledgeText: string; sources: AiSourceReference[]; customFaqs?: CustomFaq[]; trackingRequest?: any },
+    user?: { id?: string; name?: string; email?: string }
   ): { text: string; matchedSources: AiSourceReference[]; suggested: string[] } {
     const q = normalizeQuery(query);
     const isAr = language === 'ar';
+    const userGreeting = user?.name ? ` يا ${user.name.trim().split(' ')[0]}` : '';
+
+    // 0. Reference Tracking Inquiry (e.g. REQ-2026-XXXX)
+    const refMatch = query.match(/REQ-\d{4}-[A-Za-z0-9]+/i) || query.match(/REQ-[A-Za-z0-9-]+/i);
+    if (refMatch || q.includes('رقم المتابعة') || q.includes('متابعة طلبي') || q.includes('حالة الحجز') || q.includes('حالة الطلب')) {
+      if (context.trackingRequest) {
+        const item = context.trackingRequest;
+        const statusMapAr: Record<string, string> = {
+          PENDING: 'قيد المراجعة والمتابعة من سكرتارية الكنيسة / الأب الكاهن',
+          IN_PROGRESS: 'جاري التنسيق والمتابعة هاتفياً',
+          RESOLVED: 'تم تأكيد الموعد والتنسيق بنجاح',
+          CANCELLED: 'ملغي أو تعذر تأكيده'
+        };
+        const text = isAr
+          ? `سلام ونعمة${userGreeting}. تفاصيل وحالة طلبك المسجل برقم مرجعي (**#${item.referenceCode}**):\n\n` +
+            `• **صاحب الطلب:** ${item.name}\n` +
+            `• **رقم الهاتف:** ${item.phone}\n` +
+            `• **نوع وتفاصيل الطلب:** ${item.message}\n` +
+            `• **تاريخ التقديم:** ${new Date(item.createdAt).toLocaleDateString('ar-EG')}\n` +
+            `• **الحالة الحالية:** ⏳ **${statusMapAr[item.status] || item.status}**\n\n` +
+            `إذا كنت بحاجة لأي استفسار عاجل، يمكنك التواصل مع سكرتارية الكنيسة على الرقم (+20 100 000 0002).`
+          : `Hello${userGreeting}. Here are the details and status of request (**#${item.referenceCode}**):\n\n` +
+            `• **Applicant:** ${item.name}\n` +
+            `• **Phone:** ${item.phone}\n` +
+            `• **Details:** ${item.message}\n` +
+            `• **Date:** ${new Date(item.createdAt).toLocaleDateString()}\n` +
+            `• **Status:** **${item.status}**\n\n` +
+            `For immediate assistance, contact the church office.`;
+
+        return {
+          text,
+          matchedSources: [{ title: isAr ? 'متابعة الطلبات الكنسية' : 'Request Tracking', url: '/', type: 'contact' }],
+          suggested: isAr
+            ? ['حجز موعد اعتراف جديد', 'مواعيد القداسات هذا الأسبوع', 'التواصل مع سكرتارية الكنيسة']
+            : ['Book new appointment', 'Mass schedule', 'Contact church secretary']
+        };
+      } else if (refMatch) {
+        const text = isAr
+          ? `سلام ونعمة${userGreeting}. عذراً، لم نتمكن من العثور على أي طلب مسجل بالرقم المرجعي (**#${refMatch[0].toUpperCase()}**).\n\nيرجى التأكد من كتابة الرقم بشكل صحيح (مثال: REQ-2026-1234) أو التواصل مباشرة مع سكرتارية الكنيسة لمساعدتك.`
+          : `Hello${userGreeting}. We could not find any request matching reference code (**#${refMatch[0].toUpperCase()}**). Please verify the code or contact the church office.`;
+        return {
+          text,
+          matchedSources: [],
+          suggested: isAr ? ['حجز موعد اعتراف', 'التواصل مع سكرتارية الكنيسة'] : ['Book confession', 'Contact church']
+        };
+      }
+    }
 
     // 0. Check Custom FAQs first
     if (context.customFaqs && context.customFaqs.length > 0) {
@@ -965,7 +1013,7 @@ CRITICAL OPERATIONAL RULES:
       // Individual Priest Inquiries
       if (q.includes('كاراس')) {
         const text = isAr
-          ? `أهلاً بك يا فادي. بخصوص **أبونا القس كاراس عزيز**:\n\n` +
+          ? `سلام ونعمة${userGreeting}. بخصوص **أبونا القس كاراس عزيز**:\n\n` +
             `• **مواعيد جلسات الاعتراف والإرشاد:**\n` +
             `  - يوم **الأربعاء:** من 6:00 م حتى 9:00 م\n` +
             `  - يوم **السبت:** من 6:00 م حتى 9:00 م\n\n` +
@@ -1088,7 +1136,7 @@ CRITICAL OPERATIONAL RULES:
 
       // General Confession Inquiry
       let text = isAr
-        ? `أهلاً بك يا فادي. يمكنك حجز موعد جلسة اعتراف أو إرشاد روحي بالكنيسة:\n\n` +
+        ? `سلام ونعمة${userGreeting}. يمكنك حجز موعد جلسة اعتراف أو إرشاد روحي بالكنيسة:\n\n` +
           `• **الآباء الكهنة المتاحون للاعتراف:**\n` +
           `  - **القمص مينا عزت:** (الاثنين والأربعاء مساءً)\n` +
           `  - **القمص فيلوباتير عزمي:** (الثلاثاء والجمعة مساءً)\n` +
@@ -1462,7 +1510,8 @@ CRITICAL OPERATIONAL RULES:
   static async processChat(
     userMessage: string,
     history: AiChatMessage[] = [],
-    preferredLanguage?: 'ar' | 'en'
+    preferredLanguage?: 'ar' | 'en',
+    currentUser?: { id?: string; name?: string; email?: string }
   ): Promise<AiChatResponse> {
     const startTime = Date.now();
     const lang = preferredLanguage || detectLanguage(userMessage);
@@ -1470,39 +1519,61 @@ CRITICAL OPERATIONAL RULES:
     // 1. Resolve multi-turn conversational memory & references
     const resolvedQuery = ChurchAiService.resolveFollowUpQuery(userMessage, history);
 
+    // 1.1 Check if user message is querying a reference tracking code
+    const refMatch = userMessage.match(/REQ-\d{4}-[A-Za-z0-9]+/i) || userMessage.match(/REQ-[A-Za-z0-9-]+/i);
+    let trackingRequest: any = null;
+    if (refMatch) {
+      try {
+        trackingRequest = await prisma.aiSupportRequest.findFirst({
+          where: { referenceCode: { equals: refMatch[0], mode: 'insensitive' } }
+        });
+      } catch {}
+    }
+
     // 2. Retrieve Grounded Context
     const { knowledgeText, sources, customFaqs } = await ChurchAiService.buildContext(resolvedQuery, lang);
 
     // 3. Detect Action Intent
     const action = ChurchAiService.detectActionIntent(userMessage, lang);
 
-    // 4. Read Configuration & Provider Keys
-    const geminiKey = process.env.GEMINI_API_KEY?.trim() || '';
-    const geminiModel = process.env.GEMINI_MODEL?.trim() || 'gemini-1.5-flash';
+    // 4. Read Configuration & Provider Keys from SystemConfig & Environment
+    const systemSettings = await ChurchKnowledgeRetriever.getAiSystemSettings();
 
-    const groqKey = process.env.GROQ_API_KEY?.trim() || '';
-    let groqModel = process.env.GROQ_MODEL?.trim() || 'llama-3.1-8b-instant';
+    const geminiKey = systemSettings['ai_gemini_key'] || process.env.GEMINI_API_KEY?.trim() || '';
+    const geminiModel = systemSettings['ai_gemini_model'] || process.env.GEMINI_MODEL?.trim() || 'gemini-1.5-flash';
+
+    const groqKey = systemSettings['ai_groq_key'] || process.env.GROQ_API_KEY?.trim() || '';
+    let groqModel = systemSettings['ai_groq_model'] || process.env.GROQ_MODEL?.trim() || 'llama-3.1-8b-instant';
     if (groqModel === 'llama-3.3-70b-versatile') {
       groqModel = 'llama-3.1-8b-instant';
     }
 
-    const openaiKey = process.env.OPENAI_API_KEY?.trim() || '';
-    const openaiModel = process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini';
+    const openaiKey = systemSettings['ai_openai_key'] || process.env.OPENAI_API_KEY?.trim() || '';
+    const openaiModel = systemSettings['ai_openai_model'] || process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini';
 
-    const deepseekKey = process.env.DEEPSEEK_API_KEY?.trim() || '';
-    const deepseekModel = process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-chat';
+    const deepseekKey = systemSettings['ai_deepseek_key'] || process.env.DEEPSEEK_API_KEY?.trim() || '';
+    const deepseekModel = systemSettings['ai_deepseek_model'] || process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-chat';
 
-    const primaryProvider = (process.env.AI_PROVIDER || 'gemini').toLowerCase();
-    const fallbackProvider = (process.env.AI_FALLBACK_PROVIDER || 'groq').toLowerCase();
+    const primaryProvider = (systemSettings['ai_provider'] || process.env.AI_PROVIDER || 'gemini').toLowerCase();
+    const fallbackProvider = (systemSettings['ai_fallback_provider'] || process.env.AI_FALLBACK_PROVIDER || 'groq').toLowerCase();
     const maxTokens = parseInt(process.env.AI_MAX_OUTPUT_TOKENS || '1024', 10);
     const timeoutMs = parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '25000', 10);
 
-    const systemPrompt = `${ChurchAiService.getSystemPrompt(lang)}\n\n=== VERIFIED CHURCH KNOWLEDGE BASE ===\n${knowledgeText}`;
+    let systemPrompt = `${ChurchAiService.getSystemPrompt(lang)}\n\n=== VERIFIED CHURCH KNOWLEDGE BASE ===\n${knowledgeText}`;
+    if (currentUser?.name) {
+      systemPrompt += `\n\n[Active User Context]: The member interacting with you is named "${currentUser.name}". Address them respectfully by their real first name when appropriate.`;
+    }
+    if (trackingRequest) {
+      systemPrompt += `\n\n[CRITICAL LIVE TRACKING DATA FOR #${trackingRequest.referenceCode}]:\n` +
+        `- Applicant: ${trackingRequest.name}\n- Phone: ${trackingRequest.phone}\n- Status: ${trackingRequest.status}\n` +
+        `- Message/Details: ${trackingRequest.message}\n- Created At: ${trackingRequest.createdAt.toISOString()}\n` +
+        `Explain the live status of this request directly to the user with Christian warmth and next steps.`;
+    }
 
     // 5. Shared Daily Budget Check
     if (isBudgetExceeded()) {
       console.warn('AI shared daily budget limit reached. Serving via verified local knowledge engine.');
-      const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources, customFaqs });
+      const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources, customFaqs, trackingRequest }, currentUser);
       return {
         response: fallback.text,
         sources: fallback.matchedSources,

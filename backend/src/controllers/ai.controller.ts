@@ -74,11 +74,12 @@ router.post('/chat', async (req: Request, res: Response) => {
     // Safety length check (max 1200 chars per message)
     const sanitizedMessage = message.trim().slice(0, 1200);
 
-    // Process through AI Service
+    // Process through AI Service with active user context
     const aiResult = await ChurchAiService.processChat(
       sanitizedMessage,
       Array.isArray(history) ? history : [],
-      language === 'en' ? 'en' : 'ar'
+      language === 'en' ? 'en' : 'ar',
+      user ? { id: user.id, name: user.fullName || user.email, email: user.email } : undefined
     );
 
     // Log query in ActionLog (anonymized if visitor)
@@ -154,19 +155,23 @@ router.get(
   async (req: AuthRequest, res: Response) => {
     try {
       const dbSettings = await ChurchKnowledgeRetriever.getAiSystemSettings();
-      const geminiKey = process.env.GEMINI_API_KEY?.trim() || '';
-      const groqKey = process.env.GROQ_API_KEY?.trim() || '';
+      const geminiKey = dbSettings['ai_gemini_key'] || process.env.GEMINI_API_KEY?.trim() || '';
+      const groqKey = dbSettings['ai_groq_key'] || process.env.GROQ_API_KEY?.trim() || '';
+      const openaiKey = dbSettings['ai_openai_key'] || process.env.OPENAI_API_KEY?.trim() || '';
 
       const settings = {
-        primaryProvider: process.env.AI_PROVIDER || 'gemini',
-        primaryModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+        primaryProvider: dbSettings['ai_provider'] || process.env.AI_PROVIDER || 'gemini',
+        primaryModel: dbSettings['ai_gemini_model'] || process.env.GEMINI_MODEL || 'gemini-1.5-flash',
         hasGeminiKey: geminiKey.length > 0,
         maskedGeminiKey: geminiKey.length > 6 ? `${geminiKey.slice(0, 4)}...${geminiKey.slice(-4)}` : (geminiKey ? '****' : null),
 
-        fallbackProvider: process.env.AI_FALLBACK_PROVIDER || 'groq',
-        fallbackModel: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+        fallbackProvider: dbSettings['ai_fallback_provider'] || process.env.AI_FALLBACK_PROVIDER || 'groq',
+        fallbackModel: dbSettings['ai_groq_model'] || process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
         hasGroqKey: groqKey.length > 0,
         maskedGroqKey: groqKey.length > 6 ? `${groqKey.slice(0, 4)}...${groqKey.slice(-4)}` : (groqKey ? '****' : null),
+
+        hasOpenaiKey: openaiKey.length > 0,
+        maskedOpenaiKey: openaiKey.length > 6 ? `${openaiKey.slice(0, 4)}...${openaiKey.slice(-4)}` : (openaiKey ? '****' : null),
 
         maxTokens: parseInt(process.env.AI_MAX_OUTPUT_TOKENS || '1024', 10),
         timeoutMs: parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '25000', 10),
@@ -199,7 +204,17 @@ router.patch(
   requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
   async (req: AuthRequest, res: Response) => {
     try {
-      const { enabled, defaultLanguage, escalationPhone, escalationEmail } = req.body;
+      const {
+        enabled,
+        defaultLanguage,
+        escalationPhone,
+        escalationEmail,
+        geminiApiKey,
+        groqApiKey,
+        openaiApiKey,
+        primaryProvider,
+        fallbackProvider
+      } = req.body;
 
       const updates: { key: string; value: string }[] = [];
       if (typeof enabled === 'boolean') {
@@ -213,6 +228,21 @@ router.patch(
       }
       if (escalationEmail) {
         updates.push({ key: 'ai_escalation_email', value: String(escalationEmail).slice(0, 60) });
+      }
+      if (geminiApiKey !== undefined) {
+        updates.push({ key: 'ai_gemini_key', value: String(geminiApiKey).trim() });
+      }
+      if (groqApiKey !== undefined) {
+        updates.push({ key: 'ai_groq_key', value: String(groqApiKey).trim() });
+      }
+      if (openaiApiKey !== undefined) {
+        updates.push({ key: 'ai_openai_key', value: String(openaiApiKey).trim() });
+      }
+      if (primaryProvider && typeof primaryProvider === 'string') {
+        updates.push({ key: 'ai_provider', value: primaryProvider.trim() });
+      }
+      if (fallbackProvider && typeof fallbackProvider === 'string') {
+        updates.push({ key: 'ai_fallback_provider', value: fallbackProvider.trim() });
       }
 
       await Promise.all(
@@ -658,6 +688,74 @@ router.get('/support-request/:refCode', async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Failed to fetch support request status.' });
   }
 });
+
+/**
+ * 17.1 Admin: List support requests
+ * GET /api/ai/admin/support-requests
+ */
+router.get(
+  '/admin/support-requests',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { status, search } = req.query;
+      const where: any = {};
+      if (status && status !== 'ALL') {
+        where.status = String(status);
+      }
+      if (search && typeof search === 'string' && search.trim().length > 0) {
+        where.OR = [
+          { referenceCode: { contains: search.trim(), mode: 'insensitive' } },
+          { name: { contains: search.trim(), mode: 'insensitive' } },
+          { phone: { contains: search.trim(), mode: 'insensitive' } },
+          { message: { contains: search.trim(), mode: 'insensitive' } }
+        ];
+      }
+
+      const requests = await prisma.aiSupportRequest.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: 150
+      });
+
+      return res.status(200).json(requests);
+    } catch (error) {
+      console.error('Error fetching support requests:', error);
+      return res.status(500).json({ error: 'Failed to retrieve support requests.' });
+    }
+  }
+);
+
+/**
+ * 17.2 Admin: Update support request status & notes
+ * PATCH /api/ai/admin/support-requests/:id
+ */
+router.patch(
+  '/admin/support-requests/:id',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { status, notes } = req.body;
+
+      const dataToUpdate: any = {};
+      if (status) dataToUpdate.status = String(status);
+      if (notes !== undefined) dataToUpdate.notes = String(notes);
+
+      const updated = await prisma.aiSupportRequest.update({
+        where: { id },
+        data: dataToUpdate
+      });
+
+      return res.status(200).json(updated);
+    } catch (error) {
+      console.error('Error updating support request:', error);
+      return res.status(500).json({ error: 'Failed to update support request.' });
+    }
+  }
+);
 
 /**
  * 18. Admin Knowledge Chat: GET /api/ai/admin/conversations

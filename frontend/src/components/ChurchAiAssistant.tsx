@@ -196,6 +196,22 @@ export default function ChurchAiAssistant() {
 
   // Dynamic Route-Aware Suggestions
   const [routeSuggestions, setRouteSuggestions] = useState<string[]>([]);
+  const [dynamicFaqs, setDynamicFaqs] = useState<string[]>([]);
+
+  // Fetch dynamic FAQs configured from Admin Panel
+  useEffect(() => {
+    fetch(`${API_URL}/ai/faqs`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          const questions = data.map((item: any) => isAr ? item.questionAr : (item.questionEn || item.questionAr)).filter(Boolean);
+          if (questions.length > 0) {
+            setDynamicFaqs(questions);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [isAr]);
 
   // Human Handoff / Support Escalation Modal
   const [isHandoffModalOpen, setIsHandoffModalOpen] = useState(false);
@@ -323,44 +339,82 @@ export default function ChurchAiAssistant() {
     } catch {}
   };
 
+  // Helper to extract active logged-in member's first name
+  const getUserFirstName = (): string | null => {
+    if (typeof window !== 'undefined') {
+      try {
+        const userStr = localStorage.getItem('church-user');
+        if (userStr) {
+          const userObj = JSON.parse(userStr);
+          if (userObj?.fullName && typeof userObj.fullName === 'string') {
+            const first = userObj.fullName.trim().split(/\s+/)[0];
+            if (first && first.length > 0) return first;
+          }
+        }
+      } catch {}
+    }
+    return null;
+  };
+
   // Initial welcome message
-  const getInitialMessage = (): ChatMessage => ({
-    id: 'welcome-msg',
-    role: 'assistant',
-    text: isAr
-      ? 'سلام ونعمة يا فادي ❤️\nأنا مساعد كنيسة الشهيد العظيم أبي سيفين، وموجود هنا لمساعدتك في كل استفساراتك.\nتقدر تسألني عن مواعيد القداسات، حجز موعد اعتراف مع الآباء، استمارة العضوية، أو رحلات الكنيسة، ونقدر نتمم الإجراء سوا مباشرة.'
-      : 'Peace and grace ❤️\nWelcome to Church of St. Abu Sefein. I am your church assistant. You can ask me about liturgy times, booking confession appointments, family membership, or church events.',
-    suggestedQuestions: isAr
-      ? [
-          '⛪ إمتى قداس يوم الجمعة؟',
-          '✝️ عايز أحجز موعد اعتراف مع أبونا',
-          '📋 استمارة العضوية الكنسية للأسرة',
-          '🚌 ما هي رحلات الكنيسة المتاحة؟',
-          '📍 أين تقع الكنيسة ومواعيد المزار؟'
-        ]
-      : [
-          '⛪ When is Friday Liturgy?',
-          '✝️ Book confession with Father',
-          '📋 Family membership registration',
-          '🚌 Upcoming church trips',
-          '📍 Church location and shrine hours'
-        ],
-    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  });
+  const getInitialMessage = (nameOverride?: string | null): ChatMessage => {
+    const firstName = nameOverride !== undefined ? nameOverride : getUserFirstName();
+    const greeting = firstName
+      ? (isAr ? `سلام ونعمة يا ${firstName} ❤️` : `Peace and grace, ${firstName} ❤️`)
+      : (isAr ? 'سلام ونعمة ❤️' : 'Peace and grace ❤️');
+
+    return {
+      id: 'welcome-msg',
+      role: 'assistant',
+      text: isAr
+        ? `${greeting}\nأنا مساعد كنيسة الشهيد العظيم أبي سيفين، وموجود هنا لمساعدتك في كل استفساراتك.\nتقدر تسألني عن مواعيد القداسات، حجز موعد اعتراف مع الآباء، استمارة العضوية، أو متابعة طلب سابق برقم المرجع، ونقدر نتمم الإجراء سوا مباشرة.`
+        : `${greeting}\nWelcome to Church of St. Abu Sefein. I am your church assistant. You can ask me about liturgy times, booking confession appointments, family membership, or tracking past requests.`,
+      suggestedQuestions: isAr
+        ? [
+            '⛪ إمتى قداس يوم الجمعة؟',
+            '✝️ عايز أحجز موعد اعتراف مع أبونا',
+            '📋 استمارة العضوية الكنسية للأسرة',
+            '🚌 ما هي رحلات الكنيسة المتاحة؟',
+            '📍 أين تقع الكنيسة ومواعيد المزار؟'
+          ]
+        : [
+            '⛪ When is Friday Liturgy?',
+            '✝️ Book confession with Father',
+            '📋 Family membership registration',
+            '🚌 Upcoming church trips',
+            '📍 Church location and shrine hours'
+          ],
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+  };
 
   // Load chat history from localStorage on client mount
   useEffect(() => {
+    const firstName = getUserFirstName();
     const saved = localStorage.getItem('church-ai-chat-history');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed);
+          // Clean any previous hardcoded "فادي" from saved history
+          const cleaned = parsed.map((m: ChatMessage) => {
+            if (m.id === 'welcome-msg') {
+              return getInitialMessage(firstName);
+            }
+            if (m.text && m.text.includes('يا فادي')) {
+              return {
+                ...m,
+                text: firstName ? m.text.replace(/يا فادي/g, `يا ${firstName}`) : m.text.replace(/يا فادي/g, '').replace(/\s{2,}/g, ' ')
+              };
+            }
+            return m;
+          });
+          setMessages(cleaned);
           return;
         }
       } catch {}
     }
-    setMessages([getInitialMessage()]);
+    setMessages([getInitialMessage(firstName)]);
   }, [language]);
 
   // Save history on change
@@ -447,12 +501,14 @@ export default function ChurchAiAssistant() {
         setBookingForm(prev => ({ ...prev, isSubmitting: false, successRef: refCode }));
 
         // Add confirmation message to chat
+        const memberFirst = getUserFirstName() || (bookingForm.fullName ? bookingForm.fullName.trim().split(/\s+/)[0] : null);
+        const nameGreeting = memberFirst ? (isAr ? ` يا ${memberFirst}` : `, ${memberFirst}`) : '';
         const confirmMsg: ChatMessage = {
           id: `sys-${Date.now()}`,
           role: 'assistant',
           text: isAr
-            ? `تم تسجيل طلب الموعد بنجاح يا فادي! ✨\nتم إرسال طلبك إلى ${bookingForm.priestName}.\nرقم المتابعة المرجعي الخاص بك: **#${refCode}**.\nسيقوم الأب الكاهن أو سكرتارية الكنيسة بالتواصل معك هاتفياً على الرقم (${bookingForm.phone}) لتأكيد الموعد النهائي.`
-            : `Appointment request submitted successfully! ✨\nYour request has been forwarded to ${bookingForm.priestName}.\nYour tracking reference code: **#${refCode}**.\nThe church office will contact you at (${bookingForm.phone}) to confirm.`,
+            ? `تم تسجيل طلب الموعد بنجاح${nameGreeting}! ✨\nتم إرسال طلبك إلى ${bookingForm.priestName}.\nرقم المتابعة المرجعي الخاص بك: **#${refCode}**.\nسيقوم الأب الكاهن أو سكرتارية الكنيسة بالتواصل معك هاتفياً على الرقم (${bookingForm.phone}) لتأكيد الموعد النهائي.`
+            : `Appointment request submitted successfully${nameGreeting}! ✨\nYour request has been forwarded to ${bookingForm.priestName}.\nYour tracking reference code: **#${refCode}**.\nThe church office will contact you at (${bookingForm.phone}) to confirm.`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setMessages(prev => [...prev, confirmMsg]);
@@ -1947,49 +2003,6 @@ export default function ChurchAiAssistant() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Quick Suggestions: Mobile-only Horizontal Chips */}
-              {((messages[messages.length - 1]?.suggestedQuestions && messages[messages.length - 1]?.suggestedQuestions!.length > 0) || routeSuggestions.length > 0) && (
-                <div
-                  className="flex sm:hidden"
-                  style={{
-                    padding: '6px 14px',
-                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-                    gap: '6px',
-                    overflowX: 'auto',
-                    scrollbarWidth: 'none',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {(messages[messages.length - 1]?.suggestedQuestions || routeSuggestions).slice(0, 5).map((q, qIdx) => (
-                    <button
-                      key={qIdx}
-                      onClick={() => handleSendMessage(q)}
-                      style={{
-                        padding: '5px 11px',
-                        borderRadius: '16px',
-                        backgroundColor: 'rgba(226, 183, 20, 0.1)',
-                        border: '1px solid rgba(226, 183, 20, 0.28)',
-                        color: '#fff',
-                        fontSize: '0.76rem',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.backgroundColor = 'rgba(226, 183, 20, 0.22)';
-                        e.currentTarget.style.borderColor = 'var(--accent-gold)';
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.backgroundColor = 'rgba(226, 183, 20, 0.1)';
-                        e.currentTarget.style.borderColor = 'rgba(226, 183, 20, 0.28)';
-                      }}
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               {/* Input Area */}
               <div
                 style={{
@@ -1999,7 +2012,7 @@ export default function ChurchAiAssistant() {
                   position: 'relative'
                 }}
               >
-                {/* Desktop FAQ Popover Menu */}
+                {/* Dynamic FAQ Popover Menu */}
                 {isFaqMenuOpen && (
                   <div
                     style={{
@@ -2039,7 +2052,7 @@ export default function ChurchAiAssistant() {
                       </button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '190px', overflowY: 'auto' }}>
-                      {FREQUENT_FAQS.map((q, idx) => (
+                      {(dynamicFaqs.length > 0 ? dynamicFaqs : FREQUENT_FAQS).map((q, idx) => (
                         <button
                           key={idx}
                           type="button"
@@ -2083,18 +2096,19 @@ export default function ChurchAiAssistant() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
-                    position: 'relative'
+                    position: 'relative',
+                    width: '100%'
                   }}
                 >
-                  {/* Desktop FAQ Toggle Button */}
+                  {/* FAQ Toggle Button - Visible everywhere (Mobile & Desktop) */}
                   <button
                     type="button"
                     onClick={() => setIsFaqMenuOpen(prev => !prev)}
-                    className="hidden sm:flex"
+                    className="flex"
                     title={isAr ? 'قائمة الأسئلة الشائعة' : 'FAQ Menu'}
                     style={{
                       height: '42px',
-                      padding: '0 12px',
+                      padding: '0 10px',
                       borderRadius: '21px',
                       backgroundColor: isFaqMenuOpen ? 'rgba(226, 183, 20, 0.25)' : 'rgba(226, 183, 20, 0.1)',
                       border: '1px solid rgba(226, 183, 20, 0.35)',
@@ -2109,7 +2123,7 @@ export default function ChurchAiAssistant() {
                     }}
                   >
                     <HelpCircle size={15} />
-                    <span>{isAr ? 'أسئلة شائعة' : 'FAQ'}</span>
+                    <span className="hidden xs:inline sm:inline">{isAr ? 'أسئلة شائعة' : 'FAQ'}</span>
                   </button>
 
                   <input
@@ -2119,14 +2133,15 @@ export default function ChurchAiAssistant() {
                     onChange={e => setInputText(e.target.value)}
                     placeholder={
                       isAr
-                        ? 'اكتب استفسارك هنا (مثل: إمتى قداس الجمعة أو حجز موعد اعتراف)...'
-                        : 'Ask your question here (e.g. When is Friday mass?)...'
+                        ? 'اكتب استفسارك هنا...'
+                        : 'Ask your question here...'
                     }
                     maxLength={1000}
                     disabled={isLoading}
                     style={{
-                      flex: 1,
-                      padding: '11px 16px',
+                      flex: '1 1 0%',
+                      minWidth: 0,
+                      padding: '11px 14px',
                       borderRadius: '24px',
                       backgroundColor: 'rgba(28, 33, 40, 0.9)',
                       border: '1px solid rgba(226, 183, 20, 0.25)',

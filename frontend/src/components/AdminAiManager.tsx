@@ -94,7 +94,7 @@ interface AiAnalytics {
 export default function AdminAiManager({ token, language, initialSubTab }: AdminAiManagerProps) {
   const isAr = language === 'ar';
 
-  type SubTabType = 'admin-chat' | 'knowledge' | 'chat-logs' | 'evaluation-lab' | 'provider-health' | 'faqs' | 'overview' | 'playground' | 'analytics';
+  type SubTabType = 'admin-chat' | 'knowledge' | 'chat-logs' | 'support-requests' | 'evaluation-lab' | 'provider-health' | 'faqs' | 'overview' | 'playground' | 'analytics';
   const [activeSubTab, setActiveSubTab] = useState<SubTabType>(initialSubTab || 'admin-chat');
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [analytics, setAnalytics] = useState<AiAnalytics | null>(null);
@@ -102,6 +102,12 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Support Requests states
+  const [supportRequests, setSupportRequests] = useState<any[]>([]);
+  const [supportFilter, setSupportFilter] = useState('ALL');
+  const [supportSearch, setSupportSearch] = useState('');
+  const [isLoadingSupport, setIsLoadingSupport] = useState(false);
 
   // AI Knowledge Chat states
   const [adminConversations, setAdminConversations] = useState<any[]>([]);
@@ -142,6 +148,11 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
   const [formDefaultLang, setFormDefaultLang] = useState('ar');
   const [formEscalationPhone, setFormEscalationPhone] = useState('+20 100 000 0002');
   const [formEscalationEmail, setFormEscalationEmail] = useState('contact@church.org');
+  const [formGeminiKey, setFormGeminiKey] = useState('');
+  const [formGroqKey, setFormGroqKey] = useState('');
+  const [formOpenaiKey, setFormOpenaiKey] = useState('');
+  const [formPrimaryProvider, setFormPrimaryProvider] = useState('gemini');
+  const [formFallbackProvider, setFormFallbackProvider] = useState('groq');
 
   // FAQ modal & form states
   const [isFaqModalOpen, setIsFaqModalOpen] = useState(false);
@@ -502,13 +513,66 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
     } catch (e) {}
   };
 
+  // Fetch Support Requests
+  const fetchSupportRequests = async () => {
+    if (!token) return;
+    setIsLoadingSupport(true);
+    try {
+      const query = new URLSearchParams();
+      if (supportFilter !== 'ALL') query.set('status', supportFilter);
+      if (supportSearch.trim()) query.set('search', supportSearch.trim());
+
+      const res = await fetch(`${API_URL}/ai/admin/support-requests?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSupportRequests(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      console.error('Error fetching support requests:', e);
+    } finally {
+      setIsLoadingSupport(false);
+    }
+  };
+
+  const handleUpdateSupportStatus = async (id: string, newStatus: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/ai/admin/support-requests/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        setSupportRequests(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
+        setStatusMsg({
+          text: isAr ? 'تم تحديث حالة الطلب بنجاح.' : 'Request status updated successfully.',
+          type: 'success'
+        });
+      }
+    } catch (e) {
+      console.error('Error updating support request:', e);
+    }
+  };
+
   useEffect(() => {
     fetchData();
     fetchAdminConversations();
     fetchKnowledgeItems();
     fetchEvaluationCases();
     fetchProviderHealth();
+    fetchSupportRequests();
   }, [token]);
+
+  useEffect(() => {
+    if (activeSubTab === 'support-requests') {
+      fetchSupportRequests();
+    }
+  }, [supportFilter, activeSubTab]);
 
   // Save Settings
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -528,16 +592,24 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
           enabled: formEnabled,
           defaultLanguage: formDefaultLang,
           escalationPhone: formEscalationPhone,
-          escalationEmail: formEscalationEmail
+          escalationEmail: formEscalationEmail,
+          geminiApiKey: formGeminiKey ? formGeminiKey : undefined,
+          groqApiKey: formGroqKey ? formGroqKey : undefined,
+          openaiApiKey: formOpenaiKey ? formOpenaiKey : undefined,
+          primaryProvider: formPrimaryProvider,
+          fallbackProvider: formFallbackProvider
         })
       });
 
       if (!res.ok) throw new Error('Failed to update settings');
 
       setStatusMsg({
-        text: isAr ? 'تم حفظ إعدادات المساعد بنجاح.' : 'AI settings saved successfully.',
+        text: isAr ? 'تم حفظ إعدادات ومفاتيح المساعد بنجاح.' : 'AI settings and keys saved successfully.',
         type: 'success'
       });
+      setFormGeminiKey('');
+      setFormGroqKey('');
+      setFormOpenaiKey('');
       fetchData();
     } catch (err) {
       setStatusMsg({
@@ -836,6 +908,7 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
           { id: 'admin-chat', icon: <MessageSquare size={16} />, labelAr: 'محادثة وتدريب المعرفة', labelEn: 'AI Knowledge Chat' },
           { id: 'knowledge', icon: <Database size={16} />, labelAr: 'مصادر المعرفة وسجلات الـ RAG', labelEn: 'Knowledge Pipeline' },
           { id: 'chat-logs', icon: <FileText size={16} />, labelAr: 'سجلات المحادثات والمنشأ', labelEn: 'Chat Logs & Provenance' },
+          { id: 'support-requests', icon: <HeartHandshake size={16} />, labelAr: 'طلبات المساعدة والرعاية', labelEn: 'Support Requests' },
           { id: 'evaluation-lab', icon: <Shield size={16} />, labelAr: 'مختبر التقييم الآلي', labelEn: 'Evaluation Lab' },
           { id: 'provider-health', icon: <BarChart3 size={16} />, labelAr: 'صحة المزودين والميزانية', labelEn: 'Provider Health' },
           { id: 'faqs', icon: <HelpCircle size={16} />, labelAr: 'الأسئلة السريعة والصور', labelEn: 'Quick Q&A & Media' },
@@ -1241,6 +1314,282 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* SUBTAB: SUPPORT REQUESTS & PASTORAL CARE TICKETS          */}
+      {/* ========================================================= */}
+      {activeSubTab === 'support-requests' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Header & Controls */}
+          <div
+            style={{
+              padding: '16px',
+              borderRadius: '12px',
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}
+          >
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <HeartHandshake size={18} style={{ color: 'var(--accent-gold)' }} />
+                {isAr ? 'طلبات المساعدة والرعاية الكنسية (Support Requests)' : 'Pastoral & Support Requests'}
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                {isAr
+                  ? 'هنا تصل جميع طلبات التواصل والرعاية والمساعدة التي يرسلها الأعضاء أو الزوار عبر المساعد الذكي مع أرقام المتابعة المرجعية.'
+                  : 'Manage all help, pastoral care, and support requests submitted by visitors and members through the AI.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={supportSearch}
+                onChange={e => setSupportSearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && fetchSupportRequests()}
+                placeholder={isAr ? 'بحث بالاسم، الهاتف، أو رقم المرجع...' : 'Search by name, phone, or #REQ...'}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.82rem',
+                  minWidth: '220px'
+                }}
+              />
+
+              <select
+                value={supportFilter}
+                onChange={e => setSupportFilter(e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.82rem'
+                }}
+              >
+                <option value="ALL">{isAr ? 'جميع الحالات' : 'All Statuses'}</option>
+                <option value="PENDING">{isAr ? '⏳ قيد الانتظار (Pending)' : 'Pending'}</option>
+                <option value="IN_PROGRESS">{isAr ? '🔄 قيد المتابعة (In Progress)' : 'In Progress'}</option>
+                <option value="RESOLVED">{isAr ? '✅ تم الحل والتواصل (Resolved)' : 'Resolved'}</option>
+                <option value="CANCELLED">{isAr ? '❌ ملغي (Cancelled)' : 'Cancelled'}</option>
+              </select>
+
+              <button
+                onClick={fetchSupportRequests}
+                disabled={isLoadingSupport}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 14px',
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(226, 183, 20, 0.15)',
+                  border: '1px solid rgba(226, 183, 20, 0.35)',
+                  color: 'var(--accent-gold)',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                <RefreshCw size={14} className={isLoadingSupport ? 'animate-spin' : ''} />
+                <span>{isAr ? 'تحديث' : 'Refresh'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Requests List */}
+          {isLoadingSupport ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 10px', display: 'block' }} />
+              <span>{isAr ? 'جاري تحميل طلبات الدعم والرعاية...' : 'Loading support requests...'}</span>
+            </div>
+          ) : supportRequests.length === 0 ? (
+            <div style={{ padding: '50px 20px', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+              <HeartHandshake size={36} style={{ color: 'var(--accent-gold)', opacity: 0.7, margin: '0 auto 10px', display: 'block' }} />
+              <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                {isAr ? 'لا توجد طلبات مساعدة مسجلة تطابق معايير البحث.' : 'No support requests found.'}
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {supportRequests.map((req: any) => {
+                const isProgress = req.status === 'IN_PROGRESS';
+                const isResolved = req.status === 'RESOLVED';
+                const isCancelled = req.status === 'CANCELLED';
+
+                const statusBg = isResolved ? 'rgba(46, 204, 113, 0.15)' : isProgress ? 'rgba(52, 152, 219, 0.15)' : isCancelled ? 'rgba(231, 76, 60, 0.15)' : 'rgba(243, 156, 18, 0.15)';
+                const statusColor = isResolved ? '#2ecc71' : isProgress ? '#3498db' : isCancelled ? '#e74c3c' : '#f39c12';
+                const statusText = isResolved ? (isAr ? 'تم الحل والتواصل' : 'Resolved') : isProgress ? (isAr ? 'قيد المتابعة' : 'In Progress') : isCancelled ? (isAr ? 'ملغي' : 'Cancelled') : (isAr ? 'قيد الانتظار' : 'Pending');
+
+                return (
+                  <div
+                    key={req.id}
+                    style={{
+                      padding: '16px',
+                      borderRadius: '12px',
+                      backgroundColor: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px'
+                    }}
+                  >
+                    {/* Top Row: Ref code, applicant, status badge */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <span
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '8px',
+                            backgroundColor: 'rgba(226, 183, 20, 0.15)',
+                            border: '1px solid rgba(226, 183, 20, 0.35)',
+                            color: 'var(--accent-gold)',
+                            fontWeight: 700,
+                            fontSize: '0.82rem',
+                            letterSpacing: '0.5px'
+                          }}
+                        >
+                          #{req.referenceCode}
+                        </span>
+
+                        <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+                          {req.name}
+                        </span>
+
+                        <a
+                          href={`tel:${req.phone}`}
+                          style={{
+                            fontSize: '0.82rem',
+                            color: 'var(--accent-gold)',
+                            textDecoration: 'none',
+                            backgroundColor: 'var(--bg-card)',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)'
+                          }}
+                        >
+                          📞 {req.phone}
+                        </a>
+
+                        {req.email && (
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                            ✉️ {req.email}
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            backgroundColor: statusBg,
+                            color: statusColor,
+                            fontSize: '0.76rem',
+                            fontWeight: 700
+                          }}
+                        >
+                          {statusText}
+                        </span>
+
+                        <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                          {new Date(req.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Middle Row: Message content */}
+                    <div
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: '8px',
+                        backgroundColor: 'var(--bg-card)',
+                        border: '1px solid var(--border-color)',
+                        fontSize: '0.88rem',
+                        lineHeight: 1.5,
+                        color: 'var(--text-primary)',
+                        whiteSpace: 'pre-wrap'
+                      }}
+                    >
+                      {req.message}
+                    </div>
+
+                    {/* Bottom Row: Category badge & Status quick actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', paddingTop: '6px', borderTop: '1px solid var(--border-color)' }}>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                        {isAr ? 'التصنيف:' : 'Category:'} <strong>{req.category || 'عام (GENERAL)'}</strong>
+                      </span>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          {isAr ? 'تغيير الحالة:' : 'Set Status:'}
+                        </span>
+
+                        <button
+                          onClick={() => handleUpdateSupportStatus(req.id, 'IN_PROGRESS')}
+                          disabled={req.status === 'IN_PROGRESS'}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid #3498db',
+                            backgroundColor: req.status === 'IN_PROGRESS' ? '#3498db' : 'transparent',
+                            color: req.status === 'IN_PROGRESS' ? '#fff' : '#3498db',
+                            fontSize: '0.74rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {isAr ? 'قيد المتابعة' : 'In Progress'}
+                        </button>
+
+                        <button
+                          onClick={() => handleUpdateSupportStatus(req.id, 'RESOLVED')}
+                          disabled={req.status === 'RESOLVED'}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid #2ecc71',
+                            backgroundColor: req.status === 'RESOLVED' ? '#2ecc71' : 'transparent',
+                            color: req.status === 'RESOLVED' ? '#fff' : '#2ecc71',
+                            fontSize: '0.74rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {isAr ? 'تم الحل والتواصل' : 'Resolved'}
+                        </button>
+
+                        <button
+                          onClick={() => handleUpdateSupportStatus(req.id, 'CANCELLED')}
+                          disabled={req.status === 'CANCELLED'}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid #e74c3c',
+                            backgroundColor: req.status === 'CANCELLED' ? '#e74c3c' : 'transparent',
+                            color: req.status === 'CANCELLED' ? '#fff' : '#e74c3c',
+                            fontSize: '0.74rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {isAr ? 'إلغاء' : 'Cancel'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -1893,6 +2242,128 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
                 type="email"
                 value={formEscalationEmail}
                 onChange={e => setFormEscalationEmail(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.85rem'
+                }}
+              />
+            </div>
+
+            {/* Divider */}
+            <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
+
+            <div>
+              <h4 style={{ margin: '0 0 6px 0', fontSize: '0.92rem', color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Zap size={16} />
+                {isAr ? 'تفعيل الذكاء الاصطناعي التوليدي الحواري (مثل ChatGPT)' : 'Generative LLM Engine Configuration'}
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.74rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                {isAr
+                  ? 'عند إدخال مفتاح Gemini أو Groq، سيتفاعل المساعد مع المستخدمين بأسلوب حواري ذكي وفهم كامل للأسئلة العشوائية بناءً على معلومات الكنيسة المعتمدة، بدلاً من مجرد الردود الجافة.'
+                  : 'Providing an API key enables real-time conversational understanding like ChatGPT grounded in church knowledge.'}
+              </p>
+            </div>
+
+            {/* Primary Provider Selector */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  {isAr ? 'المزود الأساسي:' : 'Primary Provider:'}
+                </label>
+                <select
+                  value={formPrimaryProvider}
+                  onChange={e => setFormPrimaryProvider(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.82rem'
+                  }}
+                >
+                  <option value="gemini">Google Gemini (موصى به)</option>
+                  <option value="groq">Groq LLaMA 3.1 (فائق السرعة)</option>
+                  <option value="openai">OpenAI GPT-4o-mini</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  {isAr ? 'المزود الاحتياطي (Failover):' : 'Fallback Provider:'}
+                </label>
+                <select
+                  value={formFallbackProvider}
+                  onChange={e => setFormFallbackProvider(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.82rem'
+                  }}
+                >
+                  <option value="groq">Groq LLaMA 3.1 (احتياطي سريع)</option>
+                  <option value="gemini">Google Gemini</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Google Gemini API Key */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  {isAr ? 'مفتاح Google Gemini API Key:' : 'Google Gemini API Key:'}
+                </label>
+                {settings?.hasGeminiKey && (
+                  <span style={{ fontSize: '0.72rem', color: '#2ecc71', fontWeight: 600 }}>
+                    ✓ {isAr ? `مسجل (${settings.maskedGeminiKey})` : `Configured (${settings.maskedGeminiKey})`}
+                  </span>
+                )}
+              </div>
+              <input
+                type="password"
+                value={formGeminiKey}
+                onChange={e => setFormGeminiKey(e.target.value)}
+                placeholder={settings?.hasGeminiKey ? (isAr ? 'اتركه فارغاً للاحتفاظ بالمفتاح الحالي، أو الصق مفتاحاً جديداً' : 'Leave blank to keep current key') : 'AIzaSy...'}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.85rem'
+                }}
+              />
+            </div>
+
+            {/* Groq API Key */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  {isAr ? 'مفتاح Groq API Key (بديل مجاني وسريع):' : 'Groq API Key (Fast & Free):'}
+                </label>
+                {settings?.hasGroqKey && (
+                  <span style={{ fontSize: '0.72rem', color: '#2ecc71', fontWeight: 600 }}>
+                    ✓ {isAr ? `مسجل (${settings.maskedGroqKey})` : `Configured (${settings.maskedGroqKey})`}
+                  </span>
+                )}
+              </div>
+              <input
+                type="password"
+                value={formGroqKey}
+                onChange={e => setFormGroqKey(e.target.value)}
+                placeholder={settings?.hasGroqKey ? (isAr ? 'اتركه فارغاً للاحتفاظ بالمفتاح الحالي، أو الصق مفتاحاً جديداً' : 'Leave blank to keep current key') : 'gsk_...'}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
