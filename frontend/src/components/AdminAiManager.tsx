@@ -485,18 +485,8 @@ export default function AdminAiManager({ token, language }: AdminAiManagerProps)
         </div>
       )}
 
-      {/* 2. Scrollable Sub-Tabs Navigation for Mobile & Desktop */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '8px',
-          overflowX: 'auto',
-          paddingBottom: '6px',
-          WebkitOverflowScrolling: 'touch',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none'
-        }}
-      >
+      {/* 2. Sub-Tabs Navigation (Fully responsive on Mobile and Desktop) */}
+      <div className="admin-ai-subtabs">
         {[
           { id: 'faqs', icon: <HelpCircle size={16} />, labelAr: 'الأسئلة السريعة والصور', labelEn: 'Quick Q&A & Media' },
           { id: 'overview', icon: <Settings size={16} />, labelAr: 'المزود المزدوج والإعدادات', labelEn: 'Dual Providers & Config' },
@@ -508,27 +498,11 @@ export default function AdminAiManager({ token, language }: AdminAiManagerProps)
           return (
             <button
               key={tab.id}
+              type="button"
+              className={`admin-ai-subtab-btn ${isActive ? 'admin-ai-subtab-btn-active' : ''}`}
               onClick={() => setActiveSubTab(tab.id as any)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                backgroundColor: isActive ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                color: isActive ? '#000' : 'var(--text-secondary)',
-                border: isActive ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
-                fontWeight: 600,
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                minHeight: '40px',
-                touchAction: 'manipulation',
-                flexShrink: 0,
-                transition: 'all 0.2s ease'
-              }}
             >
-              {tab.icon}
+              <span style={{ display: 'flex', alignItems: 'center' }}>{tab.icon}</span>
               <span>{isAr ? tab.labelAr : tab.labelEn}</span>
             </button>
           );

@@ -62,7 +62,7 @@ export default function Loading() {
       >
         <img
           src="/logo.png"
-          alt="كنيسة السيدة العذراء والشهيد أبي سيفين"
+          alt="كنيسة الشهيد العظيم أبي سيفين"
           style={{
             maxWidth: '100%',
             maxHeight: '100%',

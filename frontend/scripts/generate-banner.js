@@ -51,10 +51,10 @@ async function createOgBanner() {
 
     <!-- Typography -->
     <!-- Arabic Church Name -->
-    <text x="600" y="285" font-family="'Cairo', system-ui, sans-serif" font-size="38" font-weight="700" fill="#FFFFFF" text-anchor="middle">كنيسة السيدة العذراء والشهيد أبي سيفين</text>
+    <text x="600" y="285" font-family="'Cairo', system-ui, sans-serif" font-size="40" font-weight="700" fill="#FFFFFF" text-anchor="middle">كنيسة الشهيد العظيم أبي سيفين</text>
     
     <!-- English Church Name -->
-    <text x="600" y="335" font-family="'Outfit', system-ui, sans-serif" font-size="24" font-weight="600" fill="#E2B714" text-anchor="middle">St. Mary &amp; St. Philopater Coptic Orthodox Church</text>
+    <text x="600" y="335" font-family="'Outfit', system-ui, sans-serif" font-size="24" font-weight="600" fill="#E2B714" text-anchor="middle">St. Philopater Coptic Orthodox Church</text>
 
     <!-- Gold Divider -->
     <rect x="340" y="365" width="520" height="2" fill="url(#goldLine)" />
@@ -81,7 +81,7 @@ async function createOgBanner() {
     .png()
     .toFile(bannerPath);
 
-  console.log('og-banner.png created successfully at:', bannerPath);
+  console.log('og-banner.png updated successfully with official name at:', bannerPath);
 }
 
 createOgBanner().catch(console.error);

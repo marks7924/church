@@ -42,6 +42,7 @@ export default function ChurchAiAssistant() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showPrivacyBanner, setShowPrivacyBanner] = useState(true);
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
+  const [isFooterVisible, setIsFooterVisible] = useState(false);
 
   // Hide AI trigger button whenever the mobile navigation drawer is open
   useEffect(() => {
@@ -69,6 +70,34 @@ export default function ChurchAiAssistant() {
       observer.disconnect();
     };
   }, []);
+
+  // Hide AI trigger button on mobile when scrolling over the footer
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const footer = document.querySelector('footer');
+    if (!footer) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        const isNearFooter = entry.isIntersecting;
+        setIsFooterVisible(isNearFooter);
+        if (typeof document !== 'undefined') {
+          document.body.classList.toggle('footer-in-view', isNearFooter);
+        }
+      },
+      { threshold: 0.05 }
+    );
+
+    observer.observe(footer);
+    return () => {
+      observer.disconnect();
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('footer-in-view');
+      }
+    };
+  }, [pathname]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -382,7 +411,7 @@ export default function ChurchAiAssistant() {
   return (
     <>
       {/* 1. Floating Action Trigger Button (Bottom corner) */}
-      {!isOpen && !isNavDrawerOpen && !isAuthPage && (
+      {!isOpen && !isNavDrawerOpen && !isAuthPage && !isFooterVisible && (
         <button
           id="church-ai-trigger-btn"
           onClick={() => {
