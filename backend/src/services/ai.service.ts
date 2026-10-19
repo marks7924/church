@@ -428,24 +428,58 @@ export async function callGeminiProvider(
   maxTokens: number,
   timeoutMs: number
 ): Promise<ProviderResult> {
+  const cleanKey = apiKey.trim();
+  if (!cleanKey) return { success: false, errorMessage: 'Gemini API key is empty' };
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    // Gemini rules:
+    // 1. Contents must begin with role 'user'.
+    // 2. Roles must strictly alternate: 'user' -> 'model' -> 'user' -> 'model' -> 'user'.
+    const rawTurns: { role: 'user' | 'model'; text: string }[] = [];
 
-    // Build Gemini contents array
-    const contents: any[] = [];
-    history.slice(-4).forEach(h => {
-      contents.push({
+    const validHistory = (Array.isArray(history) ? history : []).filter(
+      h => h && typeof h.content === 'string' && h.content.trim().length > 0
+    );
+
+    // Skip any leading assistant/model greeting so first turn is guaranteed to be 'user'
+    const firstUserIdx = validHistory.findIndex(h => h.role === 'user');
+    const prunedHistory = firstUserIdx >= 0 ? validHistory.slice(firstUserIdx) : [];
+
+    prunedHistory.slice(-4).forEach(h => {
+      rawTurns.push({
         role: h.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: h.content }]
+        text: h.content.trim()
       });
     });
-    contents.push({
+
+    rawTurns.push({
       role: 'user',
-      parts: [{ text: userMessage }]
+      text: userMessage.trim()
     });
+
+    // Enforce strict alternating turns and merge consecutive identical roles
+    const contents: any[] = [];
+    for (const turn of rawTurns) {
+      if (contents.length === 0) {
+        if (turn.role === 'user') {
+          contents.push({ role: 'user', parts: [{ text: turn.text }] });
+        }
+      } else {
+        const last = contents[contents.length - 1];
+        if (last.role === turn.role) {
+          last.parts[0].text += `\n${turn.text}`;
+        } else {
+          contents.push({ role: turn.role, parts: [{ text: turn.text }] });
+        }
+      }
+    }
+
+    if (contents.length === 0) {
+      contents.push({ role: 'user', parts: [{ text: userMessage.trim() }] });
+    }
 
     const bodyPayload = {
       systemInstruction: {
@@ -458,50 +492,58 @@ export async function callGeminiProvider(
       }
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(bodyPayload),
-      signal: controller.signal
-    });
+    // Candidate model priority list
+    const candidateModels = [model || 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-latest']
+      .filter((v, i, a) => a.indexOf(v) === i);
+
+    let lastError = '';
+
+    for (const curModel of candidateModels) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(curModel)}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyPayload),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          lastError = `Gemini HTTP ${response.status} (${curModel}): ${errText.slice(0, 200)}`;
+          console.error('[Gemini API Error]', lastError);
+          // If model not found (404), try next model
+          if (response.status === 404) continue;
+          break;
+        }
+
+        const data = (await response.json()) as any;
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (text && typeof text === 'string') {
+          clearTimeout(timeoutId);
+          const tokensUsed = data?.usageMetadata?.totalTokenCount || Math.round(text.length / 4);
+          return {
+            success: true,
+            text,
+            tokensUsed
+          };
+        }
+      } catch (err: any) {
+        lastError = err.message || 'Gemini request error';
+      }
+    }
 
     clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errText = await response.text();
-      const status = response.status;
-      // 429 = Rate Limit/Quota; 500, 502, 503, 504 = Server errors
-      const isTransient = status === 429 || (status >= 500 && status <= 504);
-      return {
-        success: false,
-        isTransient,
-        errorMessage: `Gemini HTTP ${status}: ${errText.slice(0, 200)}`
-      };
-    }
-
-    const data = (await response.json()) as any;
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!text || typeof text !== 'string') {
-      return {
-        success: false,
-        isTransient: true,
-        errorMessage: 'Gemini returned empty or malformed candidate part'
-      };
-    }
-
-    const tokensUsed = data?.usageMetadata?.totalTokenCount || Math.round(text.length / 4);
-
     return {
-      success: true,
-      text,
-      tokensUsed
+      success: false,
+      isTransient: true,
+      errorMessage: lastError || 'Gemini returned empty candidate'
     };
   } catch (err: any) {
     clearTimeout(timeoutId);
     const isTimeout = err.name === 'AbortError' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT';
+    console.error('[Gemini Exception]', err.message);
     return {
       success: false,
       isTransient: isTimeout || true,
@@ -512,7 +554,7 @@ export async function callGeminiProvider(
 
 /**
  * Groq Dedicated Fallback Provider Client
- * Uses official Groq OpenAI-compatible contract (with strictly non-deprecated model)
+ * Uses official Groq OpenAI-compatible contract
  */
 export async function callGroqProvider(
   apiKey: string,
@@ -523,69 +565,80 @@ export async function callGroqProvider(
   maxTokens: number,
   timeoutMs: number
 ): Promise<ProviderResult> {
+  const cleanKey = apiKey.trim();
+  if (!cleanKey) return { success: false, errorMessage: 'Groq API key is empty' };
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  // Guard against deprecated llama-3.3-70b-versatile
-  const safeModel = model === 'llama-3.3-70b-versatile' ? 'llama-3.1-8b-instant' : model;
+  const candidateModels = [model || 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768']
+    .filter((v, i, a) => a.indexOf(v) === i);
 
   try {
     const url = 'https://api.groq.com/openai/v1/chat/completions';
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...history.slice(-4).map(h => ({ role: h.role, content: h.content })),
-      { role: 'user', content: userMessage }
+      ...history
+        .filter(h => h && h.content && typeof h.content === 'string' && h.content.trim().length > 0)
+        .slice(-6)
+        .map(h => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: h.content.trim() })),
+      { role: 'user', content: userMessage.trim() }
     ];
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: safeModel,
-        messages,
-        temperature: 0.3,
-        max_tokens: maxTokens
-      }),
-      signal: controller.signal
-    });
+    let lastError = '';
+
+    for (const curModel of candidateModels) {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${cleanKey}`
+          },
+          body: JSON.stringify({
+            model: curModel,
+            messages,
+            temperature: 0.3,
+            max_tokens: maxTokens
+          }),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          lastError = `Groq HTTP ${response.status} (${curModel}): ${errText.slice(0, 200)}`;
+          console.error('[Groq API Error]', lastError);
+          if (response.status === 404 || response.status === 400) continue;
+          break;
+        }
+
+        const data = (await response.json()) as any;
+        const text = data?.choices?.[0]?.message?.content;
+
+        if (text && typeof text === 'string') {
+          clearTimeout(timeoutId);
+          const tokensUsed = data?.usage?.total_tokens || Math.round(text.length / 4);
+          return {
+            success: true,
+            text,
+            tokensUsed
+          };
+        }
+      } catch (err: any) {
+        lastError = err.message || 'Groq request error';
+      }
+    }
 
     clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errText = await response.text();
-      const status = response.status;
-      const isTransient = status === 429 || (status >= 500 && status <= 504);
-      return {
-        success: false,
-        isTransient,
-        errorMessage: `Groq HTTP ${status}: ${errText.slice(0, 200)}`
-      };
-    }
-
-    const data = (await response.json()) as any;
-    const text = data?.choices?.[0]?.message?.content;
-
-    if (!text || typeof text !== 'string') {
-      return {
-        success: false,
-        isTransient: true,
-        errorMessage: 'Groq returned empty content'
-      };
-    }
-
-    const tokensUsed = data?.usage?.total_tokens || Math.round(text.length / 4);
-
     return {
-      success: true,
-      text,
-      tokensUsed
+      success: false,
+      isTransient: true,
+      errorMessage: lastError || 'Groq returned empty content'
     };
   } catch (err: any) {
     clearTimeout(timeoutId);
     const isTimeout = err.name === 'AbortError' || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT';
+    console.error('[Groq Exception]', err.message);
     return {
       success: false,
       isTransient: isTimeout || true,
@@ -1005,10 +1058,11 @@ CRITICAL OPERATIONAL RULES:
 
     // 1. Confession booking / Priests Directory & Individual Father Inquiries (High Priority)
     if (
-      q.includes('اعتراف') || q.includes('ابونا') || q.includes('سيدنا') || q.includes('كاهن') || 
+      q.includes('اعتراف') || q.includes('اعترف') || q.includes('اعترافات') || q.includes('معترف') ||
+      q.includes('ابونا') || q.includes('سيدنا') || q.includes('كاهن') || 
       q.includes('كاراس') || q.includes('مينا') || q.includes('فيلوباتير') || q.includes('يوحنا') || 
       q.includes('مايكل') || q.includes('موسى') || q.includes('اثناسيوس') ||
-      q.includes('confession') || q.includes('priest') || q.includes('bishop')
+      q.includes('confession') || q.includes('confess') || q.includes('priest') || q.includes('bishop')
     ) {
       // Individual Priest Inquiries
       if (q.includes('كاراس')) {
@@ -1539,23 +1593,69 @@ CRITICAL OPERATIONAL RULES:
     // 4. Read Configuration & Provider Keys from SystemConfig & Environment
     const systemSettings = await ChurchKnowledgeRetriever.getAiSystemSettings();
 
-    const geminiKey = systemSettings['ai_gemini_key'] || process.env.GEMINI_API_KEY?.trim() || '';
-    const geminiModel = systemSettings['ai_gemini_model'] || process.env.GEMINI_MODEL?.trim() || 'gemini-1.5-flash';
+    const geminiKey = (
+      systemSettings['ai_gemini_key'] ||
+      process.env.GEMINI_API_KEY ||
+      process.env.GEMINI_KEY ||
+      process.env.GOOGLE_GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      ''
+    ).trim();
+    const geminiModel = (
+      systemSettings['ai_gemini_model'] ||
+      process.env.GEMINI_MODEL ||
+      'gemini-1.5-flash'
+    ).trim();
 
-    const groqKey = systemSettings['ai_groq_key'] || process.env.GROQ_API_KEY?.trim() || '';
-    let groqModel = systemSettings['ai_groq_model'] || process.env.GROQ_MODEL?.trim() || 'llama-3.1-8b-instant';
-    if (groqModel === 'llama-3.3-70b-versatile') {
-      groqModel = 'llama-3.1-8b-instant';
+    const groqKey = (
+      systemSettings['ai_groq_key'] ||
+      process.env.GROQ_API_KEY ||
+      process.env.GROQ_KEY ||
+      ''
+    ).trim();
+    let groqModel = (
+      systemSettings['ai_groq_model'] ||
+      process.env.GROQ_MODEL ||
+      'llama-3.1-8b-instant'
+    ).trim();
+
+    const openaiKey = (
+      systemSettings['ai_openai_key'] ||
+      process.env.OPENAI_API_KEY ||
+      process.env.OPENAI_KEY ||
+      ''
+    ).trim();
+    const openaiModel = (
+      systemSettings['ai_openai_model'] ||
+      process.env.OPENAI_MODEL ||
+      'gpt-4o-mini'
+    ).trim();
+
+    const deepseekKey = (
+      systemSettings['ai_deepseek_key'] ||
+      process.env.DEEPSEEK_API_KEY ||
+      process.env.DEEPSEEK_KEY ||
+      ''
+    ).trim();
+    const deepseekModel = (
+      systemSettings['ai_deepseek_model'] ||
+      process.env.DEEPSEEK_MODEL ||
+      'deepseek-chat'
+    ).trim();
+
+    // Auto-detect available provider: If selected provider has no key but another does, auto-switch!
+    let primaryProvider = (systemSettings['ai_provider'] || process.env.AI_PROVIDER || 'gemini').toLowerCase();
+    let fallbackProvider = (systemSettings['ai_fallback_provider'] || process.env.AI_FALLBACK_PROVIDER || 'groq').toLowerCase();
+
+    if (primaryProvider === 'gemini' && !geminiKey && groqKey) {
+      primaryProvider = 'groq';
+      fallbackProvider = 'gemini';
+    } else if (primaryProvider === 'groq' && !groqKey && geminiKey) {
+      primaryProvider = 'gemini';
+      fallbackProvider = 'groq';
+    } else if (!geminiKey && !groqKey && openaiKey) {
+      primaryProvider = 'openai';
     }
-
-    const openaiKey = systemSettings['ai_openai_key'] || process.env.OPENAI_API_KEY?.trim() || '';
-    const openaiModel = systemSettings['ai_openai_model'] || process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini';
-
-    const deepseekKey = systemSettings['ai_deepseek_key'] || process.env.DEEPSEEK_API_KEY?.trim() || '';
-    const deepseekModel = systemSettings['ai_deepseek_model'] || process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-chat';
-
-    const primaryProvider = (systemSettings['ai_provider'] || process.env.AI_PROVIDER || 'gemini').toLowerCase();
-    const fallbackProvider = (systemSettings['ai_fallback_provider'] || process.env.AI_FALLBACK_PROVIDER || 'groq').toLowerCase();
     const maxTokens = parseInt(process.env.AI_MAX_OUTPUT_TOKENS || '1024', 10);
     const timeoutMs = parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '25000', 10);
 
