@@ -8,11 +8,17 @@ import { API_URL } from '../../config';
 import { formatTimeSlot, formatDateTime } from '../../utils/format';
 import { 
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
-  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown, Scissors, Clock, Sparkles, MessageSquare 
+  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown, Scissors, Clock, Sparkles, MessageSquare,
+  Facebook, Mail, QrCode
 } from 'lucide-react';
 import PriestScheduleManager from '../../components/PriestScheduleManager';
 import ImageCropModal from '../../components/ImageCropModal';
 import AdminAiManager from '../../components/AdminAiManager';
+import FacebookNewsModerator from '../../components/FacebookNewsModerator';
+import AdminEmailCenter from '../../components/AdminEmailCenter';
+import EventsInvitationsManager from '../../components/EventsInvitationsManager';
+import FyQuestionModerator from '../../components/FyQuestionModerator';
+import VipInvitationCard from '../../components/VipInvitationCard';
 
 interface Booking {
   id: string;
@@ -124,6 +130,7 @@ export default function DashboardPage() {
   const [pendingMembers, setPendingMembers] = useState<PendingProfile[]>([]);
   const [allMembers, setAllMembers] = useState<PendingProfile[]>([]);
   const [contactMessages, setContactMessages] = useState<any[]>([]);
+  const [myInvitations, setMyInvitations] = useState<any[]>([]);
   
   // Live Config State
   const [isLiveActive, setIsLiveActive] = useState(false);
@@ -307,6 +314,12 @@ export default function DashboardPage() {
         labelEn: 'My Profile & Status',
         icon: <User size={16} />
       });
+      tabs.push({
+        id: 'my-invitations',
+        labelAr: language === 'ar' ? 'دعواتي الرسمية (VIP)' : 'My Official Invitations',
+        labelEn: language === 'ar' ? 'دعواتي الرسمية (VIP)' : 'My Official Invitations',
+        icon: <QrCode size={16} />
+      });
     }
 
     // Non-member News Tab
@@ -389,6 +402,35 @@ export default function DashboardPage() {
         labelAr: language === 'ar' ? 'إدارة المساعد الذكي (AI Manager)' : 'AI Assistant Manager',
         labelEn: language === 'ar' ? 'إدارة المساعد الذكي (AI Manager)' : 'AI Assistant Manager',
         icon: <Sparkles size={16} />
+      });
+
+      // Four Integrated Systems Admin Tabs
+      tabs.push({
+        id: 'facebook-news',
+        labelAr: language === 'ar' ? 'مشاركات فيسبوك والأخبار' : 'Facebook News & Moderation',
+        labelEn: language === 'ar' ? 'مشاركات فيسبوك والأخبار' : 'Facebook News & Moderation',
+        icon: <Facebook size={16} />
+      });
+
+      tabs.push({
+        id: 'email-center',
+        labelAr: language === 'ar' ? 'مركز البريد الإلكتروني' : 'Admin Email Center',
+        labelEn: language === 'ar' ? 'مركز البريد الإلكتروني' : 'Admin Email Center',
+        icon: <Mail size={16} />
+      });
+
+      tabs.push({
+        id: 'events-qr',
+        labelAr: language === 'ar' ? 'الدعوات وتأكيد الحضور (QR)' : 'Invitations & QR Scanner',
+        labelEn: language === 'ar' ? 'الدعوات وتأكيد الحضور (QR)' : 'Invitations & QR Scanner',
+        icon: <QrCode size={16} />
+      });
+
+      tabs.push({
+        id: 'fy-moderation',
+        labelAr: language === 'ar' ? 'إشراف أسئلة الإيمان (FY)' : 'FY Questions Moderation',
+        labelEn: language === 'ar' ? 'إشراف أسئلة الإيمان (FY)' : 'FY Questions Moderation',
+        icon: <HelpCircle size={16} />
       });
     }
 
@@ -684,6 +726,17 @@ export default function DashboardPage() {
           if (Array.isArray(data)) setContactMessages(data);
         })
         .catch(err => console.log(err));
+    }
+
+    if (token && (activeTab === 'my-profile' || activeTab === 'my-invitations')) {
+      fetch(`${API_URL}/invitations/my-invitations`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setMyInvitations(data);
+        })
+        .catch(err => console.log('Error fetching invitations:', err));
     }
   }, [activeTab, token, user]);
 
@@ -1763,6 +1816,48 @@ export default function DashboardPage() {
             )}
           </div>
 
+          {/* Member's Invitations & VIP Passes */}
+          <div className="dashboard-panel">
+            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
+              🎟️ {language === 'ar' ? 'دعواتي الرسمية وبطاقات الدخول (VIP Passes)' : 'My Official Event Invitations & Passes'}
+            </h3>
+
+            {myInvitations.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                {myInvitations.map(inv => (
+                  <VipInvitationCard key={inv.id} invitation={inv} language={language} />
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', textAlign: 'center', margin: '1rem 0' }}>
+                {language === 'ar' ? 'لا توجد دعوات حالية صادرة لحسابك.' : 'No active invitations found for your account.'}
+              </p>
+            )}
+          </div>
+
+        </div>
+      )}
+
+      {/* Tab: Member Dedicated Invitations View */}
+      {activeTab === 'my-invitations' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          <div className="dashboard-panel">
+            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
+              🎟️ {language === 'ar' ? 'دعواتي الرسمية وبطاقات الدخول (VIP Passes)' : 'My Official Event Invitations & Passes'}
+            </h3>
+
+            {myInvitations.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                {myInvitations.map(inv => (
+                  <VipInvitationCard key={inv.id} invitation={inv} language={language} />
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', textAlign: 'center', margin: '2rem 0' }}>
+                {language === 'ar' ? 'لا توجد دعوات صادرة لحسابك حتى الآن.' : 'No active invitations found for your account.'}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -4440,6 +4535,34 @@ export default function DashboardPage() {
       {/* Tab: AI Assistant Administration & Safe Testing Playground */}
       {activeTab === 'ai-assistant' && (
         <AdminAiManager token={token} language={language} />
+      )}
+
+      {/* Tab: Facebook Posts & News Moderation */}
+      {activeTab === 'facebook-news' && (
+        <div className="dashboard-panel">
+          <FacebookNewsModerator token={token} />
+        </div>
+      )}
+
+      {/* Tab: Official Email Center */}
+      {activeTab === 'email-center' && (
+        <div className="dashboard-panel">
+          <AdminEmailCenter token={token} />
+        </div>
+      )}
+
+      {/* Tab: Events, VIP Invitations & Continuous QR Check-in */}
+      {activeTab === 'events-qr' && (
+        <div className="dashboard-panel">
+          <EventsInvitationsManager token={token} />
+        </div>
+      )}
+
+      {/* Tab: FY Questions Moderation */}
+      {activeTab === 'fy-moderation' && (
+        <div className="dashboard-panel">
+          <FyQuestionModerator token={token} />
+        </div>
       )}
 
       {/* InstaPay Receipt Preview Modal */}

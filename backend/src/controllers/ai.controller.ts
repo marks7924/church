@@ -165,7 +165,7 @@ router.get('/diagnostics', async (req: Request, res: Response) => {
         const listRes = await fetch(listUrl, {
           headers: { Authorization: `Bearer ${groqKey}` }
         });
-        const listData = await listRes.json();
+        const listData = (await listRes.json()) as any;
         const modelIds = listData?.data?.map((m: any) => m.id) || [];
         return {
           httpStatus: listRes.status,

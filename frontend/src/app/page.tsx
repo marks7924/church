@@ -67,6 +67,7 @@ export default function Home() {
     id: string;
     content: string | null;
     imageUrl: string | null;
+    originalPermalink?: string | null;
     createdAt: string;
     author: {
       fullName: string;
@@ -1088,6 +1089,27 @@ export default function Home() {
             <p style={{ fontSize: '1.1rem', lineHeight: '1.7', color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
               {selectedNews.content}
             </p>
+
+            {selectedNews.originalPermalink && (
+              <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                <a
+                  href={selectedNews.originalPermalink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    color: '#1877f2',
+                    textDecoration: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.92rem'
+                  }}
+                >
+                  <span>{language === 'ar' ? 'عرض المنشور الأصلي المعتمد على فيسبوك ↗' : 'View original Facebook post ↗'}</span>
+                </a>
+              </div>
+            )}
           </div>
         </div>
       )}

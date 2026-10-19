@@ -100,6 +100,7 @@ export default function Navbar() {
 
   const navItems = [
     { name: t('nav_home'), path: '/' },
+    { name: t('nav_fy'), path: '/fy' },
     { name: t('nav_schedule'), path: '/schedule' },
     { name: t('nav_sermons'), path: '/sermons' },
     { name: t('nav_ministries'), path: '/ministries' },

@@ -62,11 +62,17 @@ model User {
   updatedAt        DateTime          @updatedAt
 
   // Relations
-  familyProfile    FamilyHead?
-  priestProfile    PriestProfile?
-  appointments     Appointment[]     @relation("MemberAppointments")
-  newsPosts        News[]            @relation("UserNews")
-  adminAiConversations AiAdminConversation[] @relation("UserAdminAiConversations")
+  familyProfile        FamilyHead?
+  priestProfile        PriestProfile?
+  appointments         Appointment[]             @relation("MemberAppointments")
+  newsPosts            News[]                    @relation("UserNews")
+  adminAiConversations AiAdminConversation[]     @relation("UserAdminAiConversations")
+  receivedEmails       EmailMessage[]
+  eventInvitations     EventInvitation[]
+  eventApplications    EventApplication[]
+  bibleProgress        BibleReadingProgress[]
+  biblePosition        BibleLastPosition?
+  fySubmissions        FyMemberQuestionSubmission[]
 }
 
 model PriestProfile {
@@ -174,20 +180,33 @@ model Sermon {
 }
 
 model Event {
-  id            String   @id @default(uuid())
-  titleAr       String
-  titleEn       String
-  descriptionAr String
-  descriptionEn String
-  type          String   // e.g. "MASS", "CONFERENCE", "TRIP", "PRAYERS"
-  date          DateTime
-  locationAr    String?
-  locationEn    String?
-  price         Float?   // Optional (e.g. for trips)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                    String             @id @default(uuid())
+  titleAr               String
+  titleEn               String
+  descriptionAr         String
+  descriptionEn         String
+  type                  String             // e.g. "MASS", "CONFERENCE", "TRIP", "PRAYERS", "SPECIAL"
+  date                  DateTime
+  locationAr            String?
+  locationEn            String?
+  price                 Float?             // Optional (e.g. for trips)
+  imageUrl              String?
+  isPublicVisible       Boolean            @default(false)
+  isApplicationActive   Boolean            @default(false)
+  status                String             @default("DRAFT") // DRAFT, PUBLISHED, OPEN, CLOSED, COMPLETED, CANCELLED
+  applicationOpenDate   DateTime?
+  applicationCloseDate  DateTime?
+  timezone              String             @default("Africa/Cairo")
+  startTime             String?
+  endTime               String?
+  eligibilityRulesJson  String             @default("{}")
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 
-  tripBookings  TripBooking[]
+  tripBookings          TripBooking[]
+  locations             EventLocation[]
+  invitations           EventInvitation[]
+  applications          EventApplication[]
 }
 
 model SystemConfig {
@@ -196,13 +215,18 @@ model SystemConfig {
 }
 
 model News {
-  id        String   @id @default(uuid())
-  content   String?  // the text content (can be rich text or plain)
-  imageUrl  String?  // optional uploaded image (base64 or link)
-  authorId  String
-  author    User     @relation("UserNews", fields: [authorId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  String              @id @default(uuid())
+  titleAr             String?
+  titleEn             String?
+  content             String?             // the text content (can be rich text or plain)
+  imageUrl            String?             // optional uploaded image (base64 or link)
+  authorId            String
+  author              User                @relation("UserNews", fields: [authorId], references: [id], onDelete: Cascade)
+  originalFbPermalink String?             // Original Facebook post link if imported
+  fbPostImportId      String?             @unique
+  fbPostImport        FacebookPostImport? @relation(fields: [fbPostImportId], references: [id], onDelete: SetNull)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 }
 
 model ActionLog {
@@ -350,4 +374,313 @@ model AiEvaluationCase {
 
   @@index([category])
 }
+
+// ==========================================
+// SYSTEM 1: FACEBOOK & NEWS MODERATION
+// ==========================================
+
+model FacebookPostImport {
+  id               String    @id @default(uuid())
+  externalPostId   String    @unique
+  permalink        String
+  authorName       String    @default("كنيسة الشهيد أبي سيفين")
+  postText         String?
+  mediaUrlsJson    String    @default("[]") // Array of { url: string, type: 'image' | 'video', sizeBytes?: number }
+  totalMediaSize   Int       @default(0)
+  publishedAt      DateTime  @default(now())
+  status           String    @default("PENDING") // PENDING, PUBLISHED, ARCHIVED, FAILED
+  importType       String    @default("MANUAL")  // AUTOMATIC, MANUAL
+  errorMessage     String?
+  publishedNews    News?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([status])
+  @@index([externalPostId])
+}
+
+// ==========================================
+// SYSTEM 2: ADMIN EMAIL CENTER
+// ==========================================
+
+model EmailConversation {
+  id             String         @id @default(uuid())
+  subject        String
+  threadId       String?        @unique
+  status         String         @default("ACTIVE") // ACTIVE, ARCHIVED, SPAM
+  lastMessageAt  DateTime       @default(now())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  messages       EmailMessage[]
+
+  @@index([status])
+  @@index([lastMessageAt])
+}
+
+model EmailMessage {
+  id               String            @id @default(uuid())
+  conversationId   String
+  conversation     EmailConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderEmail      String
+  senderName       String?
+  recipientEmail   String
+  recipientName    String?
+  recipientUserId  String?
+  recipientUser    User?             @relation(fields: [recipientUserId], references: [id], onDelete: SetNull)
+  direction        String            // OUTBOUND, INBOUND
+  subject          String
+  bodyHtml         String
+  bodyText         String
+  messageIdHeader  String?           @unique
+  inReplyToHeader  String?
+  status           String            @default("QUEUED") // QUEUED, SENT, DELIVERED, BOUNCED, FAILED, RECEIVED
+  failureReason    String?
+  attachmentsJson  String            @default("[]")
+  createdAt        DateTime          @default(now())
+
+  @@index([conversationId])
+  @@index([recipientEmail])
+  @@index([status])
+}
+
+// ==========================================
+// SYSTEM 3: EVENTS, INVITATIONS, VIP & QR
+// ==========================================
+
+model EventLocation {
+  id              String                     @id @default(uuid())
+  eventId         String
+  event           Event                      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  nameAr          String
+  nameEn          String
+  addressAr       String?
+  addressEn       String?
+  maxCapacity     Int
+  confirmedCount  Int                        @default(0)
+  isFull          Boolean                    @default(false)
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  invitations     EventInvitation[]
+  applications    EventApplication[]
+  capacityLogs    EventLocationCapacityLog[]
+
+  @@index([eventId])
+}
+
+model EventLocationCapacityLog {
+  id          String        @id @default(uuid())
+  locationId  String
+  location    EventLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  oldCapacity Int
+  newCapacity Int
+  changedById String
+  reason      String
+  createdAt   DateTime      @default(now())
+
+  @@index([locationId])
+}
+
+model EventApplication {
+  id            String         @id @default(uuid())
+  eventId       String
+  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  locationId    String
+  location      EventLocation  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  externalEmail String?
+  fullName      String
+  phone         String
+  status        String         @default("PENDING") // PENDING, APPROVED, REJECTED, CONFIRMED
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([eventId])
+  @@index([locationId])
+  @@index([status])
+}
+
+model EventInvitation {
+  id                  String             @id @default(uuid())
+  eventId             String
+  event               Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  locationId          String
+  location            EventLocation      @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  userId              String?
+  user                User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  recipientEmail      String
+  recipientName       String
+  type                String             @default("STANDARD") // STANDARD, VIP
+  qrToken             String             @unique
+  status              String             @default("ACTIVE")   // ACTIVE, REDEEMED, CANCELLED, REVOKED, EXPIRED
+  redeemedAt          DateTime?
+  redeemedById        String?
+  emailDeliveryStatus String             @default("QUEUED")   // QUEUED, SENT, DELIVERED, FAILED
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  checkInLogs         EventCheckInLog[]
+
+  @@index([eventId])
+  @@index([locationId])
+  @@index([userId])
+  @@index([qrToken])
+  @@index([status])
+  @@index([type])
+}
+
+model EventCheckInLog {
+  id             String          @id @default(uuid())
+  invitationId   String
+  invitation     EventInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  scannedById    String
+  status         String          @default("VERIFIED") // VERIFIED, REVERSED
+  reversalReason String?
+  reversedById   String?
+  createdAt      DateTime        @default(now())
+
+  @@index([invitationId])
+}
+
+// ==========================================
+// SYSTEM 4: FY — FAITH & QUESTIONS & BIBLE
+// ==========================================
+
+model BibleTranslation {
+  id            String         @id
+  nameAr        String
+  nameEn        String
+  language      String         // "ar" or "en"
+  isPublicDomain Boolean       @default(true)
+  licenseInfo   String?
+  chapters      BibleChapter[]
+}
+
+model BibleBook {
+  id           String         @id // e.g. "GEN", "MAT"
+  testament    String         // "OLD" or "NEW"
+  orderIndex   Int
+  nameAr       String
+  nameEn       String
+  chapterCount Int
+  chapters     BibleChapter[]
+
+  @@index([testament])
+  @@index([orderIndex])
+}
+
+model BibleChapter {
+  id            String           @id @default(uuid())
+  translationId String
+  translation   BibleTranslation @relation(fields: [translationId], references: [id], onDelete: Cascade)
+  bookId        String
+  book          BibleBook        @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  chapterNumber Int
+  versesJson    String           // JSON array of { verseNumber: number, text: string }
+  verseCount    Int
+  createdAt     DateTime         @default(now())
+
+  @@unique([translationId, bookId, chapterNumber])
+  @@index([translationId, bookId])
+}
+
+model BibleReadingProgress {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  translationId String
+  bookId        String
+  chapterNumber Int
+  isCompleted   Boolean  @default(true)
+  completedAt   DateTime @default(now())
+
+  @@unique([userId, translationId, bookId, chapterNumber])
+  @@index([userId])
+}
+
+model BibleLastPosition {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  translationId String
+  bookId        String
+  chapterNumber Int
+  verseNumber   Int?
+  updatedAt     DateTime @updatedAt
+}
+
+model BibleVerseOfDay {
+  id            String   @id @default(uuid())
+  date          String   @unique // YYYY-MM-DD
+  translationId String   @default("van-dyck")
+  bookId        String
+  chapterNumber Int
+  verseNumber   Int
+  verseTextAr   String
+  verseTextEn   String
+  referenceAr   String
+  referenceEn   String
+  isManual      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([date])
+}
+
+model FyQuestionCategory {
+  id         String       @id @default(uuid())
+  slug       String       @unique
+  nameAr     String
+  nameEn     String
+  orderIndex Int          @default(0)
+  questions  FyQuestion[]
+
+  @@index([slug])
+}
+
+model FyQuestion {
+  id                String              @id @default(uuid())
+  categoryId        String?
+  category          FyQuestionCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  titleAr           String
+  titleEn           String?
+  slug              String              @unique
+  answerTextAr      String?
+  answerTextEn      String?
+  videoUrl          String?
+  externalLinksJson String              @default("[]") // Array of { titleAr, titleEn, url }
+  tags              String              @default("[]") // JSON string array
+  status            String              @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
+  isFeatured        Boolean             @default(false)
+  authorId          String?
+  publishedAt       DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([slug])
+}
+
+model FyMemberQuestionSubmission {
+  id                  String   @id @default(uuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isAnonymous         Boolean  @default(false)
+  authorDisplayName   String?
+  questionTitle       String
+  questionDetails     String
+  categorySlug        String?
+  status              String   @default("PENDING_REVIEW") // PENDING_REVIEW, UNDER_REVIEW, ANSWER_DRAFTED, PUBLISHED, REJECTED, ARCHIVED
+  moderatorNotes      String?
+  publishedQuestionId String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
 

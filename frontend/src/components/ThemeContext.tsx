@@ -128,7 +128,32 @@ export const dictionary: TranslationDictionary = {
   // General Buttons
   back: { ar: 'رجوع', en: 'Back' },
   save: { ar: 'حفظ والتعديل', en: 'Save Changes' },
-  font_scale: { ar: 'حجم الخط', en: 'Font Size' }
+  font_scale: { ar: 'حجم الخط', en: 'Font Size' },
+
+  // Four Systems Nav & Section Keys
+  nav_fy: { ar: 'الإيمان وأسئلتكم (FY)', en: 'Faith & Questions (FY)' },
+  facebook_news: { ar: 'أخبار ومشاركات فيسبوك', en: 'Facebook Posts & News' },
+  email_center: { ar: 'مركز البريد الإلكتروني', en: 'Email Center' },
+  events_qr: { ar: 'الدعوات وتأكيد الحضور (QR)', en: 'Invitations & QR Check-in' },
+  fy_moderation: { ar: 'إشراف أسئلة الإيمان', en: 'FY Questions Moderation' },
+  my_invitations: { ar: 'دعواتي الرسمية', en: 'My Invitations' },
+  bible_reader: { ar: 'الكتاب المقدس', en: 'Holy Bible' },
+  verse_of_the_day: { ar: 'آية اليوم', en: 'Verse of the Day' },
+  questions_about_god: { ar: 'أسئلة حول الله والإيمان', en: 'Questions About God' },
+  hymns_coming_soon: { ar: 'الألحان والتسابيح (قريبًا)', en: 'Hymns & Praises (Coming Soon)' },
+  hymns_placeholder_title: { ar: 'الألحان الكنسية والتسابيح', en: 'Church Hymns & Praises' },
+  hymns_placeholder_badge: { ar: 'قريبًا', en: 'SOON' },
+  hymns_placeholder_desc: { ar: 'مكتبة الألحان والتسابيح التراثية قيد الإعداد والإضافة قريبًا.', en: 'The heritage hymns and liturgical praises library is currently under preparation and coming soon.' },
+  locked_members_only: { ar: 'هذا القسم متاح فقط للأعضاء المؤكدين في الكنيسة', en: 'This section is available exclusively to verified church members.' },
+  ask_question: { ar: 'اسأل سؤالك', en: 'Ask a Question' },
+  ask_anonymously: { ar: 'إرسال السؤال بدون اسم (مجهول)', en: 'Submit anonymously' },
+  anonymous_notice: { ar: 'لن يتم عرض اسمك للجمهور أو الأعضاء الآخرين في حال نشر السؤال.', en: 'Your name will not be displayed to the public or other members if the question is published.' },
+  vip_invitation: { ar: 'دعوة كبار الزوار VIP', en: 'VIP Invitation' },
+  scan_qr: { ar: 'المسح المستمر لرمز QR', en: 'Continuous QR Scanner' },
+  qr_verified: { ar: 'تم التحقق بنجاح ✓', en: 'VERIFIED ✓' },
+  qr_already_used: { ar: 'مستخدمة سابقاً !', en: 'ALREADY USED !' },
+  qr_invalid: { ar: 'رمز غير صالح أو ملغي ✗', en: 'INVALID ✗' },
+  qr_wrong_event: { ar: 'الدعوة لفعالية أو مكان مختلف ✗', en: 'WRONG EVENT OR LOCATION ✗' }
 };
 
 interface ThemeContextType {

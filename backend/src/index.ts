@@ -17,6 +17,10 @@ import newsRouter from './controllers/news.controller';
 import adminUsersRouter from './controllers/admin-users.controller';
 import contactRouter from './controllers/contact.controller';
 import aiRouter from './controllers/ai.controller';
+import facebookNewsRouter from './controllers/facebook-news.controller';
+import emailCenterRouter from './controllers/email-center.controller';
+import invitationRouter from './controllers/invitation.controller';
+import fyRouter from './controllers/fy.controller';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -99,6 +103,10 @@ app.use('/api/news', newsRouter);
 app.use('/api/admin-users', adminUsersRouter);
 app.use('/api/contact', contactRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/facebook-news', facebookNewsRouter);
+app.use('/api/email-center', emailCenterRouter);
+app.use('/api/invitations', invitationRouter);
+app.use('/api/fy', fyRouter);
 
 // Error Handling Middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
