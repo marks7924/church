@@ -1,6 +1,6 @@
 {
   "name": "church-platform-backend",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Bilingual Church Platform backend server",
   "main": "dist/index.js",
   "scripts": {
