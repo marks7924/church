@@ -414,68 +414,23 @@ export default function ChurchAiAssistant() {
       {!isOpen && !isNavDrawerOpen && !isAuthPage && !isFooterVisible && (
         <button
           id="church-ai-trigger-btn"
+          className="church-ai-trigger-btn"
           onClick={() => {
             setIsOpen(true);
             setIsMinimized(false);
           }}
           aria-label={isAr ? 'فتح مساعد الكنيسة الذكي' : 'Open Church AI Assistant'}
+          title={isAr ? 'مساعد الكنيسة الذكي' : 'Church AI Assistant'}
           style={{
-            position: 'fixed',
-            bottom: '24px',
             [isAr ? 'left' : 'right']: '24px',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            padding: '12px 18px',
-            backgroundColor: 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
-            border: '2px solid var(--accent-gold)',
-            borderRadius: '50px',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4), 0 0 16px rgba(226, 183, 20, 0.25)',
-            cursor: 'pointer',
-            transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-            fontFamily: isAr ? 'var(--font-arabic)' : 'var(--font-english)',
-            fontSize: '0.95rem',
-            fontWeight: 600
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.transform = 'translateY(-3px) scale(1.03)';
-            e.currentTarget.style.boxShadow = '0 12px 30px rgba(0, 0, 0, 0.5), 0 0 22px rgba(226, 183, 20, 0.4)';
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.transform = 'translateY(0) scale(1)';
-            e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.4), 0 0 16px rgba(226, 183, 20, 0.25)';
+            fontFamily: isAr ? 'var(--font-arabic)' : 'var(--font-english)'
           }}
         >
-          <div
-            style={{
-              position: 'relative',
-              width: '32px',
-              height: '32px',
-              borderRadius: '50%',
-              backgroundColor: 'rgba(226, 183, 20, 0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--accent-gold)'
-            }}
-          >
+          <div className="church-ai-trigger-icon">
             <Sparkles size={18} />
-            <span
-              style={{
-                position: 'absolute',
-                top: '-1px',
-                right: '-1px',
-                width: '9px',
-                height: '9px',
-                borderRadius: '50%',
-                backgroundColor: '#2ecc71',
-                border: '2px solid var(--bg-secondary)'
-              }}
-            />
+            <span className="church-ai-trigger-dot" />
           </div>
-          <span>{isAr ? 'مساعد الكنيسة الذكي' : 'Church AI Assistant'}</span>
+          <span className="church-ai-trigger-text">{isAr ? 'مساعد الكنيسة الذكي' : 'Church AI Assistant'}</span>
         </button>
       )}
 
