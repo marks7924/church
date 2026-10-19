@@ -103,6 +103,9 @@ router.post('/chat', async (req: Request, res: Response) => {
       sources: aiResult.sources,
       suggestedQuestions: aiResult.suggestedQuestions,
       latencyMs: aiResult.latencyMs,
+      provider: aiResult.provider,
+      model: aiResult.model,
+      fallbackTriggered: aiResult.fallbackTriggered,
       action: aiResult.action,
       conversationId: conversationId || `conv-${Date.now()}`
     });
@@ -112,6 +115,83 @@ router.post('/chat', async (req: Request, res: Response) => {
       error: 'An internal error occurred while processing your question.',
       errorAr: 'حدث خطأ مؤقت أثناء معالجة السؤال. يرجى المحاولة مرة أخرى أو مراجعة سكرتارية الكنيسة.'
     });
+  }
+});
+
+/**
+ * Live Provider Diagnostics: GET /api/ai/diagnostics
+ */
+router.get('/diagnostics', async (req: Request, res: Response) => {
+  try {
+    const dbSettings = await ChurchKnowledgeRetriever.getAiSystemSettings();
+    const geminiKey = (
+      dbSettings['ai_gemini_key'] ||
+      process.env.GEMINI_API_KEY ||
+      process.env.GEMINI_KEY ||
+      process.env.GOOGLE_GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      ''
+    ).trim();
+
+    const groqKey = (
+      dbSettings['ai_groq_key'] ||
+      process.env.GROQ_API_KEY ||
+      process.env.GROQ_KEY ||
+      ''
+    ).trim();
+
+    const mask = (k: string) => (k ? `${k.slice(0, 6)}...${k.slice(-4)} (length ${k.length})` : 'NOT_FOUND_OR_EMPTY');
+
+    const testGemini = async () => {
+      if (!geminiKey) return { status: 'NO_KEY_DETECTED' };
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`;
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'ping' }] }] })
+        });
+        const text = await r.text();
+        return { httpStatus: r.status, ok: r.ok, bodyPreview: text.slice(0, 300) };
+      } catch (err: any) {
+        return { error: err.message };
+      }
+    };
+
+    const testGroq = async () => {
+      if (!groqKey) return { status: 'NO_KEY_DETECTED' };
+      try {
+        const url = 'https://api.groq.com/openai/v1/chat/completions';
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+          body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages: [{ role: 'user', content: 'ping' }], max_tokens: 10 })
+        });
+        const text = await r.text();
+        return { httpStatus: r.status, ok: r.ok, bodyPreview: text.slice(0, 300) };
+      } catch (err: any) {
+        return { error: err.message };
+      }
+    };
+
+    const [geminiResult, groqResult] = await Promise.all([testGemini(), testGroq()]);
+
+    return res.status(200).json({
+      envCheck: {
+        GEMINI_KEY_MASKED: mask(geminiKey),
+        GROQ_KEY_MASKED: mask(groqKey),
+        AI_PROVIDER: process.env.AI_PROVIDER || 'gemini',
+        AI_FALLBACK_PROVIDER: process.env.AI_FALLBACK_PROVIDER || 'groq',
+        NODE_ENV: process.env.NODE_ENV,
+        VERCEL: process.env.VERCEL
+      },
+      liveTests: {
+        gemini: geminiResult,
+        groq: groqResult
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 });
 
