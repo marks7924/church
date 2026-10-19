@@ -492,9 +492,14 @@ export async function callGeminiProvider(
       }
     };
 
-    // Candidate model priority list
-    const candidateModels = [model || 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-latest']
-      .filter((v, i, a) => a.indexOf(v) === i);
+    // Candidate model priority list (including gemini-2.5-flash verified in production)
+    const candidateModels = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      model || 'gemini-1.5-flash',
+      'gemini-2.5-pro',
+      'gemini-1.5-pro'
+    ].filter((v, i, a) => a.indexOf(v) === i);
 
     let lastError = '';
 
@@ -512,9 +517,8 @@ export async function callGeminiProvider(
           const errText = await response.text();
           lastError = `Gemini HTTP ${response.status} (${curModel}): ${errText.slice(0, 200)}`;
           console.error('[Gemini API Error]', lastError);
-          // If model not found (404), try next model
-          if (response.status === 404) continue;
-          break;
+          // If model not found (404) or bad request, try next model
+          continue;
         }
 
         const data = (await response.json()) as any;
@@ -571,8 +575,17 @@ export async function callGroqProvider(
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  const candidateModels = [model || 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768']
-    .filter((v, i, a) => a.indexOf(v) === i);
+  // Candidate models verified available on active Groq account
+  const candidateModels = [
+    model,
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'qwen/qwen3.8-27b',
+    'allam-2-7b',
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant'
+  ].filter((v): v is string => Boolean(v) && v.trim().length > 0)
+   .filter((v, i, a) => a.indexOf(v) === i);
 
   try {
     const url = 'https://api.groq.com/openai/v1/chat/completions';
@@ -1604,7 +1617,7 @@ CRITICAL OPERATIONAL RULES:
     const geminiModel = (
       systemSettings['ai_gemini_model'] ||
       process.env.GEMINI_MODEL ||
-      'gemini-1.5-flash'
+      'gemini-2.5-flash'
     ).trim();
 
     const groqKey = (
@@ -1616,7 +1629,7 @@ CRITICAL OPERATIONAL RULES:
     let groqModel = (
       systemSettings['ai_groq_model'] ||
       process.env.GROQ_MODEL ||
-      'llama-3.1-8b-instant'
+      'openai/gpt-oss-120b'
     ).trim();
 
     const openaiKey = (
