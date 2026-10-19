@@ -8,8 +8,101 @@ import {
   X, Send, RotateCcw, Copy, Check, 
   ExternalLink, Sparkles, ChevronDown, Shield, Volume2, VolumeX,
   HeartHandshake, Calendar, Users, Phone, MapPin, ArrowUpRight,
-  CheckCircle2, Clock
+  CheckCircle2, Clock, HelpCircle
 } from 'lucide-react';
+
+export interface PriestScheduleRule {
+  id: string;
+  nameAr: string;
+  nameEn: string;
+  status: 'available' | 'traveling' | 'unavailable' | 'bishop_office';
+  statusBadgeAr: string;
+  days: string[];
+  slots: string[];
+  noteAr: string;
+}
+
+export const CHURCH_CLERGY_SCHEDULES: PriestScheduleRule[] = [
+  {
+    id: 'karas',
+    nameAr: 'القس كاراس عزيز',
+    nameEn: 'Fr. Karas Aziz',
+    status: 'available',
+    statusBadgeAr: 'متاح للاعتراف',
+    days: ['الأربعاء القادم', 'السبت القادم'],
+    slots: ['6:00 م – 7:30 م', '7:30 م – 9:00 م'],
+    noteAr: 'مواعيد الاعتراف المعتمدة: الأربعاء والسبت من 6:00 م إلى 9:00 م.'
+  },
+  {
+    id: 'mina',
+    nameAr: 'القمص مينا عزت',
+    nameEn: 'Fr. Mina Ezzat',
+    status: 'available',
+    statusBadgeAr: 'متاح للاعتراف',
+    days: ['الاثنين القادم', 'الأربعاء القادم'],
+    slots: ['6:00 م – 7:30 م', '7:30 م – 9:00 م'],
+    noteAr: 'مواعيد الاعتراف المعتمدة: الاثنين والأربعاء من 6:00 م إلى 9:00 م.'
+  },
+  {
+    id: 'philopateer',
+    nameAr: 'القمص فيلوباتير عزمي',
+    nameEn: 'Fr. Philopateer Azmy',
+    status: 'available',
+    statusBadgeAr: 'متاح للاعتراف',
+    days: ['الثلاثاء القادم', 'الجمعة القادمة'],
+    slots: ['6:00 م – 7:30 م', '7:30 م – 9:00 م'],
+    noteAr: 'مواعيد الاعتراف المعتمدة: الثلاثاء والجمعة من 6:00 م إلى 9:00 م.'
+  },
+  {
+    id: 'yohanna',
+    nameAr: 'القس يوحنا جون',
+    nameEn: 'Fr. Yohanna John',
+    status: 'available',
+    statusBadgeAr: 'متاح للاعتراف',
+    days: ['الأحد القادم', 'الخميس القادم'],
+    slots: ['6:00 م – 7:30 م', '7:30 م – 9:00 م'],
+    noteAr: 'مواعيد الاعتراف المعتمدة: الأحد والخميس من 6:00 م إلى 9:00 م.'
+  },
+  {
+    id: 'michael',
+    nameAr: 'القمص مايكل إبراهيم',
+    nameEn: 'Fr. Michael Ibrahim',
+    status: 'traveling',
+    statusBadgeAr: 'مسافر خارج مصر (الاعترافات متوقفة حالياً)',
+    days: [],
+    slots: [],
+    noteAr: 'أبونا مايكل مسافر في خدمة رعوية خارج مصر، والاعترافات متوقفة مؤقتاً لحين عودته بسلامة الله.'
+  },
+  {
+    id: 'moussa',
+    nameAr: 'القمص موسى عطية',
+    nameEn: 'Fr. Moussa Attia',
+    status: 'unavailable',
+    statusBadgeAr: 'لا يستقبل اعترافات حالياً',
+    days: [],
+    slots: [],
+    noteAr: 'أبونا موسى لا يستقبل اعترافات حالياً لظروف خدمته الخاصة، ونرجو اختيار كاهن آخر من الآباء المتاحين.'
+  },
+  {
+    id: 'athanasius',
+    nameAr: 'سيدنا الأنبا اثناسيوس',
+    nameEn: 'Bishop Anba Athanasius',
+    status: 'bishop_office',
+    statusBadgeAr: 'تنسيق مع مكتب المطرانية',
+    days: [],
+    slots: [],
+    noteAr: 'سيدنا الأنبا اثناسيوس ليس له جدول مواعيد ثابت على الموقع. يتم ترتيب اللقاءات والمواعيد بالتنسيق المباشر مع مكتب سكرتارية المطرانية.'
+  }
+];
+
+export const FREQUENT_FAQS = [
+  'مواعيد القداسات هذا الأسبوع',
+  'كيف أحجز موعد اعتراف؟',
+  'مواعيد اعتراف أبونا كاراس',
+  'ما هي رحلات الكنيسة المتاحة؟',
+  'أين تقع الكنيسة؟',
+  'كيفية التواصل مع سكرتارية الكنيسة'
+];
 
 interface SourceReference {
   title: string;
@@ -65,22 +158,26 @@ export default function ChurchAiAssistant() {
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [isFooterVisible, setIsFooterVisible] = useState(false);
 
+  // FAQ Menu Toggle State
+  const [isFaqMenuOpen, setIsFaqMenuOpen] = useState(false);
+
   // Priests list for in-chat booking
-  const [priestsList, setPriestsList] = useState<PriestOption[]>([
-    { id: '1', nameAr: 'سيدنا الأنبا اثناسيوس', nameEn: 'Bishop Anba Athanasius', titleAr: 'الأنبا' },
-    { id: '2', nameAr: 'القمص مينا عزت', nameEn: 'Fr. Mina Ezzat', titleAr: 'القمص' },
-    { id: '3', nameAr: 'القمص فيلوباتير عزمي', nameEn: 'Fr. Philopateer Azmy', titleAr: 'القمص' },
-    { id: '4', nameAr: 'القس يوحنا جون', nameEn: 'Fr. Yohanna John', titleAr: 'القس' },
-    { id: '5', nameAr: 'القس كاراس عزيز', nameEn: 'Fr. Karas Aziz', titleAr: 'القس' }
-  ]);
+  const [priestsList, setPriestsList] = useState<PriestOption[]>(
+    CHURCH_CLERGY_SCHEDULES.map(p => ({
+      id: p.id,
+      nameAr: p.nameAr,
+      nameEn: p.nameEn,
+      titleAr: p.statusBadgeAr
+    }))
+  );
 
   // In-chat Interactive Action States
   const [bookingForm, setBookingForm] = useState({
-    priestName: 'القمص مينا عزت',
+    priestName: 'القس كاراس عزيز',
     fullName: '',
     phone: '',
-    date: 'الجمعة القادمة',
-    timeSlot: 'بعد القداس الإلهي',
+    date: 'الأربعاء القادم',
+    timeSlot: '6:00 م – 7:30 م',
     notes: '',
     isSubmitting: false,
     successRef: null as string | null,
@@ -273,11 +370,21 @@ export default function ChurchAiAssistant() {
     }
   }, [messages]);
 
-  // Scroll to bottom when messages update
+  // Scroll behavior:
+  // When the latest message is an assistant reply, scroll to its beginning so the user reads from the top!
   useEffect(() => {
-    if (isOpen && !isMinimized) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!isOpen || isMinimized) return;
+
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && lastMsg.role === 'assistant') {
+      const msgElement = document.getElementById(`msg-${lastMsg.id}`);
+      if (msgElement) {
+        msgElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
     }
+
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen, isMinimized, isLoading, bookingForm.successRef, membershipForm.successRef]);
 
   // Focus input when opened
@@ -518,6 +625,24 @@ export default function ChurchAiAssistant() {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
+      if (data.action?.actionId === 'book_appointment' && data.action?.data?.priestName) {
+        const priestTarget = data.action.data.priestName;
+        const matched = CHURCH_CLERGY_SCHEDULES.find(
+          p => p.nameAr === priestTarget || 
+               priestTarget.includes(p.nameAr) || 
+               (p.id === 'karas' && priestTarget.includes('كاراس'))
+        );
+        if (matched) {
+          setBookingForm(prev => ({
+            ...prev,
+            priestName: matched.nameAr,
+            date: matched.days[0] || prev.date,
+            timeSlot: matched.slots[0] || prev.timeSlot,
+            error: null
+          }));
+        }
+      }
+
       setMessages(prev => [...prev, assistantMessage]);
       playChime();
     } catch (err: any) {
@@ -756,16 +881,19 @@ export default function ChurchAiAssistant() {
             bottom: isMinimized ? '20px' : '24px',
             [isAr ? 'left' : 'right']: '24px',
             zIndex: 10000,
-            width: isMinimized ? '320px' : '420px',
-            maxWidth: 'calc(100vw - 32px)',
-            height: isMinimized ? '58px' : '650px',
+            width: isMinimized ? 'auto' : '420px',
+            minWidth: isMinimized ? '220px' : undefined,
+            maxWidth: isMinimized ? '290px' : 'calc(100vw - 32px)',
+            height: isMinimized ? '48px' : '650px',
             maxHeight: 'calc(100vh - 48px)',
             backgroundColor: 'rgba(18, 22, 28, 0.96)',
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',
-            borderRadius: '22px',
-            border: '1px solid rgba(226, 183, 20, 0.3)',
-            boxShadow: '0 24px 60px rgba(0, 0, 0, 0.7), 0 0 30px rgba(226, 183, 20, 0.15)',
+            borderRadius: isMinimized ? '24px' : '22px',
+            border: '1px solid rgba(226, 183, 20, 0.4)',
+            boxShadow: isMinimized
+              ? '0 12px 30px rgba(0, 0, 0, 0.6), 0 0 16px rgba(226, 183, 20, 0.25)'
+              : '0 24px 60px rgba(0, 0, 0, 0.7), 0 0 30px rgba(226, 183, 20, 0.15)',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -775,160 +903,248 @@ export default function ChurchAiAssistant() {
           }}
         >
           {/* Header */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px 16px',
-              background: 'linear-gradient(180deg, rgba(226, 183, 20, 0.14) 0%, rgba(226, 183, 20, 0.04) 100%)',
-              borderBottom: isMinimized ? 'none' : '1px solid rgba(226, 183, 20, 0.2)',
-              userSelect: 'none'
-            }}
-          >
+          {isMinimized ? (
             <div
-              style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flex: 1 }}
-              onClick={() => setIsMinimized(prev => !prev)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '6px 14px',
+                height: '100%',
+                boxSizing: 'border-box',
+                cursor: 'pointer',
+                gap: '8px',
+                width: '100%'
+              }}
+              onClick={() => setIsMinimized(false)}
             >
-              <div
-                style={{
-                  width: '34px',
-                  height: '34px',
-                  borderRadius: '10px',
-                  backgroundColor: 'rgba(226, 183, 20, 0.2)',
-                  border: '1px solid rgba(226, 183, 20, 0.4)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--accent-gold, #e2b714)'
-                }}
-              >
-                <Sparkles size={18} />
-              </div>
-              <div>
-                <h4
-                  id="ai-chat-title"
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                <div
                   style={{
-                    fontSize: '0.94rem',
-                    fontWeight: 700,
-                    color: '#fff',
-                    margin: 0,
-                    lineHeight: 1.2
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(226, 183, 20, 0.2)',
+                    border: '1px solid rgba(226, 183, 20, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--accent-gold, #e2b714)',
+                    flexShrink: 0
                   }}
                 >
-                  {isAr ? 'مساعد كنيسة أبي سيفين' : 'Abu Sefein AI Assistant'}
-                </h4>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
-                  <span
-                    style={{
-                      width: '7px',
-                      height: '7px',
-                      borderRadius: '50%',
-                      backgroundColor: '#2ecc71',
-                      display: 'inline-block',
-                      boxShadow: '0 0 6px #2ecc71'
-                    }}
-                  />
-                  <span style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.7)' }}>
-                    {isAr ? 'متصل للخدمة والرعاية' : 'Online for pastoral help'}
-                  </span>
+                  <Sparkles size={14} />
                 </div>
+                <span
+                  style={{
+                    fontSize: '0.84rem',
+                    fontWeight: 700,
+                    color: '#fff',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  {isAr ? 'مساعد كنيسة أبي سيفين' : 'Church AI Assistant'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px', flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setIsMinimized(false);
+                  }}
+                  title={isAr ? 'تكبير' : 'Expand'}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--accent-gold, #e2b714)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <ChevronDown size={17} style={{ transform: 'rotate(180deg)' }} />
+                </button>
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setIsOpen(false);
+                  }}
+                  title={isAr ? 'إغلاق' : 'Close'}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255,255,255,0.7)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <X size={15} />
+                </button>
               </div>
             </div>
-
-            {/* Header Action Icons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <button
-                onClick={() => setIsHandoffModalOpen(true)}
-                title={isAr ? 'طلب مساعدة خادم / سكرتارية' : 'Human Help / Servant Support'}
-                style={{
-                  background: 'rgba(226, 183, 20, 0.15)',
-                  border: '1px solid rgba(226, 183, 20, 0.4)',
-                  color: 'var(--accent-gold, #e2b714)',
-                  cursor: 'pointer',
-                  padding: '5px 9px',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '0.74rem',
-                  fontWeight: 600,
-                  transition: 'all 0.2s'
-                }}
-              >
-                <HeartHandshake size={14} />
-                <span className="hidden sm:inline">{isAr ? 'مساعدة' : 'Help'}</span>
-              </button>
-
-              <button
-                onClick={() => setSoundEnabled(prev => !prev)}
-                title={soundEnabled ? (isAr ? 'كتم الصوت' : 'Mute sound') : (isAr ? 'تفعيل الصوت' : 'Enable sound')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: soundEnabled ? 'var(--accent-gold)' : 'rgba(255,255,255,0.6)',
-                  cursor: 'pointer',
-                  padding: '6px',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
-              >
-                {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-              </button>
-
-              <button
-                onClick={clearChat}
-                title={isAr ? 'بدء محادثة جديدة' : 'New conversation'}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'rgba(255,255,255,0.6)',
-                  cursor: 'pointer',
-                  padding: '6px',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
-              >
-                <RotateCcw size={15} />
-              </button>
-
-              <button
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                background: 'linear-gradient(180deg, rgba(226, 183, 20, 0.14) 0%, rgba(226, 183, 20, 0.04) 100%)',
+                borderBottom: '1px solid rgba(226, 183, 20, 0.2)',
+                userSelect: 'none'
+              }}
+            >
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', flex: 1 }}
                 onClick={() => setIsMinimized(prev => !prev)}
-                title={isMinimized ? (isAr ? 'تكبير' : 'Expand') : (isAr ? 'تصغير' : 'Minimize')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'rgba(255,255,255,0.6)',
-                  cursor: 'pointer',
-                  padding: '6px',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
               >
-                <ChevronDown size={17} style={{ transform: isMinimized ? 'rotate(180deg)' : 'none' }} />
-              </button>
+                <div
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: '10px',
+                    backgroundColor: 'rgba(226, 183, 20, 0.2)',
+                    border: '1px solid rgba(226, 183, 20, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--accent-gold, #e2b714)'
+                  }}
+                >
+                  <Sparkles size={18} />
+                </div>
+                <div>
+                  <h4
+                    id="ai-chat-title"
+                    style={{
+                      fontSize: '0.94rem',
+                      fontWeight: 700,
+                      color: '#fff',
+                      margin: 0,
+                      lineHeight: 1.2
+                    }}
+                  >
+                    {isAr ? 'مساعد كنيسة أبي سيفين' : 'Abu Sefein AI Assistant'}
+                  </h4>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px' }}>
+                    <span
+                      style={{
+                        width: '7px',
+                        height: '7px',
+                        borderRadius: '50%',
+                        backgroundColor: '#2ecc71',
+                        display: 'inline-block',
+                        boxShadow: '0 0 6px #2ecc71'
+                      }}
+                    />
+                    <span style={{ fontSize: '0.72rem', color: 'rgba(255, 255, 255, 0.7)' }}>
+                      {isAr ? 'متصل للخدمة والرعاية' : 'Online for pastoral help'}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-              <button
-                onClick={() => setIsOpen(false)}
-                title={isAr ? 'إغلاق' : 'Close'}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'rgba(255,255,255,0.6)',
-                  cursor: 'pointer',
-                  padding: '6px',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
-              >
-                <X size={17} />
-              </button>
+              {/* Header Action Icons */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <button
+                  onClick={() => setIsHandoffModalOpen(true)}
+                  title={isAr ? 'طلب مساعدة خادم / سكرتارية' : 'Human Help / Servant Support'}
+                  style={{
+                    background: 'rgba(226, 183, 20, 0.15)',
+                    border: '1px solid rgba(226, 183, 20, 0.4)',
+                    color: 'var(--accent-gold, #e2b714)',
+                    cursor: 'pointer',
+                    padding: '5px 9px',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <HeartHandshake size={14} />
+                  <span className="hidden sm:inline">{isAr ? 'مساعدة' : 'Help'}</span>
+                </button>
+
+                <button
+                  onClick={() => setSoundEnabled(prev => !prev)}
+                  title={soundEnabled ? (isAr ? 'كتم الصوت' : 'Mute sound') : (isAr ? 'تفعيل الصوت' : 'Enable sound')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: soundEnabled ? 'var(--accent-gold)' : 'rgba(255,255,255,0.6)',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                </button>
+
+                <button
+                  onClick={clearChat}
+                  title={isAr ? 'بدء محادثة جديدة' : 'New conversation'}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255,255,255,0.6)',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <RotateCcw size={15} />
+                </button>
+
+                <button
+                  onClick={() => setIsMinimized(prev => !prev)}
+                  title={isMinimized ? (isAr ? 'تكبير' : 'Expand') : (isAr ? 'تصغير' : 'Minimize')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255,255,255,0.6)',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <ChevronDown size={17} style={{ transform: isMinimized ? 'rotate(180deg)' : 'none' }} />
+                </button>
+
+                <button
+                  onClick={() => setIsOpen(false)}
+                  title={isAr ? 'إغلاق' : 'Close'}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255,255,255,0.6)',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <X size={17} />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Body (Hidden when minimized) */}
           {!isMinimized && (
@@ -986,6 +1202,7 @@ export default function ChurchAiAssistant() {
                   return (
                     <div
                       key={msg.id}
+                      id={`msg-${msg.id}`}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
@@ -1010,186 +1227,351 @@ export default function ChurchAiAssistant() {
                         {renderFormattedText(msg.text)}
 
                         {/* 1. Interactive Priest Appointment Booking Card */}
-                        {isAssistant && msg.action && msg.action.actionId === 'book_appointment' && (
-                          <div
-                            style={{
-                              marginTop: '12px',
-                              padding: '14px',
-                              borderRadius: '14px',
-                              backgroundColor: 'rgba(18, 22, 28, 0.95)',
-                              border: '1px solid rgba(226, 183, 20, 0.4)',
-                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)'
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                              <span style={{ fontSize: '1.2rem' }}>✝️</span>
-                              <div>
-                                <h5 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 700, color: 'var(--accent-gold, #e2b714)' }}>
-                                  {isAr ? 'حجز موعد اعتراف أو لقاء رعوي' : 'Book Confession Appointment'}
-                                </h5>
-                                <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)' }}>
-                                  {isAr ? 'تسجيل مباشر لدى سكرتارية الكنيسة' : 'Direct booking with church secretary'}
-                                </span>
-                              </div>
-                            </div>
+                        {isAssistant && msg.action && msg.action.actionId === 'book_appointment' && (() => {
+                          const currentPriestSchedule = CHURCH_CLERGY_SCHEDULES.find(
+                            p => p.nameAr === bookingForm.priestName ||
+                                 bookingForm.priestName.includes(p.nameAr) ||
+                                 (p.id === 'karas' && bookingForm.priestName.includes('كاراس')) ||
+                                 (p.id === 'mina' && bookingForm.priestName.includes('مينا')) ||
+                                 (p.id === 'philopateer' && bookingForm.priestName.includes('فيلوباتير')) ||
+                                 (p.id === 'yohanna' && bookingForm.priestName.includes('يوحنا')) ||
+                                 (p.id === 'michael' && bookingForm.priestName.includes('مايكل')) ||
+                                 (p.id === 'moussa' && bookingForm.priestName.includes('موسى')) ||
+                                 (p.id === 'athanasius' && (bookingForm.priestName.includes('اثناسيوس') || bookingForm.priestName.includes('سيدنا')))
+                          ) || CHURCH_CLERGY_SCHEDULES[0];
 
-                            {bookingForm.successRef ? (
-                              <div
-                                style={{
-                                  padding: '10px',
-                                  borderRadius: '8px',
-                                  backgroundColor: 'rgba(46, 204, 113, 0.15)',
-                                  border: '1px solid #2ecc71',
-                                  textAlign: 'center'
-                                }}
-                              >
-                                <CheckCircle2 size={24} style={{ color: '#2ecc71', margin: '0 auto 6px' }} />
-                                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>
-                                  {isAr ? 'تم تأكيد طلبك بنجاح!' : 'Request Confirmed!'}
-                                </div>
-                                <div style={{ fontSize: '0.75rem', color: '#2ecc71', marginTop: '2px' }}>
-                                  #{bookingForm.successRef}
-                                </div>
-                              </div>
-                            ) : (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {bookingForm.error && (
-                                  <div style={{ color: '#e74c3c', fontSize: '0.74rem' }}>{bookingForm.error}</div>
-                                )}
+                          const isAvailable = currentPriestSchedule.status === 'available';
+                          const isTraveling = currentPriestSchedule.status === 'traveling';
+                          const isUnavailable = currentPriestSchedule.status === 'unavailable';
+                          const isBishop = currentPriestSchedule.status === 'bishop_office';
 
+                          return (
+                            <div
+                              style={{
+                                marginTop: '12px',
+                                padding: '14px',
+                                borderRadius: '14px',
+                                backgroundColor: 'rgba(18, 22, 28, 0.95)',
+                                border: '1px solid rgba(226, 183, 20, 0.4)',
+                                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                                <span style={{ fontSize: '1.2rem' }}>✝️</span>
                                 <div>
-                                  <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '3px' }}>
-                                    {isAr ? 'اختر الأب الكاهن:' : 'Select Priest:'}
-                                  </label>
-                                  <select
-                                    value={bookingForm.priestName}
-                                    onChange={e => setBookingForm(prev => ({ ...prev, priestName: e.target.value }))}
-                                    style={{
-                                      width: '100%',
-                                      padding: '7px 10px',
-                                      borderRadius: '8px',
-                                      backgroundColor: 'rgba(0, 0, 0, 0.4)',
-                                      border: '1px solid rgba(226, 183, 20, 0.3)',
-                                      color: '#fff',
-                                      fontSize: '0.82rem',
-                                      outline: 'none'
-                                    }}
-                                  >
-                                    {priestsList.map(p => (
-                                      <option key={p.id} value={p.nameAr} style={{ background: '#1c2128', color: '#fff' }}>
-                                        {isAr ? p.nameAr : p.nameEn}
-                                      </option>
-                                    ))}
-                                  </select>
+                                  <h5 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 700, color: 'var(--accent-gold, #e2b714)' }}>
+                                    {isAr ? 'حجز موعد اعتراف أو لقاء رعوي' : 'Book Confession Appointment'}
+                                  </h5>
+                                  <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.6)' }}>
+                                    {isAr ? 'نظام الاعتراف المعتمد بكنيسة أبي سيفين' : 'Authorized Confession System'}
+                                  </span>
                                 </div>
+                              </div>
 
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                  <div style={{ flex: 1 }}>
-                                    <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '3px' }}>
-                                      {isAr ? 'الاسم بالكامل:' : 'Your Name:'}
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={bookingForm.fullName}
-                                      onChange={e => setBookingForm(prev => ({ ...prev, fullName: e.target.value }))}
-                                      placeholder={isAr ? 'اسمك الثلاثي' : 'Full Name'}
-                                      style={{
-                                        width: '100%',
-                                        padding: '7px 10px',
-                                        borderRadius: '8px',
-                                        backgroundColor: 'rgba(0, 0, 0, 0.4)',
-                                        border: '1px solid rgba(226, 183, 20, 0.3)',
-                                        color: '#fff',
-                                        fontSize: '0.82rem',
-                                        outline: 'none',
-                                        boxSizing: 'border-box'
-                                      }}
-                                    />
-                                  </div>
-                                  <div style={{ flex: 1 }}>
-                                    <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '3px' }}>
-                                      {isAr ? 'رقم الهاتف *:' : 'Phone *:'}
-                                    </label>
-                                    <input
-                                      type="tel"
-                                      value={bookingForm.phone}
-                                      onChange={e => setBookingForm(prev => ({ ...prev, phone: e.target.value }))}
-                                      placeholder="01234567890"
-                                      style={{
-                                        width: '100%',
-                                        padding: '7px 10px',
-                                        borderRadius: '8px',
-                                        backgroundColor: 'rgba(0, 0, 0, 0.4)',
-                                        border: '1px solid rgba(226, 183, 20, 0.3)',
-                                        color: '#fff',
-                                        fontSize: '0.82rem',
-                                        outline: 'none',
-                                        boxSizing: 'border-box',
-                                        direction: 'ltr',
-                                        textAlign: isAr ? 'right' : 'left'
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                  <div style={{ flex: 1 }}>
-                                    <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '3px' }}>
-                                      {isAr ? 'اليوم المفضل:' : 'Preferred Day:'}
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={bookingForm.date}
-                                      onChange={e => setBookingForm(prev => ({ ...prev, date: e.target.value }))}
-                                      placeholder={isAr ? 'الجمعة / الأحد' : 'Day / Date'}
-                                      style={{
-                                        width: '100%',
-                                        padding: '7px 10px',
-                                        borderRadius: '8px',
-                                        backgroundColor: 'rgba(0, 0, 0, 0.4)',
-                                        border: '1px solid rgba(226, 183, 20, 0.3)',
-                                        color: '#fff',
-                                        fontSize: '0.82rem',
-                                        outline: 'none',
-                                        boxSizing: 'border-box'
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-
-                                <button
-                                  onClick={handleExecuteAppointmentBooking}
-                                  disabled={bookingForm.isSubmitting}
+                              {bookingForm.successRef ? (
+                                <div
                                   style={{
-                                    marginTop: '6px',
-                                    padding: '9px 14px',
+                                    padding: '10px',
                                     borderRadius: '8px',
-                                    backgroundColor: 'var(--accent-gold, #e2b714)',
-                                    color: '#000',
-                                    fontWeight: 700,
-                                    fontSize: '0.82rem',
-                                    border: 'none',
-                                    cursor: bookingForm.isSubmitting ? 'not-allowed' : 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '6px',
-                                    boxShadow: '0 4px 12px rgba(226, 183, 20, 0.3)'
+                                    backgroundColor: 'rgba(46, 204, 113, 0.15)',
+                                    border: '1px solid #2ecc71',
+                                    textAlign: 'center'
                                   }}
                                 >
-                                  {bookingForm.isSubmitting ? (
-                                    <span>{isAr ? 'جاري تأكيد الحجز...' : 'Booking...'}</span>
-                                  ) : (
+                                  <CheckCircle2 size={24} style={{ color: '#2ecc71', margin: '0 auto 6px' }} />
+                                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fff' }}>
+                                    {isAr ? 'تم تسجيل طلب الموعد بنجاح!' : 'Request Registered!'}
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: '#2ecc71', marginTop: '2px' }}>
+                                    #{bookingForm.successRef}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '9px' }}>
+                                  {bookingForm.error && (
+                                    <div style={{ color: '#e74c3c', fontSize: '0.74rem' }}>{bookingForm.error}</div>
+                                  )}
+
+                                  {/* Priest Selector */}
+                                  <div>
+                                    <label style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '4px' }}>
+                                      {isAr ? 'اختر الأب الكاهن:' : 'Select Priest:'}
+                                    </label>
+                                    <select
+                                      value={bookingForm.priestName}
+                                      onChange={e => {
+                                        const selectedName = e.target.value;
+                                        const found = CHURCH_CLERGY_SCHEDULES.find(p => p.nameAr === selectedName) || CHURCH_CLERGY_SCHEDULES[0];
+                                        setBookingForm(prev => ({
+                                          ...prev,
+                                          priestName: selectedName,
+                                          date: found.days[0] || '',
+                                          timeSlot: found.slots[0] || '',
+                                          error: null
+                                        }));
+                                      }}
+                                      style={{
+                                        width: '100%',
+                                        padding: '8px 10px',
+                                        borderRadius: '8px',
+                                        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                                        border: '1px solid rgba(226, 183, 20, 0.3)',
+                                        color: '#fff',
+                                        fontSize: '0.84rem',
+                                        outline: 'none'
+                                      }}
+                                    >
+                                      {CHURCH_CLERGY_SCHEDULES.map(p => (
+                                        <option key={p.id} value={p.nameAr} style={{ background: '#1c2128', color: '#fff' }}>
+                                          {p.nameAr} ({p.statusBadgeAr})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  {/* Traveling Priest (Abouna Michael) */}
+                                  {isTraveling && (
+                                    <div
+                                      style={{
+                                        padding: '10px 12px',
+                                        borderRadius: '8px',
+                                        backgroundColor: 'rgba(230, 126, 34, 0.15)',
+                                        border: '1px solid rgba(230, 126, 34, 0.5)',
+                                        color: '#f39c12',
+                                        fontSize: '0.78rem',
+                                        lineHeight: 1.5
+                                      }}
+                                    >
+                                      <strong>✈️ تنبيه رعوي:</strong> {currentPriestSchedule.noteAr}
+                                      <div style={{ marginTop: '6px', fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)' }}>
+                                        {isAr ? 'يرجى اختيار أب كاهن آخر من القائمة لحجز موعد اعتراف متاح.' : 'Please choose another priest from the list.'}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Unavailable Priest (Abouna Moussa) */}
+                                  {isUnavailable && (
+                                    <div
+                                      style={{
+                                        padding: '10px 12px',
+                                        borderRadius: '8px',
+                                        backgroundColor: 'rgba(149, 165, 166, 0.15)',
+                                        border: '1px solid rgba(149, 165, 166, 0.4)',
+                                        color: '#bdc3c7',
+                                        fontSize: '0.78rem',
+                                        lineHeight: 1.5
+                                      }}
+                                    >
+                                      <strong>ℹ️ إشعار الخدمة:</strong> {currentPriestSchedule.noteAr}
+                                      <div style={{ marginTop: '6px', fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)' }}>
+                                        {isAr ? 'يرجى اختيار كاهن آخر من الآباء المتاحين للاعتراف.' : 'Please choose another available priest.'}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Bishop Office Coordination (Sayedna Anba Athanasius) */}
+                                  {isBishop && (
+                                    <div
+                                      style={{
+                                        padding: '10px 12px',
+                                        borderRadius: '8px',
+                                        backgroundColor: 'rgba(226, 183, 20, 0.12)',
+                                        border: '1px solid rgba(226, 183, 20, 0.4)',
+                                        color: 'var(--accent-gold, #e2b714)',
+                                        fontSize: '0.78rem',
+                                        lineHeight: 1.5
+                                      }}
+                                    >
+                                      <strong>👑 تنبيه خاص:</strong> {currentPriestSchedule.noteAr}
+                                      <div style={{ marginTop: '8px' }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => setIsHandoffModalOpen(true)}
+                                          style={{
+                                            padding: '6px 12px',
+                                            borderRadius: '6px',
+                                            backgroundColor: 'var(--accent-gold, #e2b714)',
+                                            color: '#000',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 700,
+                                            border: 'none',
+                                            cursor: 'pointer'
+                                          }}
+                                        >
+                                          {isAr ? 'التواصل مع سكرتارية المطرانية' : 'Contact Bishopric Office'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Available Priests: Karas, Mina, Philopateer, Yohanna */}
+                                  {isAvailable && (
                                     <>
-                                      <span>{isAr ? 'تأكيد وإرسال طلب الموعد' : 'Confirm & Submit Booking'}</span>
-                                      <Check size={14} />
+                                      <div
+                                        style={{
+                                          padding: '6px 10px',
+                                          borderRadius: '6px',
+                                          backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                                          border: '1px solid rgba(46, 204, 113, 0.25)',
+                                          fontSize: '0.74rem',
+                                          color: '#2ecc71'
+                                        }}
+                                      >
+                                        ✅ {currentPriestSchedule.noteAr}
+                                      </div>
+
+                                      {/* Available Days */}
+                                      <div>
+                                        <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '4px' }}>
+                                          {isAr ? 'اختر اليوم المتاح للاعتراف:' : 'Select Available Day:'}
+                                        </label>
+                                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                          {currentPriestSchedule.days.map((dayName, dIdx) => {
+                                            const isSelected = bookingForm.date === dayName;
+                                            return (
+                                              <button
+                                                key={dIdx}
+                                                type="button"
+                                                onClick={() => setBookingForm(prev => ({ ...prev, date: dayName }))}
+                                                style={{
+                                                  padding: '5px 10px',
+                                                  borderRadius: '8px',
+                                                  backgroundColor: isSelected ? 'var(--accent-gold, #e2b714)' : 'rgba(255, 255, 255, 0.06)',
+                                                  border: `1px solid ${isSelected ? 'var(--accent-gold, #e2b714)' : 'rgba(226, 183, 20, 0.25)'}`,
+                                                  color: isSelected ? '#000' : '#fff',
+                                                  fontSize: '0.76rem',
+                                                  fontWeight: isSelected ? 700 : 500,
+                                                  cursor: 'pointer',
+                                                  transition: 'all 0.15s ease'
+                                                }}
+                                              >
+                                                {dayName}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+
+                                      {/* Available Time Slots */}
+                                      <div>
+                                        <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '4px' }}>
+                                          {isAr ? 'اختر التوقيت المناسب:' : 'Select Time Slot:'}
+                                        </label>
+                                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                          {currentPriestSchedule.slots.map((slotName, sIdx) => {
+                                            const isSelected = bookingForm.timeSlot === slotName;
+                                            return (
+                                              <button
+                                                key={sIdx}
+                                                type="button"
+                                                onClick={() => setBookingForm(prev => ({ ...prev, timeSlot: slotName }))}
+                                                style={{
+                                                  padding: '5px 10px',
+                                                  borderRadius: '8px',
+                                                  backgroundColor: isSelected ? 'var(--accent-gold, #e2b714)' : 'rgba(255, 255, 255, 0.06)',
+                                                  border: `1px solid ${isSelected ? 'var(--accent-gold, #e2b714)' : 'rgba(226, 183, 20, 0.25)'}`,
+                                                  color: isSelected ? '#000' : '#fff',
+                                                  fontSize: '0.76rem',
+                                                  fontWeight: isSelected ? 700 : 500,
+                                                  cursor: 'pointer',
+                                                  transition: 'all 0.15s ease'
+                                                }}
+                                              >
+                                                {slotName}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+
+                                      {/* Full Name & Phone inputs */}
+                                      <div style={{ display: 'flex', gap: '8px' }}>
+                                        <div style={{ flex: 1 }}>
+                                          <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '3px' }}>
+                                            {isAr ? 'الاسم بالكامل:' : 'Your Name:'}
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={bookingForm.fullName}
+                                            onChange={e => setBookingForm(prev => ({ ...prev, fullName: e.target.value }))}
+                                            placeholder={isAr ? 'اسمك الثلاثي' : 'Full Name'}
+                                            style={{
+                                              width: '100%',
+                                              padding: '7px 10px',
+                                              borderRadius: '8px',
+                                              backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                                              border: '1px solid rgba(226, 183, 20, 0.3)',
+                                              color: '#fff',
+                                              fontSize: '0.82rem',
+                                              outline: 'none',
+                                              boxSizing: 'border-box'
+                                            }}
+                                          />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                          <label style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.7)', display: 'block', marginBottom: '3px' }}>
+                                            {isAr ? 'رقم الهاتف *:' : 'Phone *:'}
+                                          </label>
+                                          <input
+                                            type="tel"
+                                            value={bookingForm.phone}
+                                            onChange={e => setBookingForm(prev => ({ ...prev, phone: e.target.value }))}
+                                            placeholder="01234567890"
+                                            style={{
+                                              width: '100%',
+                                              padding: '7px 10px',
+                                              borderRadius: '8px',
+                                              backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                                              border: '1px solid rgba(226, 183, 20, 0.3)',
+                                              color: '#fff',
+                                              fontSize: '0.82rem',
+                                              outline: 'none',
+                                              boxSizing: 'border-box',
+                                              direction: 'ltr',
+                                              textAlign: isAr ? 'right' : 'left'
+                                            }}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Submit Button */}
+                                      <button
+                                        type="button"
+                                        onClick={handleExecuteAppointmentBooking}
+                                        disabled={bookingForm.isSubmitting}
+                                        style={{
+                                          marginTop: '6px',
+                                          padding: '9px 14px',
+                                          borderRadius: '8px',
+                                          backgroundColor: 'var(--accent-gold, #e2b714)',
+                                          color: '#000',
+                                          fontWeight: 700,
+                                          fontSize: '0.82rem',
+                                          border: 'none',
+                                          cursor: bookingForm.isSubmitting ? 'not-allowed' : 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          gap: '6px',
+                                          boxShadow: '0 4px 12px rgba(226, 183, 20, 0.3)'
+                                        }}
+                                      >
+                                        {bookingForm.isSubmitting ? (
+                                          <span>{isAr ? 'جاري تسجيل الموعد...' : 'Booking...'}</span>
+                                        ) : (
+                                          <>
+                                            <span>{isAr ? `تأكيد حجز الموعد مع ${currentPriestSchedule.nameAr}` : 'Confirm & Submit Booking'}</span>
+                                            <Check size={14} />
+                                          </>
+                                        )}
+                                      </button>
                                     </>
                                   )}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* 2. Interactive Family Membership Quick Card */}
                         {isAssistant && msg.action && msg.action.actionId === 'register_membership' && (
@@ -1565,13 +1947,13 @@ export default function ChurchAiAssistant() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Quick Suggestions Horizontal Scroll Bar */}
+              {/* Quick Suggestions: Mobile-only Horizontal Chips */}
               {((messages[messages.length - 1]?.suggestedQuestions && messages[messages.length - 1]?.suggestedQuestions!.length > 0) || routeSuggestions.length > 0) && (
                 <div
+                  className="flex sm:hidden"
                   style={{
                     padding: '6px 14px',
                     borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-                    display: 'flex',
                     gap: '6px',
                     overflowX: 'auto',
                     scrollbarWidth: 'none',
@@ -1613,9 +1995,85 @@ export default function ChurchAiAssistant() {
                 style={{
                   padding: '12px 14px',
                   backgroundColor: 'rgba(15, 18, 23, 0.98)',
-                  borderTop: '1px solid rgba(226, 183, 20, 0.18)'
+                  borderTop: '1px solid rgba(226, 183, 20, 0.18)',
+                  position: 'relative'
                 }}
               >
+                {/* Desktop FAQ Popover Menu */}
+                {isFaqMenuOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: 'calc(100% + 8px)',
+                      left: '14px',
+                      right: '14px',
+                      backgroundColor: 'rgba(22, 27, 34, 0.98)',
+                      borderRadius: '16px',
+                      border: '1px solid rgba(226, 183, 20, 0.4)',
+                      boxShadow: '0 16px 36px rgba(0, 0, 0, 0.75), 0 0 20px rgba(226, 183, 20, 0.2)',
+                      padding: '12px',
+                      zIndex: 100,
+                      backdropFilter: 'blur(16px)'
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: '8px',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                        paddingBottom: '6px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-gold, #e2b714)', fontSize: '0.82rem', fontWeight: 700 }}>
+                        <HelpCircle size={15} />
+                        <span>{isAr ? 'أسئلة شائعة ومتكررة:' : 'Frequently Asked Questions:'}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsFaqMenuOpen(false)}
+                        style={{ background: 'none', border: 'none', color: 'rgba(255, 255, 255, 0.6)', cursor: 'pointer', padding: '2px' }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '190px', overflowY: 'auto' }}>
+                      {FREQUENT_FAQS.map((q, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            handleSendMessage(q);
+                            setIsFaqMenuOpen(false);
+                          }}
+                          style={{
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                            border: '1px solid rgba(226, 183, 20, 0.15)',
+                            color: '#fff',
+                            fontSize: '0.8rem',
+                            textAlign: isAr ? 'right' : 'left',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.backgroundColor = 'rgba(226, 183, 20, 0.2)';
+                            e.currentTarget.style.borderColor = 'var(--accent-gold, #e2b714)';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
+                            e.currentTarget.style.borderColor = 'rgba(226, 183, 20, 0.15)';
+                          }}
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <form
                   onSubmit={e => {
                     e.preventDefault();
@@ -1628,6 +2086,32 @@ export default function ChurchAiAssistant() {
                     position: 'relative'
                   }}
                 >
+                  {/* Desktop FAQ Toggle Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsFaqMenuOpen(prev => !prev)}
+                    className="hidden sm:flex"
+                    title={isAr ? 'قائمة الأسئلة الشائعة' : 'FAQ Menu'}
+                    style={{
+                      height: '42px',
+                      padding: '0 12px',
+                      borderRadius: '21px',
+                      backgroundColor: isFaqMenuOpen ? 'rgba(226, 183, 20, 0.25)' : 'rgba(226, 183, 20, 0.1)',
+                      border: '1px solid rgba(226, 183, 20, 0.35)',
+                      color: 'var(--accent-gold, #e2b714)',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      alignItems: 'center',
+                      gap: '5px',
+                      flexShrink: 0,
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <HelpCircle size={15} />
+                    <span>{isAr ? 'أسئلة شائعة' : 'FAQ'}</span>
+                  </button>
+
                   <input
                     ref={inputRef}
                     type="text"

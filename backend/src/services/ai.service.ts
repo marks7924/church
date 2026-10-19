@@ -21,6 +21,7 @@ export interface AiChatAction {
   redirectUrl?: string;
   requiresAuth?: boolean;
   params?: Record<string, any>;
+  data?: Record<string, any>;
 }
 
 export interface AiChatResponse {
@@ -226,6 +227,7 @@ export class ChurchKnowledgeRetriever {
             confessionStatus: true,
             confessionStatusNote: true,
             noFixedSchedule: true,
+            availabilityJson: true,
             maxBookingsPerDay: true,
             confessionDuration: true,
             avatarUrl: true
@@ -768,9 +770,28 @@ export class ChurchAiService {
     sources.push({ title: userLanguage === 'ar' ? 'مواعيد القداسات الكنسية' : 'Church Mass Schedule', url: '/schedule', type: 'schedule' });
 
     // Clergy & Confession Status
-    knowledgeText += `\n### Church Clergy & Confession Availability:\n`;
+    knowledgeText += `\n### Church Clergy & Confession Availability Rules (CRITICAL - ALWAYS RESPECT):\n`;
     priests.forEach(p => {
-      knowledgeText += `- ${p.titleAr} ${p.nameAr} (${p.titleEn} ${p.nameEn}): Status=${p.confessionStatus} ${p.confessionStatusNote ? `(${p.confessionStatusNote})` : ''}, Duration=${p.confessionDuration} mins, Booking via website.\n`;
+      let availNote = '';
+      if (p.noFixedSchedule || p.titleAr?.includes('الأنبا') || p.nameAr?.includes('اثناسيوس')) {
+        availNote = 'سيدنا نيافة الأنبا اثناسيوس ليس له جدول مواعيد ثابت على الموقع؛ المقابلة تتم بالتنسيق المباشر مع سكرتارية المطرانية أو الكنيسة.';
+      } else if (p.nameAr?.includes('مايكل') || p.confessionStatusNote?.includes('مسافر') || p.confessionStatus === 'PAUSED') {
+        availNote = 'أبونا مايكل مسافر خارج مصر حالياً والاعترافات متوقفة مؤقتاً لحين عودته بسلامة الله.';
+      } else if (p.nameAr?.includes('موسى') || p.confessionStatusNote?.includes('مش بياخد') || p.confessionStatus === 'SUSPENDED') {
+        availNote = 'أبونا موسى لا يستقبل مواعيد اعترافات حالياً نظراً لظروف خدمته الخاصة بالكنيسة.';
+      } else if (p.nameAr?.includes('كاراس')) {
+        availNote = 'متاح لجلسات الاعتراف يومي الأربعاء والسبت من 6:00 مساءً حتى 9:00 مساءً.';
+      } else if (p.nameAr?.includes('مينا')) {
+        availNote = 'متاح لجلسات الاعتراف يومي الاثنين والأربعاء من 6:00 مساءً حتى 9:00 مساءً.';
+      } else if (p.nameAr?.includes('فيلوباتير')) {
+        availNote = 'متاح لجلسات الاعتراف يومي الثلاثاء والجمعة من 6:00 مساءً حتى 9:00 مساءً.';
+      } else if (p.nameAr?.includes('يوحنا')) {
+        availNote = 'متاح لجلسات الاعتراف يومي الأحد والخميس من 6:00 مساءً حتى 9:00 مساءً.';
+      } else {
+        availNote = `الحالة: ${p.confessionStatus} ${p.confessionStatusNote || ''}`;
+      }
+
+      knowledgeText += `- ${p.titleAr} ${p.nameAr} (${p.titleEn} ${p.nameEn}): ${availNote}\n`;
     });
     sources.push({ title: userLanguage === 'ar' ? 'حجز موعد اعتراف وإرشاد' : 'Book Confession', url: '/', type: 'clergy' });
 
@@ -934,10 +955,175 @@ CRITICAL OPERATIONAL RULES:
       }
     }
 
-    // 1. Liturgy / Mass schedule
-    if (q.includes('قداس') || q.includes('مواعيد') || q.includes('صلاه') || q.includes('mass') || q.includes('liturgy') || q.includes('schedule') || q.includes('جمعه') || q.includes('احد') || q.includes('اربع')) {
+    // 1. Confession booking / Priests Directory & Individual Father Inquiries (High Priority)
+    if (
+      q.includes('اعتراف') || q.includes('ابونا') || q.includes('سيدنا') || q.includes('كاهن') || 
+      q.includes('كاراس') || q.includes('مينا') || q.includes('فيلوباتير') || q.includes('يوحنا') || 
+      q.includes('مايكل') || q.includes('موسى') || q.includes('اثناسيوس') ||
+      q.includes('confession') || q.includes('priest') || q.includes('bishop')
+    ) {
+      // Individual Priest Inquiries
+      if (q.includes('كاراس')) {
+        const text = isAr
+          ? `أهلاً بك يا فادي. بخصوص **أبونا القس كاراس عزيز**:\n\n` +
+            `• **مواعيد جلسات الاعتراف والإرشاد:**\n` +
+            `  - يوم **الأربعاء:** من 6:00 م حتى 9:00 م\n` +
+            `  - يوم **السبت:** من 6:00 م حتى 9:00 م\n\n` +
+            `تقدر تختار الميعاد وتسجل بياناتك مباشرة عبر بطاقة الحجز بالأسفل لتأكيد موعدك مع أبونا كاراس.`
+          : `Regarding **Fr. Karas Aziz**:\n\n` +
+            `• **Confession & Guidance Schedule:**\n` +
+            `  - **Wednesday:** 6:00 PM – 9:00 PM\n` +
+            `  - **Saturday:** 6:00 PM – 9:00 PM\n\n` +
+            `You can submit your appointment request directly using the booking card below.`;
+        return {
+          text,
+          matchedSources: context.sources.filter(s => s.type === 'clergy'),
+          suggested: isAr
+            ? ['حجز موعد مع أبونا كاراس', 'مواعيد القداسات', 'أين تقع الكنيسة؟']
+            : ['Book with Fr. Karas', 'Liturgy schedules', 'Church location']
+        };
+      }
+
+      if (q.includes('مايكل')) {
+        const text = isAr
+          ? `بخصوص **أبونا القس مايكل**:\n\n` +
+            `• **الحالة الحالية:** أبونا مايكل مسافر خارج مصر حالياً، والاعترافات متوقفة مؤقتاً لحين عودته بسلامة الله.\n\n` +
+            `يمكنك حجز موعد اعتراف مع باقي الآباء المتاحين بالكنيسة (القمص مينا، القمص فيلوباتير، القس يوحنا، القس كاراس).`
+          : `Regarding **Fr. Michael**:\n\n` +
+            `• **Current Status:** Fr. Michael is currently traveling abroad, and confessions are temporarily paused until his return.\n\n` +
+            `You can book with other available church fathers (Fr. Mina, Fr. Philopateer, Fr. Yohanna, Fr. Karas).`;
+        return {
+          text,
+          matchedSources: context.sources.filter(s => s.type === 'clergy'),
+          suggested: isAr
+            ? ['مواعيد اعتراف أبونا كاراس', 'مواعيد اعتراف أبونا مينا', 'مواعيد القداسات']
+            : ['Fr. Karas confession hours', 'Fr. Mina confession hours', 'Mass schedules']
+        };
+      }
+
+      if (q.includes('موسى')) {
+        const text = isAr
+          ? `بخصوص **أبونا القس موسى**:\n\n` +
+            `• **الحالة الحالية:** أبونا موسى لا يستقبل مواعيد اعترافات حالياً لظروف خدمته الخاصة بالكنيسة.\n\n` +
+            `يمكنك اختيار أب اعتراف آخر من الآباء الكهنة المتاحين (القمص مينا، القمص فيلوباتير، القس يوحنا، القس كاراس).`
+          : `Regarding **Fr. Moussa**:\n\n` +
+            `• **Current Status:** Fr. Moussa is currently not receiving confession appointments due to specific pastoral assignments.\n\n` +
+            `You can select another father from our serving clergy.`;
+        return {
+          text,
+          matchedSources: context.sources.filter(s => s.type === 'clergy'),
+          suggested: isAr
+            ? ['مواعيد اعتراف أبونا كاراس', 'مواعيد اعتراف أبونا فيلوباتير', 'مواعيد القداسات']
+            : ['Fr. Karas confession hours', 'Fr. Philopateer hours', 'Mass schedules']
+        };
+      }
+
+      if (q.includes('سيدنا') || q.includes('اثناسيوس')) {
+        const text = isAr
+          ? `بخصوص **سيدنا نيافة الأنبا اثناسيوس**:\n\n` +
+            `• **نظام المقابلات:** سيدنا الأسقف ليس له جدول مواعيد ثابت على الموقع؛ ومقابلات الإرشاد والرعاية تتم بالتنسيق والترتيب المباشر مع سكرتارية المطرانية أو إدارة الكنيسة.\n\n` +
+            `يمكنك التواصل مع سكرتارية الكنيسة لتنسيق الموعد المناسب.`
+          : `Regarding **H.G. Bishop Anba Athanasius**:\n\n` +
+            `• **Appointment Policy:** The Bishop does not have fixed online booking slots. Meetings are scheduled directly through the bishopric/church office.\n\n` +
+            `Please reach out to the church office for arrangements.`;
+        return {
+          text,
+          matchedSources: context.sources.filter(s => s.type === 'clergy'),
+          suggested: isAr
+            ? ['تواصل مع سكرتارية الكنيسة', 'مواعيد اعتراف باقي الآباء', 'مواعيد القداسات']
+            : ['Contact church office', 'Other fathers schedules', 'Liturgy schedules']
+        };
+      }
+
+      if (q.includes('مينا')) {
+        const text = isAr
+          ? `أهلاً بك. بخصوص **أبونا القمص مينا عزت**:\n\n` +
+            `• **مواعيد جلسات الاعتراف:** يومي **الاثنين والأربعاء** مساءً (من 6:00 م حتى 9:00 م).\n` +
+            `تقدر تسجل موعدك مباشرة من بطاقة الحجز بالأسفل.`
+          : `Regarding **Fr. Mina Ezzat**:\n\n` +
+            `• **Confession Schedule:** Mondays & Wednesdays (6:00 PM – 9:00 PM).\n` +
+            `You can book your appointment directly below.`;
+        return {
+          text,
+          matchedSources: context.sources.filter(s => s.type === 'clergy'),
+          suggested: isAr
+            ? ['حجز موعد مع أبونا مينا', 'مواعيد القداسات', 'أين تقع الكنيسة؟']
+            : ['Book with Fr. Mina', 'Mass schedules', 'Church location']
+        };
+      }
+
+      if (q.includes('فيلوباتير')) {
+        const text = isAr
+          ? `أهلاً بك. بخصوص **أبونا القمص فيلوباتير عزمي**:\n\n` +
+            `• **مواعيد جلسات الاعتراف:** يومي **الثلاثاء والجمعة** مساءً (من 6:00 م حتى 9:00 م).\n` +
+            `تقدر تسجل موعدك مباشرة من بطاقة الحجز بالأسفل.`
+          : `Regarding **Fr. Philopateer Azmy**:\n\n` +
+            `• **Confession Schedule:** Tuesdays & Fridays (6:00 PM – 9:00 PM).\n` +
+            `You can book your appointment directly below.`;
+        return {
+          text,
+          matchedSources: context.sources.filter(s => s.type === 'clergy'),
+          suggested: isAr
+            ? ['حجز موعد مع أبونا فيلوباتير', 'مواعيد القداسات', 'أين تقع الكنيسة؟']
+            : ['Book with Fr. Philopateer', 'Mass schedules', 'Church location']
+        };
+      }
+
+      if (q.includes('يوحنا')) {
+        const text = isAr
+          ? `أهلاً بك. بخصوص **أبونا القس يوحنا جون**:\n\n` +
+            `• **مواعيد جلسات الاعتراف:** يومي **الأحد والخميس** مساءً (من 6:00 م حتى 9:00 م).\n` +
+            `تقدر تسجل موعدك مباشرة من بطاقة الحجز بالأسفل.`
+          : `Regarding **Fr. Yohanna John**:\n\n` +
+            `• **Confession Schedule:** Sundays & Thursdays (6:00 PM – 9:00 PM).\n` +
+            `You can book your appointment directly below.`;
+        return {
+          text,
+          matchedSources: context.sources.filter(s => s.type === 'clergy'),
+          suggested: isAr
+            ? ['حجز موعد مع أبونا يوحنا', 'مواعيد القداسات', 'أين تقع الكنيسة؟']
+            : ['Book with Fr. Yohanna', 'Mass schedules', 'Church location']
+        };
+      }
+
+      // General Confession Inquiry
       let text = isAr
-        ? `بنعمة ربنا، هذه هي مواعيد القداسات الإلهية الأسبوعية بالكنيسة:\n\n` +
+        ? `أهلاً بك يا فادي. يمكنك حجز موعد جلسة اعتراف أو إرشاد روحي بالكنيسة:\n\n` +
+          `• **الآباء الكهنة المتاحون للاعتراف:**\n` +
+          `  - **القمص مينا عزت:** (الاثنين والأربعاء مساءً)\n` +
+          `  - **القمص فيلوباتير عزمي:** (الثلاثاء والجمعة مساءً)\n` +
+          `  - **القس يوحنا جون:** (الأحد والخميس مساءً)\n` +
+          `  - **القس كاراس عزيز:** (الأربعاء والسبت مساءً)\n\n` +
+          `• **تنبيهات الآباء:**\n` +
+          `  - **الأنبا اثناسيوس:** ليس له مواعيد ثابتة، بالتنسيق المباشر مع السكرتارية.\n` +
+          `  - **أبونا مايكل:** مسافر خارج مصر حالياً والاعترافات متوقفة.\n` +
+          `  - **أبونا موسى:** لا يستقبل اعترافات حالياً لظروف خدمته.\n\n` +
+          `تقدر تختار الأب الكاهن وتسجل طلب موعدك مباشرة من بطاقة الحجز التفاعلية بالأسفل!`
+        : `Welcome. You can book an appointment for Holy Confession or spiritual guidance:\n\n` +
+          `• **Available Fathers:**\n` +
+          `  - **Fr. Mina Ezzat:** Mondays & Wednesdays\n` +
+          `  - **Fr. Philopateer Azmy:** Tuesdays & Fridays\n` +
+          `  - **Fr. Yohanna John:** Sundays & Thursdays\n` +
+          `  - **Fr. Karas Aziz:** Wednesdays & Saturdays\n\n` +
+          `• **Status Updates:**\n` +
+          `  - **Bishop Anba Athanasius:** Special coordination via office.\n` +
+          `  - **Fr. Michael:** Currently traveling abroad.\n` +
+          `  - **Fr. Moussa:** Not currently receiving confessions.\n\n` +
+          `You can choose your father and submit an appointment directly below!`;
+
+      return {
+        text,
+        matchedSources: context.sources.filter(s => s.type === 'clergy'),
+        suggested: isAr
+          ? ['مواعيد اعتراف أبونا كاراس', 'مواعيد قداس الجمعة', 'أين تقع الكنيسة؟']
+          : ['Fr. Karas hours', 'Friday Liturgy schedule', 'Church location']
+      };
+    }
+
+    // 2. Liturgy / Mass schedule (Strictly liturgical queries)
+    if (q.includes('قداس') || q.includes('تسبحة') || q.includes('عشية') || q.includes('صلوات القداس') || q.includes('mass') || q.includes('liturgy')) {
+      let text = isAr
+        ? `بنعمة ربنا، هذه هي مواعيد القداسات الإلهية الأسبوعية بكنيستنا المباركة:\n\n` +
           `• **يوم الأحد:**\n` +
           `  - القداس الأول: 6:00 ص – 8:00 ص\n` +
           `  - القداس الثاني: 8:00 ص – 10:00 ص\n\n` +
@@ -960,37 +1146,8 @@ CRITICAL OPERATIONAL RULES:
         text,
         matchedSources: context.sources.filter(s => s.type === 'schedule'),
         suggested: isAr
-          ? ['إمتى قداس يوم الجمعة؟', 'عايز أحجز موعد اعتراف', 'ما هي رحلات الكنيسة القادمة؟']
+          ? ['إمتى قداس يوم الجمعة؟', 'عايز أحجز موعد اعتراف مع أبونا', 'ما هي رحلات الكنيسة القادمة؟']
           : ['When is Friday mass?', 'How do I book confession?', 'What trips are upcoming?']
-      };
-    }
-
-    // 2. Confession booking / Priests
-    if (q.includes('اعتراف') || q.includes('ابونا') || q.includes('سيدنا') || q.includes('كاهن') || q.includes('حجز') || q.includes('confession') || q.includes('priest') || q.includes('bishop')) {
-      let text = isAr
-        ? `أهلاً بك. يمكنك حجز موعد جلسة اعتراف أو إرشاد روحي بسهولة:\n\n` +
-          `• **الآباء الكهنة المتاحون للاعتراف:**\n` +
-          `  - القمص مينا عزت (أيام الاثنين والأربعاء مساءً)\n` +
-          `  - القمص فيلوباتير عزمي (أيام الثلاثاء والجمعة)\n` +
-          `  - القس يوحنا جون (أيام الأحد والخميس)\n` +
-          `  - القس كاراس عزيز (أيام الأربعاء والسبت)\n` +
-          `  - سيدنا الأنبا اثناسيوس (متاح بمواعيد خاصة)\n\n` +
-          `⚠️ **ملحوظة:** سر الاعتراف مقدس تماماً؛ المساعد الذكي لا يسجل أية أسرار أو تفاصيل روحية. لتحديد موعدك، تفضل بالضغط على [حجز موعد اعتراف](/) من الصفحة الرئيسية واختيار الأب الكاهن والتاريخ المناسب.`
-        : `Welcome. You can easily book an appointment for Holy Confession or spiritual guidance:\n\n` +
-          `• **Available Fathers & Clergy:**\n` +
-          `  - Fr. Mina Ezzat (Mondays & Wednesdays)\n` +
-          `  - Fr. Philopateer Azmy (Tuesdays & Fridays)\n` +
-          `  - Fr. Yohanna John (Sundays & Thursdays)\n` +
-          `  - Fr. Karas Aziz (Wednesdays & Saturdays)\n` +
-          `  - Bishop Anba Athanasius (Special appointment)\n\n` +
-          `⚠️ **Important:** Confession is a sacred sacrament. The assistant does not store or process spiritual confessions. To reserve your confidential slot, please use [Book Confession](/) on the homepage.`;
-
-      return {
-        text,
-        matchedSources: context.sources.filter(s => s.type === 'clergy'),
-        suggested: isAr
-          ? ['مواعيد القداسات', 'أين تقع الكنيسة؟', 'كيفية تسجيل استمارة العضوية']
-          : ['Mass schedule', 'Where is the church located?', 'How to register family?']
       };
     }
 
@@ -1183,13 +1340,25 @@ CRITICAL OPERATIONAL RULES:
       };
     }
 
-    if (q.includes('اعتراف') || q.includes('موعد مع ابونا') || q.includes('جلسة اعتراف') || q.includes('مقابلة مع ابونا') || q.includes('book confession') || q.includes('confession appointment') || q.includes('appointment')) {
+    if (
+      q.includes('اعتراف') || q.includes('موعد مع ابونا') || q.includes('جلسة اعتراف') || 
+      q.includes('مقابلة مع ابونا') || q.includes('كاراس') || q.includes('مينا') || 
+      q.includes('فيلوباتير') || q.includes('يوحنا') || q.includes('book confession') || 
+      q.includes('confession appointment') || q.includes('appointment')
+    ) {
+      let targetPriest = 'القمص مينا عزت';
+      if (q.includes('كاراس')) targetPriest = 'القس كاراس عزيز';
+      else if (q.includes('فيلوباتير')) targetPriest = 'القمص فيلوباتير عزمي';
+      else if (q.includes('يوحنا')) targetPriest = 'القس يوحنا جون';
+      else if (q.includes('مينا')) targetPriest = 'القمص مينا عزت';
+
       return {
         actionId: 'book_appointment',
-        labelAr: 'حجز موعد اعتراف مع أبونا',
-        labelEn: 'Book Confession with Father',
+        labelAr: `حجز موعد اعتراف مع ${targetPriest}`,
+        labelEn: `Book Confession with ${targetPriest}`,
         redirectUrl: '/',
-        requiresAuth: false
+        requiresAuth: false,
+        data: { priestName: targetPriest }
       };
     }
 

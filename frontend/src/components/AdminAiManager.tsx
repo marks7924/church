@@ -190,7 +190,9 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
 
       if (faqsRes.ok) {
         const fData = await faqsRes.json();
-        setFaqs(fData);
+        setFaqs(Array.isArray(fData) ? fData : (Array.isArray(fData?.faqs) ? fData.faqs : []));
+      } else {
+        setFaqs([]);
       }
     } catch (err) {
       console.error('Error fetching AI admin data:', err);
@@ -208,12 +210,17 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
       });
       if (res.ok) {
         const data = await res.json();
-        setAdminConversations(data);
-        if (data.length > 0 && !activeConvId) {
-          loadConversationDetails(data[0].id);
+        const convList = Array.isArray(data) ? data : (Array.isArray(data?.conversations) ? data.conversations : []);
+        setAdminConversations(convList);
+        if (convList.length > 0 && !activeConvId) {
+          loadConversationDetails(convList[0].id);
         }
+      } else {
+        setAdminConversations([]);
       }
-    } catch (e) {}
+    } catch (e) {
+      setAdminConversations([]);
+    }
   };
 
   const loadConversationDetails = async (id: string) => {
@@ -332,9 +339,13 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
-        setKnowledgeItems(data);
+        setKnowledgeItems(Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []));
+      } else {
+        setKnowledgeItems([]);
       }
-    } catch (e) {}
+    } catch (e) {
+      setKnowledgeItems([]);
+    }
   };
 
   const handlePublishKnowledge = async (id: string) => {
@@ -440,9 +451,13 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
       const res = await fetch(`${API_URL}/ai/admin/evaluations`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
-        setEvalCases(data);
+        setEvalCases(Array.isArray(data) ? data : (Array.isArray(data?.cases) ? data.cases : []));
+      } else {
+        setEvalCases([]);
       }
-    } catch (e) {}
+    } catch (e) {
+      setEvalCases([]);
+    }
   };
 
   const handleRunEvaluation = async () => {
@@ -925,12 +940,12 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
               </div>
 
               <div style={{ flex: 1, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {adminConversations.length === 0 ? (
+                {(!Array.isArray(adminConversations) || adminConversations.length === 0) ? (
                   <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem', padding: '20px 0' }}>
                     {isAr ? 'لا توجد محادثات سابقة. انقر فوق "جديدة" للبدء.' : 'No conversations. Click "New" to start.'}
                   </p>
                 ) : (
-                  adminConversations.map(c => {
+                  (Array.isArray(adminConversations) ? adminConversations : []).map(c => {
                     const isSelected = activeConvId === c.id;
                     return (
                       <div
@@ -986,12 +1001,12 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
 
                   {/* Messages Feed */}
                   <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    {(!activeConv.messages || activeConv.messages.length === 0) ? (
+                    {(!Array.isArray(activeConv?.messages) || activeConv.messages.length === 0) ? (
                       <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 'auto' }}>
                         {isAr ? 'اكتب معلوماتك الكنسية أو ناقش السياسات مع المساعد ليتم استخراج المعرفة منها.' : 'Start chatting to teach and extract church knowledge.'}
                       </p>
                     ) : (
-                      activeConv.messages.map((m: any) => {
+                      (Array.isArray(activeConv?.messages) ? activeConv.messages : []).map((m: any) => {
                         const isAdmin = m.senderType === 'ADMIN';
                         return (
                           <div
@@ -1183,8 +1198,8 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
                 </tr>
               </thead>
               <tbody>
-                {adminConversations
-                  .filter(c => !logSearchQuery || c.title.toLowerCase().includes(logSearchQuery.toLowerCase()))
+                {(Array.isArray(adminConversations) ? adminConversations : [])
+                  .filter(c => !logSearchQuery || (c.title && c.title.toLowerCase().includes(logSearchQuery.toLowerCase())))
                   .map(c => (
                     <tr key={c.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                       <td style={{ padding: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -1330,7 +1345,7 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
 
           {/* Evaluation Cases List */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {evalCases.map((c: any) => (
+            {(Array.isArray(evalCases) ? evalCases : []).map((c: any) => (
               <div
                 key={c.id}
                 style={{
@@ -2109,14 +2124,14 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
                   </tr>
                 </thead>
                 <tbody>
-                  {knowledgeItems.length === 0 ? (
+                  {(!Array.isArray(knowledgeItems) || knowledgeItems.length === 0) ? (
                     <tr>
                       <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
                         {isAr ? 'لا توجد سجلات معرفية في هذا الفلتر.' : 'No knowledge records found.'}
                       </td>
                     </tr>
                   ) : (
-                    knowledgeItems.map(item => (
+                    (Array.isArray(knowledgeItems) ? knowledgeItems : []).map(item => (
                       <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                         <td style={{ padding: '10px' }}>
                           <strong style={{ color: 'var(--text-primary)', display: 'block' }}>{item.titleAr}</strong>
@@ -2268,13 +2283,13 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
               {isAr ? 'سجل الاستفسارات الأخيرة (مع الحفاظ الكامل على الخصوصية)' : 'Recent Diagnostic Queries'}
             </h3>
 
-            {(!analytics?.recentQueries || analytics.recentQueries.length === 0) ? (
+            {(!Array.isArray(analytics?.recentQueries) || analytics.recentQueries.length === 0) ? (
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0 }}>
                 {isAr ? 'لا توجد سجلات استفسارات حديثة حتى الآن.' : 'No recent queries recorded yet.'}
               </p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {analytics.recentQueries.map(q => (
+                {(Array.isArray(analytics?.recentQueries) ? analytics.recentQueries : []).map(q => (
                   <div
                     key={q.id}
                     style={{
