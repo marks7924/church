@@ -145,14 +145,14 @@ router.get('/diagnostics', async (req: Request, res: Response) => {
     const testGemini = async () => {
       if (!geminiKey) return { status: 'NO_KEY_DETECTED' };
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`;
-        const r = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'ping' }] }] })
-        });
-        const text = await r.text();
-        return { httpStatus: r.status, ok: r.ok, bodyPreview: text.slice(0, 300) };
+        const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(geminiKey)}`;
+        const listRes = await fetch(listUrl);
+        const listText = await listRes.text();
+        return {
+          httpStatus: listRes.status,
+          ok: listRes.ok,
+          bodyPreview: listText.slice(0, 400)
+        };
       } catch (err: any) {
         return { error: err.message };
       }
@@ -161,14 +161,18 @@ router.get('/diagnostics', async (req: Request, res: Response) => {
     const testGroq = async () => {
       if (!groqKey) return { status: 'NO_KEY_DETECTED' };
       try {
-        const url = 'https://api.groq.com/openai/v1/chat/completions';
-        const r = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-          body: JSON.stringify({ model: 'llama-3.1-8b-instant', messages: [{ role: 'user', content: 'ping' }], max_tokens: 10 })
+        const listUrl = 'https://api.groq.com/openai/v1/models';
+        const listRes = await fetch(listUrl, {
+          headers: { Authorization: `Bearer ${groqKey}` }
         });
-        const text = await r.text();
-        return { httpStatus: r.status, ok: r.ok, bodyPreview: text.slice(0, 300) };
+        const listData = await listRes.json();
+        const modelIds = listData?.data?.map((m: any) => m.id) || [];
+        return {
+          httpStatus: listRes.status,
+          ok: listRes.ok,
+          availableModels: modelIds.slice(0, 15),
+          raw: !listRes.ok ? listData : undefined
+        };
       } catch (err: any) {
         return { error: err.message };
       }
