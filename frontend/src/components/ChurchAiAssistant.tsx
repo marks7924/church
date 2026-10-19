@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useTheme } from './ThemeContext';
 import { API_URL } from '../config';
 import { 
@@ -28,7 +28,9 @@ interface ChatMessage {
 export default function ChurchAiAssistant() {
   const { language } = useTheme();
   const router = useRouter();
+  const pathname = usePathname();
   const isAr = language === 'ar';
+  const isAuthPage = pathname === '/login' || pathname === '/register-member';
 
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -380,7 +382,7 @@ export default function ChurchAiAssistant() {
   return (
     <>
       {/* 1. Floating Action Trigger Button (Bottom corner) */}
-      {!isOpen && !isNavDrawerOpen && (
+      {!isOpen && !isNavDrawerOpen && !isAuthPage && (
         <button
           id="church-ai-trigger-btn"
           onClick={() => {

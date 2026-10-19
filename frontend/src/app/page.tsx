@@ -682,9 +682,18 @@ export default function Home() {
               {t('booking_title')}
             </h3>
             
-            <div style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-              <b>{language === 'ar' ? 'حجز مع:' : 'Booking with:'}</b>{' '}
-              {language === 'ar' ? `${selectedPriest.titleAr} ${selectedPriest.nameAr}` : `${selectedPriest.titleEn} ${selectedPriest.nameEn}`}
+            <div style={{ marginBottom: '1.2rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {selectedPriest.avatarUrl ? (
+                <img src={selectedPriest.avatarUrl} alt={selectedPriest.nameAr} style={{ width: '46px', height: '46px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent-gold)' }} />
+              ) : (
+                <div style={{ width: '46px', height: '46px', borderRadius: '50%', backgroundColor: 'rgba(226, 183, 20, 0.1)', border: '2px dashed var(--accent-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', color: 'var(--accent-gold)' }}>👤</div>
+              )}
+              <div>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block' }}>{language === 'ar' ? 'حجز موعد اعتراف مع:' : 'Booking Confession with:'}</span>
+                <strong style={{ fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                  {language === 'ar' ? `${selectedPriest.titleAr} ${selectedPriest.nameAr}` : `${selectedPriest.titleEn} ${selectedPriest.nameEn}`}
+                </strong>
+              </div>
             </div>
 
             {bookingMessage && (

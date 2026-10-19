@@ -192,10 +192,10 @@ export default function DashboardPage() {
   // Image Cropper Modal states
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [cropTargetImage, setCropTargetImage] = useState('');
-  const [cropPreset, setCropPreset] = useState<'1:1' | '16:9' | '4:3' | 'free'>('free');
+  const [cropPreset, setCropPreset] = useState<'circle' | '1:1' | '16:9' | '4:3' | 'free'>('free');
   const [cropCallback, setCropCallback] = useState<(croppedUrl: string) => void>(() => () => {});
 
-  const openImageCropper = (imageUrl: string, preset: '1:1' | '16:9' | '4:3' | 'free', onDone: (url: string) => void) => {
+  const openImageCropper = (imageUrl: string, preset: 'circle' | '1:1' | '16:9' | '4:3' | 'free', onDone: (url: string) => void) => {
     if (!imageUrl) {
       alert(language === 'ar' ? 'يرجى اختيار صورة أولاً لقصها.' : 'Please select an image first to crop.');
       return;
@@ -1435,7 +1435,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="container" style={{ padding: 'clamp(1.5rem, 4vw, 3rem) clamp(0.8rem, 3vw, 1.5rem)' }}>
+    <div className="container dashboard-main-container" style={{ padding: 'clamp(1rem, 3vw, 2.5rem) clamp(0.75rem, 2vw, 1.25rem)', width: '100%', maxWidth: '1300px', boxSizing: 'border-box', overflowX: 'hidden' }}>
       
       {/* Impersonation Alert Banner */}
       {impersonatorBackup && (
@@ -1444,7 +1444,7 @@ export default function DashboardPage() {
           border: '2px solid var(--accent-gold)',
           borderRadius: '8px',
           padding: '12px 18px',
-          marginBottom: '2rem',
+          marginBottom: '1.5rem',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -1491,18 +1491,18 @@ export default function DashboardPage() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '2.5rem',
+        marginBottom: '1.5rem',
         borderBottom: '1px solid var(--border-color)',
-        paddingBottom: '20px',
+        paddingBottom: '16px',
         flexWrap: 'wrap',
-        gap: '1rem'
+        gap: '12px'
       }}>
-        <div>
-          <h1 style={{ fontSize: 'clamp(1.6rem, 5vw, 2.2rem)', fontWeight: '800' }}>
+        <div style={{ minWidth: 'min(100%, 260px)' }}>
+          <h1 style={{ fontSize: 'clamp(1.4rem, 4.5vw, 2.2rem)', fontWeight: '800', margin: 0 }}>
             {t('nav_dashboard')}
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
-            {t('welcome')} {user?.fullName} • 🛡️ <span style={{ color: 'var(--accent-gold)' }}>{user?.role}</span>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginTop: '4px', margin: 0 }}>
+            {t('welcome')} {user?.fullName} • 🛡️ <span style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>{user?.role}</span>
           </p>
         </div>
         
@@ -1514,12 +1514,14 @@ export default function DashboardPage() {
               color: '#000000',
               fontWeight: 'bold',
               border: 'none',
-              padding: '10px 20px',
-              borderRadius: '4px',
+              padding: '10px 18px',
+              borderRadius: '8px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px'
+              gap: '6px',
+              minHeight: '42px',
+              touchAction: 'manipulation'
             }}
           >
             <FileText size={18} />
@@ -1528,51 +1530,85 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Mobile Tab Dropdown Button */}
-      <button 
-        className="dashboard-mobile-menu-btn" 
-        onClick={() => setIsMobileTabMenuOpen(true)}
-      >
-        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {getAvailableTabs().find(t => t.id === activeTab)?.icon}
-          <span>
-            {language === 'ar' ? 'القسم الحالي: ' : 'Section: '} 
-            <b>
-              {(() => {
-                const currentTab = getAvailableTabs().find(t => t.id === activeTab);
-                return currentTab ? (language === 'ar' ? currentTab.labelAr : currentTab.labelEn) : '';
-              })()}
-            </b>
+      {/* Unified Phone & Desktop Navigation Container */}
+      <div className="dashboard-mobile-nav-container">
+        {/* Mobile Tab Dropdown Button */}
+        <button 
+          type="button"
+          className="dashboard-mobile-menu-btn" 
+          onClick={() => setIsMobileTabMenuOpen(true)}
+          aria-label={language === 'ar' ? 'تغيير قسم لوحة التحكم' : 'Change Dashboard Section'}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, overflow: 'hidden' }}>
+            <span style={{ color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              {getAvailableTabs().find(t => t.id === activeTab)?.icon}
+            </span>
+            <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', textAlign: 'start' }}>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', display: 'block', fontWeight: 500 }}>
+                {language === 'ar' ? 'القسم الحالي:' : 'Current Section:'}
+              </span>
+              <strong style={{ color: 'var(--text-primary)', fontSize: '0.92rem' }}>
+                {(() => {
+                  const currentTab = getAvailableTabs().find(t => t.id === activeTab);
+                  return currentTab ? (language === 'ar' ? currentTab.labelAr : currentTab.labelEn) : '';
+                })()}
+              </strong>
+            </span>
           </span>
-        </span>
-        <ChevronDown size={18} />
-      </button>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-gold)', fontSize: '0.82rem', fontWeight: 700, backgroundColor: 'rgba(226, 183, 20, 0.1)', padding: '6px 10px', borderRadius: '6px', flexShrink: 0 }}>
+            <span>{language === 'ar' ? 'الأقسام' : 'Sections'}</span>
+            <ChevronDown size={16} />
+          </span>
+        </button>
 
-      {/* Desktop Tabs Menu Selection */}
-      <div className="dashboard-tabs-desktop" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '2rem' }}>
-        {getAvailableTabs().map(tab => (
-          <button 
-            key={tab.id}
-            className="dashboard-tab-btn"
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '4px',
-              border: '1px solid var(--border-color)',
-              background: activeTab === tab.id ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-              color: activeTab === tab.id ? '#000000' : 'var(--text-primary)',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              fontSize: '0.9rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            {tab.icon}
-            <span>{language === 'ar' ? tab.labelAr : tab.labelEn}</span>
-          </button>
-        ))}
+        {/* Scrollable Horizontal Pill Tabs */}
+        <div 
+          className="dashboard-tabs-scrollable" 
+          style={{ 
+            display: 'flex', 
+            gap: '8px', 
+            overflowX: 'auto', 
+            paddingBottom: '10px', 
+            marginBottom: '1.8rem',
+            scrollbarWidth: 'none',
+            WebkitOverflowScrolling: 'touch',
+            touchAction: 'pan-x'
+          }}
+        >
+          {getAvailableTabs().map(tab => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button 
+                key={tab.id}
+                type="button"
+                className={`dashboard-tab-btn ${isActive ? 'dashboard-tab-btn-active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '24px',
+                  border: isActive ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                  background: isActive ? 'var(--accent-gold)' : 'var(--bg-secondary)',
+                  color: isActive ? '#000000' : 'var(--text-primary)',
+                  cursor: 'pointer',
+                  fontWeight: isActive ? '700' : '600',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  minHeight: '40px',
+                  touchAction: 'manipulation',
+                  transition: 'all 0.2s ease',
+                  boxShadow: isActive ? '0 4px 12px rgba(226, 183, 20, 0.25)' : 'none'
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center' }}>{tab.icon}</span>
+                <span>{language === 'ar' ? tab.labelAr : tab.labelEn}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Mobile Drawer (Bottom Sheet) for Dashboard Tabs */}
@@ -1580,26 +1616,46 @@ export default function DashboardPage() {
         <div className="dashboard-drawer-overlay" onClick={() => setIsMobileTabMenuOpen(false)}>
           <div className="dashboard-drawer-content" onClick={(e) => e.stopPropagation()}>
             <div className="dashboard-drawer-header">
-              <span className="dashboard-drawer-title">{language === 'ar' ? 'أقسام لوحة التحكم' : 'Dashboard Sections'}</span>
-              <button className="dashboard-drawer-close" onClick={() => setIsMobileTabMenuOpen(false)}>
+              <span className="dashboard-drawer-title">{language === 'ar' ? 'أقسام وإدارات لوحة التحكم' : 'Dashboard Sections'}</span>
+              <button 
+                type="button"
+                className="dashboard-drawer-close" 
+                onClick={() => setIsMobileTabMenuOpen(false)}
+                aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
+                style={{ padding: '6px', minHeight: '36px', minWidth: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
                 <X size={20} />
               </button>
             </div>
             
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {getAvailableTabs().map(tab => {
                 const isActive = activeTab === tab.id;
                 return (
                   <button
                     key={tab.id}
+                    type="button"
                     className={`dashboard-drawer-item ${isActive ? 'dashboard-drawer-item-active' : ''}`}
                     onClick={() => {
                       setActiveTab(tab.id);
                       setIsMobileTabMenuOpen(false);
                     }}
+                    style={{
+                      minHeight: '48px',
+                      touchAction: 'manipulation'
+                    }}
                   >
-                    {tab.icon}
-                    <span>{language === 'ar' ? tab.labelAr : tab.labelEn}</span>
+                    <span style={{ color: isActive ? 'var(--accent-gold)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>
+                      {tab.icon}
+                    </span>
+                    <span style={{ flex: 1, fontSize: '0.92rem' }}>
+                      {language === 'ar' ? tab.labelAr : tab.labelEn}
+                    </span>
+                    {isActive && (
+                      <span style={{ fontSize: '0.75rem', backgroundColor: 'var(--accent-gold)', color: '#000000', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                        {language === 'ar' ? 'نشط' : 'Active'}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -1846,7 +1902,7 @@ export default function DashboardPage() {
                       {myAvatarUrl && (
                         <button
                           type="button"
-                          onClick={() => openImageCropper(myAvatarUrl, '1:1', (cropped) => setMyAvatarUrl(cropped))}
+                          onClick={() => openImageCropper(myAvatarUrl, 'circle', (cropped) => setMyAvatarUrl(cropped))}
                           style={{
                             padding: '6px 12px',
                             backgroundColor: 'var(--bg-secondary)',
@@ -1862,7 +1918,7 @@ export default function DashboardPage() {
                           }}
                         >
                           <Scissors size={14} />
-                          <span>{language === 'ar' ? 'قص وضبط أبعاد الصورة (1:1)' : 'Crop 1:1'}</span>
+                          <span>{language === 'ar' ? 'قص وضبط صورة الكاهن (دائري)' : 'Circular Priest Crop'}</span>
                         </button>
                       )}
                       {myAvatarUrl && (
@@ -3625,11 +3681,11 @@ export default function DashboardPage() {
                     {priestAvatarUrl && (
                       <button 
                         type="button" 
-                        onClick={() => openImageCropper(priestAvatarUrl, '1:1', (cropped) => setPriestAvatarUrl(cropped))}
-                        title={language === 'ar' ? 'قص وضبط أبعاد الصورة' : 'Crop & Adjust'}
+                        onClick={() => openImageCropper(priestAvatarUrl, 'circle', (cropped) => setPriestAvatarUrl(cropped))}
+                        title={language === 'ar' ? 'قص وضبط صورة الكاهن (دائري)' : 'Circular Priest Crop'}
                         style={{ padding: '6px 10px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem' }}
                       >
-                        <Scissors size={14} /> {language === 'ar' ? 'قص' : 'Crop'}
+                        <Scissors size={14} /> {language === 'ar' ? 'قص دائري' : 'Circle Crop'}
                       </button>
                     )}
                     <button type="button" onClick={() => setPriestAvatarUrl('')} style={{ padding: '6px 10px', backgroundColor: 'var(--bg-card)', border: '1px solid #ff4d4d', color: '#ff4d4d', borderRadius: '4px', cursor: 'pointer' }}>{language === 'ar' ? 'مسح' : 'Clear'}</button>
@@ -3719,13 +3775,46 @@ export default function DashboardPage() {
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               {allPriests.map(p => (
-                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '15px', borderBottom: '1px solid var(--border-color)', alignItems: 'center', backgroundColor: 'var(--bg-card)', borderRadius: '6px', flexWrap: 'wrap', gap: '12px' }}>
-                  <div style={{ minWidth: 'min(100%, 240px)', flex: 1 }}>
-                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
-                      {language === 'ar' ? `${p.titleAr} ${p.nameAr}` : `${p.titleEn} ${p.nameEn}`}
-                    </span>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px', wordBreak: 'break-word' }}>
-                      ✉️ {p.email} • 📞 {p.phone || 'N/A'} • 🪪 {p.nationalId || 'N/A'}
+                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '15px', borderBottom: '1px solid var(--border-color)', alignItems: 'center', backgroundColor: 'var(--bg-card)', borderRadius: '8px', flexWrap: 'wrap', gap: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 'min(100%, 240px)', flex: 1 }}>
+                    {p.avatarUrl ? (
+                      <img 
+                        src={p.avatarUrl} 
+                        alt={p.nameAr} 
+                        style={{ 
+                          width: '50px', 
+                          height: '50px', 
+                          borderRadius: '50%', 
+                          objectFit: 'cover', 
+                          border: '2px solid var(--accent-gold)', 
+                          flexShrink: 0,
+                          boxShadow: 'var(--shadow-sm)'
+                        }} 
+                      />
+                    ) : (
+                      <div style={{ 
+                        width: '50px', 
+                        height: '50px', 
+                        borderRadius: '50%', 
+                        backgroundColor: 'rgba(226, 183, 20, 0.12)', 
+                        border: '2px dashed var(--accent-gold)', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        fontSize: '1.3rem', 
+                        color: 'var(--accent-gold)', 
+                        flexShrink: 0 
+                      }}>
+                        👤
+                      </div>
+                    )}
+                    <div>
+                      <span style={{ fontWeight: 'bold', fontSize: '1.05rem', display: 'block' }}>
+                        {language === 'ar' ? `${p.titleAr} ${p.nameAr}` : `${p.titleEn} ${p.nameEn}`}
+                      </span>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px', wordBreak: 'break-word' }}>
+                        ✉️ {p.email} • 📞 {p.phone || 'N/A'} • 🪪 {p.nationalId || 'N/A'}
+                      </div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
