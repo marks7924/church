@@ -18,15 +18,15 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "كنيسة الشهيد العظيم أبي سيفين | Coptic Orthodox Church",
-    template: "%s | كنيسة الشهيد العظيم أبي سيفين",
+    default: "كنيسة السيدة العذراء والشهيد أبي سيفين | Coptic Orthodox Church",
+    template: "%s | كنيسة السيدة العذراء والشهيد أبي سيفين",
   },
-  description: "الموقع الرسمي لكنيسة الشهيد العظيم أبي سيفين القبطية الأرثوذكسية. مواعيد القداسات الإلهية، العظات، الخدمات والأنشطة الكنسية، وحجز مواعيد الاعتراف والرعاية الروحية.",
+  description: "الموقع الرسمي لكنيسة السيدة العذراء والشهيد أبي سيفين القبطية الأرثوذكسية. مواعيد القداسات الإلهية، العظات، الخدمات والأنشطة الكنسية، وحجز مواعيد الاعتراف والرعاية الروحية.",
   keywords: [
     "كنيسة قبطية أرثوذكسية",
     "مواعيد القداسات",
     "حجز موعد اعتراف",
-    "كنيسة الشهيد العظيم أبي سيفين",
+    "كنيسة السيدة العذراء والشهيد أبي سيفين",
     "عظات قبطية",
     "خدمات كنسية",
     "Coptic Orthodox Church",
@@ -34,9 +34,9 @@ export const metadata: Metadata = {
     "Coptic Hymns",
     "Holy Mass"
   ],
-  authors: [{ name: "كنيسة الشهيد العظيم أبي سيفين" }],
-  creator: "كنيسة الشهيد العظيم أبي سيفين القبطية الأرثوذكسية",
-  publisher: "كنيسة الشهيد العظيم أبي سيفين القبطية الأرثوذكسية",
+  authors: [{ name: "كنيسة السيدة العذراء والشهيد أبي سيفين" }],
+  creator: "كنيسة السيدة العذراء والشهيد أبي سيفين القبطية الأرثوذكسية",
+  publisher: "كنيسة السيدة العذراء والشهيد أبي سيفين القبطية الأرثوذكسية",
   applicationName: "منصة الكنيسة القبطية الأرثوذكسية",
   icons: {
     icon: [
@@ -61,22 +61,22 @@ export const metadata: Metadata = {
     locale: "ar_EG",
     alternateLocale: ["en_US"],
     url: "/",
-    siteName: "كنيسة الشهيد العظيم أبي سيفين القبطية الأرثوذكسية",
-    title: "كنيسة الشهيد العظيم أبي سيفين | Coptic Orthodox Church",
+    siteName: "كنيسة السيدة العذراء والشهيد أبي سيفين القبطية الأرثوذكسية",
+    title: "كنيسة السيدة العذراء والشهيد أبي سيفين | Coptic Orthodox Church",
     description: "الموقع الرسمي لصلوات وقداسات الكنيسة، حجز الاعترافات، والخدمات الكنسية والرعوية للأسرة والشباب.",
     images: [
       {
         url: "/og-banner.png",
         width: 1200,
         height: 630,
-        alt: "كنيسة الشهيد العظيم أبي سيفين القبطية الأرثوذكسية",
+        alt: "كنيسة السيدة العذراء والشهيد أبي سيفين القبطية الأرثوذكسية",
         type: "image/png",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "كنيسة الشهيد العظيم أبي سيفين | Coptic Orthodox Church",
+    title: "كنيسة السيدة العذراء والشهيد أبي سيفين | Coptic Orthodox Church",
     description: "الموقع الرسمي لصلوات وقداسات الكنيسة، حجز الاعترافات، والخدمات الكنسية والرعوية.",
     images: ["/og-banner.png"],
   },
@@ -90,8 +90,8 @@ export default function RootLayout({
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Church",
-    "name": "كنيسة الشهيد العظيم أبي سيفين القبطية الأرثوذكسية",
-    "alternateName": "St. Philopater Coptic Orthodox Church",
+    "name": "كنيسة السيدة العذراء والشهيد أبي سيفين القبطية الأرثوذكسية",
+    "alternateName": "St. Mary & St. Philopater Coptic Orthodox Church",
     "url": SITE_URL,
     "logo": `${SITE_URL}/logo.png`,
     "image": `${SITE_URL}/og-banner.png`,

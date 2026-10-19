@@ -31,6 +31,7 @@ export default function ChurchAiAssistant() {
   const pathname = usePathname();
   const isAr = language === 'ar';
   const isAuthPage = pathname === '/login' || pathname === '/register-member';
+  const isAdminPanel = pathname === '/dashboard' || pathname?.startsWith('/dashboard');
 
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -407,6 +408,10 @@ export default function ChurchAiAssistant() {
       );
     });
   };
+
+  if (isAdminPanel) {
+    return null;
+  }
 
   return (
     <>
