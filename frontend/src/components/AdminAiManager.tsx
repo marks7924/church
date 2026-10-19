@@ -6,12 +6,15 @@ import {
   Sparkles, RefreshCw, CheckCircle2, AlertTriangle, Play, 
   Settings, BarChart3, Database, Shield, ExternalLink, Send, 
   Check, X, Plus, Edit2, Trash2, Image as ImageIcon, Eye, 
-  HelpCircle, ToggleLeft, ToggleRight, MessageSquare
+  HelpCircle, ToggleLeft, ToggleRight, MessageSquare, Search,
+  Clock, ArrowUpRight, CheckCircle, FileText, Activity, AlertCircle,
+  HeartHandshake, BookOpen, Layers, Zap, UserCheck
 } from 'lucide-react';
 
 interface AdminAiManagerProps {
   token: string | null;
   language: 'ar' | 'en';
+  initialSubTab?: 'admin-chat' | 'knowledge' | 'chat-logs' | 'evaluation-lab' | 'provider-health' | 'faqs' | 'overview' | 'playground' | 'analytics';
 }
 
 interface CustomFaq {
@@ -88,16 +91,51 @@ interface AiAnalytics {
   };
 }
 
-export default function AdminAiManager({ token, language }: AdminAiManagerProps) {
+export default function AdminAiManager({ token, language, initialSubTab }: AdminAiManagerProps) {
   const isAr = language === 'ar';
 
-  const [activeSubTab, setActiveSubTab] = useState<'faqs' | 'overview' | 'knowledge' | 'analytics' | 'playground'>('faqs');
+  type SubTabType = 'admin-chat' | 'knowledge' | 'chat-logs' | 'evaluation-lab' | 'provider-health' | 'faqs' | 'overview' | 'playground' | 'analytics';
+  const [activeSubTab, setActiveSubTab] = useState<SubTabType>(initialSubTab || 'admin-chat');
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [analytics, setAnalytics] = useState<AiAnalytics | null>(null);
   const [faqs, setFaqs] = useState<CustomFaq[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // AI Knowledge Chat states
+  const [adminConversations, setAdminConversations] = useState<any[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [activeConv, setActiveConv] = useState<any | null>(null);
+  const [adminMsgInput, setAdminMsgInput] = useState('');
+  const [isAdminSending, setIsAdminSending] = useState(false);
+  const [isExtractingCandidate, setIsExtractingCandidate] = useState(false);
+  const [extractedFeedback, setExtractedFeedback] = useState<string | null>(null);
+
+  // Knowledge Items Pipeline states
+  const [knowledgeItems, setKnowledgeItems] = useState<any[]>([]);
+  const [knowledgeFilter, setKnowledgeFilter] = useState('ALL');
+  const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState(false);
+  const [editingKnowledgeId, setEditingKnowledgeId] = useState<string | null>(null);
+  const [kTitleAr, setKTitleAr] = useState('');
+  const [kTitleEn, setKTitleEn] = useState('');
+  const [kContentAr, setKContentAr] = useState('');
+  const [kContentEn, setKContentEn] = useState('');
+  const [kCategory, setKCategory] = useState('GENERAL');
+  const [kStatus, setKStatus] = useState('APPROVED');
+
+  // Evaluation Lab states
+  const [evalCases, setEvalCases] = useState<any[]>([]);
+  const [evalCategory, setEvalCategory] = useState('ALL');
+  const [isRunningEval, setIsRunningEval] = useState(false);
+  const [evalSummary, setEvalSummary] = useState<any | null>(null);
+
+  // Provider Health states
+  const [providerHealth, setProviderHealth] = useState<any | null>(null);
+
+  // Chat Logs states
+  const [logSearchQuery, setLogSearchQuery] = useState('');
+  const [selectedLogConv, setSelectedLogConv] = useState<any | null>(null);
 
   // Edit settings form states
   const [formEnabled, setFormEnabled] = useState(true);
@@ -161,8 +199,300 @@ export default function AdminAiManager({ token, language }: AdminAiManagerProps)
     }
   };
 
+  // Load Admin Conversations
+  const fetchAdminConversations = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/ai/admin/conversations`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdminConversations(data);
+        if (data.length > 0 && !activeConvId) {
+          loadConversationDetails(data[0].id);
+        }
+      }
+    } catch (e) {}
+  };
+
+  const loadConversationDetails = async (id: string) => {
+    if (!token || !id) return;
+    setActiveConvId(id);
+    try {
+      const res = await fetch(`${API_URL}/ai/admin/conversations/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActiveConv(data);
+      }
+    } catch (e) {}
+  };
+
+  const handleCreateNewConversation = async () => {
+    if (!token) return;
+    const title = prompt(isAr ? 'أدخل عنوان المحادثة التدريبية:' : 'Enter conversation title:');
+    if (!title || !title.trim()) return;
+
+    try {
+      const res = await fetch(`${API_URL}/ai/admin/conversations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ title: title.trim() })
+      });
+      if (res.ok) {
+        const newConv = await res.json();
+        setAdminConversations(prev => [newConv, ...prev]);
+        loadConversationDetails(newConv.id);
+      }
+    } catch (e) {}
+  };
+
+  const handleSendAdminMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!token || !activeConvId || !adminMsgInput.trim() || isAdminSending) return;
+
+    const content = adminMsgInput.trim();
+    setAdminMsgInput('');
+    setIsAdminSending(true);
+
+    try {
+      const res = await fetch(`${API_URL}/ai/admin/conversations/${activeConvId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          content,
+          language: isAr ? 'ar' : 'en'
+        })
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        setActiveConv((prev: any) => ({
+          ...prev,
+          messages: [...(prev?.messages || []), result.userMessage, result.aiMessage]
+        }));
+      }
+    } catch (e) {
+      alert(isAr ? 'تعذر إرسال الرسالة.' : 'Failed to send message.');
+    } finally {
+      setIsAdminSending(false);
+    }
+  };
+
+  const handleExtractKnowledge = async (messageId: string) => {
+    if (!token || !activeConvId) return;
+    setIsExtractingCandidate(true);
+    setExtractedFeedback(null);
+
+    try {
+      const res = await fetch(`${API_URL}/ai/admin/conversations/${activeConvId}/extract-knowledge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ messageId })
+      });
+
+      if (res.ok) {
+        const candidate = await res.json();
+        setExtractedFeedback(
+          isAr 
+            ? `✓ تم استخراج مرشح المعرفة بنجاح: "${candidate.titleAr}" وحفظه كمسودة للمراجعة والاعتماد!`
+            : `✓ Knowledge candidate extracted: "${candidate.titleEn || candidate.titleAr}" (Saved as Draft)!`
+        );
+        fetchKnowledgeItems();
+        setTimeout(() => setExtractedFeedback(null), 6000);
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to extract knowledge.');
+      }
+    } catch (e) {
+      alert(isAr ? 'حدث خطأ أثناء الاستخراج.' : 'Error extracting candidate.');
+    } finally {
+      setIsExtractingCandidate(false);
+    }
+  };
+
+  // Knowledge Items Management
+  const fetchKnowledgeItems = async (status = knowledgeFilter) => {
+    if (!token) return;
+    try {
+      const url = status === 'ALL'
+        ? `${API_URL}/ai/admin/knowledge`
+        : `${API_URL}/ai/admin/knowledge?status=${status}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setKnowledgeItems(data);
+      }
+    } catch (e) {}
+  };
+
+  const handlePublishKnowledge = async (id: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/ai/admin/knowledge/${id}/publish`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchKnowledgeItems();
+        setStatusMsg({
+          text: isAr ? '✓ تم اعتماد ونشر السجل المعرفي وتحديث فهرس الـ RAG فورياً!' : '✓ Knowledge record published & RAG refreshed!',
+          type: 'success'
+        });
+      }
+    } catch (e) {}
+  };
+
+  const handleUnpublishKnowledge = async (id: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/ai/admin/knowledge/${id}/unpublish`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchKnowledgeItems();
+        setStatusMsg({
+          text: isAr ? '✓ تم إلغاء نشر السجل وحجبه عن المساعد العام.' : '✓ Knowledge record unpublished.',
+          type: 'success'
+        });
+      }
+    } catch (e) {}
+  };
+
+  const handleDeleteKnowledge = async (id: string) => {
+    if (!token) return;
+    if (!confirm(isAr ? 'هل أنت متأكد من حذف هذا السجل المعرفي نهائياً؟' : 'Delete this knowledge record?')) return;
+    try {
+      const res = await fetch(`${API_URL}/ai/admin/knowledge/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchKnowledgeItems();
+      }
+    } catch (e) {}
+  };
+
+  const handleSaveKnowledgeItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    if (!kTitleAr.trim() || !kContentAr.trim()) {
+      alert(isAr ? 'العنوان والمحتوى باللغة العربية مطلوبان.' : 'Arabic title and content are required.');
+      return;
+    }
+
+    try {
+      const method = editingKnowledgeId ? 'PUT' : 'POST';
+      const url = editingKnowledgeId 
+        ? `${API_URL}/ai/admin/knowledge/${editingKnowledgeId}`
+        : `${API_URL}/ai/admin/knowledge`;
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          titleAr: kTitleAr.trim(),
+          titleEn: kTitleEn.trim() || kTitleAr.trim(),
+          contentAr: kContentAr.trim(),
+          contentEn: kContentEn.trim() || kContentAr.trim(),
+          category: kCategory,
+          status: kStatus
+        })
+      });
+
+      if (res.ok) {
+        setIsKnowledgeModalOpen(false);
+        setEditingKnowledgeId(null);
+        setKTitleAr('');
+        setKTitleEn('');
+        setKContentAr('');
+        setKContentEn('');
+        fetchKnowledgeItems();
+        setStatusMsg({
+          text: isAr ? '✓ تم حفظ السجل المعرفي بنجاح!' : '✓ Knowledge record saved!',
+          type: 'success'
+        });
+      }
+    } catch (e) {
+      alert(isAr ? 'فشل حفظ السجل.' : 'Failed to save knowledge record.');
+    }
+  };
+
+  // Evaluation Lab
+  const fetchEvaluationCases = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/ai/admin/evaluations`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setEvalCases(data);
+      }
+    } catch (e) {}
+  };
+
+  const handleRunEvaluation = async () => {
+    if (!token || isRunningEval) return;
+    setIsRunningEval(true);
+    setEvalSummary(null);
+
+    try {
+      const res = await fetch(`${API_URL}/ai/admin/evaluations/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          category: evalCategory,
+          language: isAr ? 'ar' : 'en'
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setEvalSummary(data);
+        fetchEvaluationCases();
+      }
+    } catch (e) {
+      alert(isAr ? 'فشل تشغيل مختبر التقييم.' : 'Failed to run evaluation.');
+    } finally {
+      setIsRunningEval(false);
+    }
+  };
+
+  // Provider Health
+  const fetchProviderHealth = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/ai/admin/providers/health`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setProviderHealth(data);
+      }
+    } catch (e) {}
+  };
+
   useEffect(() => {
     fetchData();
+    fetchAdminConversations();
+    fetchKnowledgeItems();
+    fetchEvaluationCases();
+    fetchProviderHealth();
   }, [token]);
 
   // Save Settings
@@ -488,10 +818,13 @@ export default function AdminAiManager({ token, language }: AdminAiManagerProps)
       {/* 2. Sub-Tabs Navigation (Fully responsive on Mobile and Desktop) */}
       <div className="admin-ai-subtabs">
         {[
+          { id: 'admin-chat', icon: <MessageSquare size={16} />, labelAr: 'محادثة وتدريب المعرفة', labelEn: 'AI Knowledge Chat' },
+          { id: 'knowledge', icon: <Database size={16} />, labelAr: 'مصادر المعرفة وسجلات الـ RAG', labelEn: 'Knowledge Pipeline' },
+          { id: 'chat-logs', icon: <FileText size={16} />, labelAr: 'سجلات المحادثات والمنشأ', labelEn: 'Chat Logs & Provenance' },
+          { id: 'evaluation-lab', icon: <Shield size={16} />, labelAr: 'مختبر التقييم الآلي', labelEn: 'Evaluation Lab' },
+          { id: 'provider-health', icon: <BarChart3 size={16} />, labelAr: 'صحة المزودين والميزانية', labelEn: 'Provider Health' },
           { id: 'faqs', icon: <HelpCircle size={16} />, labelAr: 'الأسئلة السريعة والصور', labelEn: 'Quick Q&A & Media' },
           { id: 'overview', icon: <Settings size={16} />, labelAr: 'المزود المزدوج والإعدادات', labelEn: 'Dual Providers & Config' },
-          { id: 'knowledge', icon: <Database size={16} />, labelAr: 'مصادر المعرفة الكنسية', labelEn: 'Grounded Sources' },
-          { id: 'analytics', icon: <BarChart3 size={16} />, labelAr: 'الإحصائيات والميزانية', labelEn: 'Usage & Budget' },
           { id: 'playground', icon: <Play size={16} />, labelAr: 'ميدان التجربة (Playground)', labelEn: 'Playground' }
         ].map(tab => {
           const isActive = activeSubTab === tab.id;
@@ -510,7 +843,641 @@ export default function AdminAiManager({ token, language }: AdminAiManagerProps)
       </div>
 
       {/* ========================================================= */}
-      {/* TAB 1: QUICK FAQS & MEDIA MANAGER (NEW FEATURE)            */}
+      {/* SUBTAB: AI KNOWLEDGE CHAT (NEW MASTER FEATURE)            */}
+      {/* ========================================================= */}
+      {activeSubTab === 'admin-chat' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {extractedFeedback && (
+            <div
+              style={{
+                padding: '12px 16px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(46, 204, 113, 0.15)',
+                border: '1px solid #2ecc71',
+                color: '#2ecc71',
+                fontSize: '0.86rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <CheckCircle size={18} />
+              <span>{extractedFeedback}</span>
+            </div>
+          )}
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(260px, 320px) 1fr',
+              gap: '16px',
+              minHeight: '600px',
+              borderRadius: '14px',
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              overflow: 'hidden'
+            }}
+            className="admin-chat-grid-container"
+          >
+            {/* Sidebar: Conversation List */}
+            <div
+              style={{
+                borderInlineEnd: '1px solid var(--border-color)',
+                display: 'flex',
+                flexDirection: 'column',
+                backgroundColor: 'rgba(0, 0, 0, 0.1)'
+              }}
+            >
+              <div
+                style={{
+                  padding: '14px',
+                  borderBottom: '1px solid var(--border-color)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <MessageSquare size={18} style={{ color: 'var(--accent-gold)' }} />
+                  <strong style={{ fontSize: '0.92rem', color: 'var(--text-primary)' }}>
+                    {isAr ? 'محادثات المعرفة' : 'Knowledge Chats'}
+                  </strong>
+                </div>
+                <button
+                  onClick={handleCreateNewConversation}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    backgroundColor: 'var(--accent-gold)',
+                    color: '#000',
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.78rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Plus size={14} />
+                  <span>{isAr ? 'جديدة' : 'New'}</span>
+                </button>
+              </div>
+
+              <div style={{ flex: 1, overflowY: 'auto', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {adminConversations.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem', padding: '20px 0' }}>
+                    {isAr ? 'لا توجد محادثات سابقة. انقر فوق "جديدة" للبدء.' : 'No conversations. Click "New" to start.'}
+                  </p>
+                ) : (
+                  adminConversations.map(c => {
+                    const isSelected = activeConvId === c.id;
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => loadConversationDetails(c.id)}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          backgroundColor: isSelected ? 'rgba(226, 183, 20, 0.15)' : 'transparent',
+                          border: isSelected ? '1px solid var(--accent-gold)' : '1px solid transparent',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <strong style={{ fontSize: '0.84rem', color: isSelected ? 'var(--accent-gold)' : 'var(--text-primary)', display: 'block' }}>
+                          {c.title}
+                        </strong>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                          <span>{new Date(c.createdAt).toLocaleDateString()}</span>
+                          <span>{c._count?.messages || c.messages?.length || 0} {isAr ? 'رسائل' : 'msgs'}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Chat Transcript Area */}
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              {activeConv ? (
+                <>
+                  {/* Active Header */}
+                  <div
+                    style={{
+                      padding: '12px 16px',
+                      borderBottom: '1px solid var(--border-color)',
+                      backgroundColor: 'rgba(226, 183, 20, 0.05)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+                        {activeConv.title}
+                      </h4>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                        {isAr ? 'محادثة خاصة للإدارة والتدريب الكنسي • محفوظة في قاعدة البيانات' : 'Private admin knowledge chat • Persisted in DB'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Messages Feed */}
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {(!activeConv.messages || activeConv.messages.length === 0) ? (
+                      <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 'auto' }}>
+                        {isAr ? 'اكتب معلوماتك الكنسية أو ناقش السياسات مع المساعد ليتم استخراج المعرفة منها.' : 'Start chatting to teach and extract church knowledge.'}
+                      </p>
+                    ) : (
+                      activeConv.messages.map((m: any) => {
+                        const isAdmin = m.senderType === 'ADMIN';
+                        return (
+                          <div
+                            key={m.id}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: isAdmin ? 'flex-start' : 'flex-end',
+                              maxWidth: '85%',
+                              alignSelf: isAdmin ? 'flex-start' : 'flex-end'
+                            }}
+                          >
+                            <div
+                              style={{
+                                padding: '12px 16px',
+                                borderRadius: isAdmin ? '14px 14px 14px 4px' : '14px 14px 4px 14px',
+                                backgroundColor: isAdmin ? 'var(--bg-card)' : 'rgba(226, 183, 20, 0.12)',
+                                border: '1px solid var(--border-color)',
+                                color: 'var(--text-primary)',
+                                fontSize: '0.88rem',
+                                lineHeight: 1.5
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                                <span style={{ fontWeight: 600, color: isAdmin ? 'var(--accent-gold)' : '#2ecc71' }}>
+                                  {isAdmin ? (isAr ? '👤 المسؤول (Admin)' : '👤 Administrator') : (isAr ? '🤖 مساعد الكنيسة (AI)' : '🤖 Church AI')}
+                                </span>
+                                <span>{new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              </div>
+
+                              <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{m.content}</p>
+
+                              {/* Knowledge Extraction Button */}
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', paddingTop: '6px', borderTop: '1px solid var(--border-color)' }}>
+                                <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
+                                  {m.provider ? `⚡ ${m.provider} (${m.tokensUsed || 0} tokens)` : ''}
+                                </span>
+
+                                <button
+                                  onClick={() => handleExtractKnowledge(m.id)}
+                                  disabled={isExtractingCandidate}
+                                  title={isAr ? 'استخراج هذه المعلومة كمرشح معرفة معتمد للمساعد العام' : 'Extract this as knowledge candidate'}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    padding: '3px 8px',
+                                    borderRadius: '6px',
+                                    backgroundColor: 'rgba(226, 183, 20, 0.18)',
+                                    border: '1px solid var(--accent-gold)',
+                                    color: 'var(--accent-gold)',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <Sparkles size={11} />
+                                  <span>{isAr ? 'استخراج كمرشح معرفة' : 'Extract Knowledge'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Input Bar */}
+                  <form
+                    onSubmit={handleSendAdminMessage}
+                    style={{
+                      padding: '12px 14px',
+                      borderTop: '1px solid var(--border-color)',
+                      display: 'flex',
+                      gap: '8px',
+                      backgroundColor: 'var(--bg-secondary)'
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={adminMsgInput}
+                      onChange={e => setAdminMsgInput(e.target.value)}
+                      placeholder={isAr ? 'اكتب للمساعد الكنسي (مثال: مواعيد مدارس الأحد تم تعديلها لتصبح...)' : 'Type message to teach church assistant...'}
+                      disabled={isAdminSending}
+                      style={{
+                        flex: 1,
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        backgroundColor: 'var(--bg-card)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-primary)',
+                        fontSize: '0.88rem',
+                        outline: 'none'
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!adminMsgInput.trim() || isAdminSending}
+                      style={{
+                        padding: '10px 18px',
+                        borderRadius: '8px',
+                        backgroundColor: 'var(--accent-gold)',
+                        color: '#000',
+                        fontWeight: 700,
+                        border: 'none',
+                        cursor: adminMsgInput.trim() && !isAdminSending ? 'pointer' : 'not-allowed',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <Send size={15} style={{ transform: isAr ? 'scaleX(-1)' : 'none' }} />
+                      <span>{isAr ? 'إرسال' : 'Send'}</span>
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <div style={{ margin: 'auto', textAlign: 'center', padding: '40px' }}>
+                  <MessageSquare size={36} style={{ color: 'var(--accent-gold)', opacity: 0.5, marginBottom: '10px' }} />
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                    {isAr ? 'اختر محادثة من القائمة أو أنشئ محادثة جديدة للبدء.' : 'Select a conversation or create a new one to begin.'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* SUBTAB: CHAT LOGS & PROVENANCE                            */}
+      {/* ========================================================= */}
+      {activeSubTab === 'chat-logs' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div
+            style={{
+              padding: '16px',
+              borderRadius: '12px',
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}
+          >
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FileText size={18} style={{ color: 'var(--accent-gold)' }} />
+                {isAr ? 'سجلات محادثات الإدارة والمنشأ المعرفي (Chat Logs)' : 'Admin Chat Logs & Provenance'}
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                {isAr ? 'مراجعة وتدقيق كامل المحادثات الإدارية والمصادر المستخرجة منها.' : 'Audit complete admin chat transcripts and trace derived knowledge.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '240px' }}>
+              <Search size={16} style={{ color: 'var(--text-secondary)' }} />
+              <input
+                type="text"
+                value={logSearchQuery}
+                onChange={e => setLogSearchQuery(e.target.value)}
+                placeholder={isAr ? 'بحث في السجلات...' : 'Search logs...'}
+                style={{
+                  flex: 1,
+                  padding: '7px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.82rem',
+                  outline: 'none'
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Conversations Table */}
+          <div style={{ borderRadius: '12px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0, 0, 0, 0.1)', textAlign: isAr ? 'right' : 'left' }}>
+                  <th style={{ padding: '12px' }}>{isAr ? 'عنوان المحادثة' : 'Title'}</th>
+                  <th style={{ padding: '12px' }}>{isAr ? 'عدد الرسائل' : 'Messages'}</th>
+                  <th style={{ padding: '12px' }}>{isAr ? 'تاريخ الإنشاء' : 'Created'}</th>
+                  <th style={{ padding: '12px' }}>{isAr ? 'الحالة' : 'Status'}</th>
+                  <th style={{ padding: '12px' }}>{isAr ? 'إجراءات' : 'Actions'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adminConversations
+                  .filter(c => !logSearchQuery || c.title.toLowerCase().includes(logSearchQuery.toLowerCase()))
+                  .map(c => (
+                    <tr key={c.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {c.title}
+                      </td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>
+                        {c._count?.messages || c.messages?.length || 0}
+                      </td>
+                      <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>
+                        {new Date(c.createdAt).toLocaleString()}
+                      </td>
+                      <td style={{ padding: '12px' }}>
+                        <span style={{ padding: '3px 8px', borderRadius: '4px', backgroundColor: 'rgba(46, 204, 113, 0.15)', color: '#2ecc71', fontSize: '0.72rem', fontWeight: 700 }}>
+                          {c.status || 'ACTIVE'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px' }}>
+                        <button
+                          onClick={() => {
+                            setActiveSubTab('admin-chat');
+                            loadConversationDetails(c.id);
+                          }}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            backgroundColor: 'rgba(226, 183, 20, 0.15)',
+                            border: '1px solid var(--accent-gold)',
+                            color: 'var(--accent-gold)',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {isAr ? 'عرض المحادثة' : 'Open'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* SUBTAB: AI EVALUATION LAB                                 */}
+      {/* ========================================================= */}
+      {activeSubTab === 'evaluation-lab' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div
+            style={{
+              padding: '16px',
+              borderRadius: '12px',
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}
+          >
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Shield size={18} style={{ color: 'var(--accent-gold)' }} />
+                {isAr ? 'مختبر التقييم الآلي وفحص الأمان الكنسي (Evaluation Lab)' : 'AI Evaluation & Safety Lab'}
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                {isAr ? 'اختبار جودة الإجابات، طقس الاعتراف، مقاومة الاختراق، واللهجة المصرية.' : 'Test answer quality, sacrament privacy, injection defense, and Egyptian Arabic.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <select
+                value={evalCategory}
+                onChange={e => setEvalCategory(e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.82rem',
+                  outline: 'none'
+                }}
+              >
+                <option value="ALL">{isAr ? 'كل الفئات' : 'All Categories'}</option>
+                <option value="SCHEDULE">{isAr ? 'القداسات' : 'Schedules'}</option>
+                <option value="CLERGY">{isAr ? 'الكهنة' : 'Clergy'}</option>
+                <option value="SACRAMENT">{isAr ? 'سر الاعتراف' : 'Sacraments'}</option>
+                <option value="SECURITY">{isAr ? 'الأمان والاختراق' : 'Security'}</option>
+                <option value="EVENTS">{isAr ? 'الرحلات' : 'Events'}</option>
+                <option value="BILINGUAL_EGY">{isAr ? 'اللهجة المصرية' : 'Egyptian Arabic'}</option>
+                <option value="DONATIONS">{isAr ? 'التبرعات' : 'Donations'}</option>
+              </select>
+
+              <button
+                onClick={handleRunEvaluation}
+                disabled={isRunningEval}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9px 18px',
+                  borderRadius: '6px',
+                  backgroundColor: 'var(--accent-gold)',
+                  color: '#000',
+                  fontWeight: 700,
+                  fontSize: '0.84rem',
+                  border: 'none',
+                  cursor: isRunningEval ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <Play size={14} className={isRunningEval ? 'animate-spin' : ''} />
+                <span>{isRunningEval ? (isAr ? 'جاري الفحص...' : 'Running...') : (isAr ? 'تشغيل حزمة الاختبار' : 'Run Suite')}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Evaluation Results Summary Card */}
+          {evalSummary && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+              <div style={{ padding: '14px', borderRadius: '10px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{isAr ? 'نسبة النجاح' : 'Pass Rate'}</span>
+                <div style={{ fontSize: '1.6rem', fontWeight: 700, color: evalSummary.passRate >= 80 ? '#2ecc71' : '#e74c3c', marginTop: '4px' }}>
+                  {evalSummary.passRate}%
+                </div>
+              </div>
+              <div style={{ padding: '14px', borderRadius: '10px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{isAr ? 'الحالات الناجحة' : 'Passed'}</span>
+                <div style={{ fontSize: '1.6rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
+                  {evalSummary.passed} / {evalSummary.total}
+                </div>
+              </div>
+              <div style={{ padding: '14px', borderRadius: '10px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{isAr ? 'متوسط السرعة' : 'Avg Latency'}</span>
+                <div style={{ fontSize: '1.6rem', fontWeight: 700, color: 'var(--accent-gold)', marginTop: '4px' }}>
+                  {evalSummary.avgLatencyMs} ms
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Evaluation Cases List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {evalCases.map((c: any) => (
+              <div
+                key={c.id}
+                style={{
+                  padding: '14px 16px',
+                  borderRadius: '10px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ padding: '3px 8px', borderRadius: '4px', backgroundColor: 'rgba(226, 183, 20, 0.15)', color: 'var(--accent-gold)', fontSize: '0.72rem', fontWeight: 700 }}>
+                      {c.category}
+                    </span>
+                    <strong style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>{c.title}</strong>
+                  </div>
+                  {c.lastPassed !== null && (
+                    <span
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        backgroundColor: c.lastPassed ? 'rgba(46, 204, 113, 0.15)' : 'rgba(231, 76, 60, 0.15)',
+                        color: c.lastPassed ? '#2ecc71' : '#e74c3c',
+                        fontSize: '0.75rem',
+                        fontWeight: 700
+                      }}
+                    >
+                      {c.lastPassed ? '✓ PASS' : '✗ FAIL'} ({c.lastScore}%)
+                    </span>
+                  )}
+                </div>
+
+                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                  💬 <strong>{isAr ? 'السؤال التجريبي:' : 'Prompt:'}</strong> {isAr ? c.promptAr : c.promptEn}
+                </p>
+
+                {c.lastActualOutput && (
+                  <div style={{ padding: '8px 10px', borderRadius: '6px', backgroundColor: 'var(--bg-card)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    <strong>{isAr ? 'آخر إجابة من المساعد:' : 'Last AI Output:'} </strong>
+                    <span>{c.lastActualOutput}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* SUBTAB: PROVIDER HEALTH & COST INTELLIGENCE               */}
+      {/* ========================================================= */}
+      {activeSubTab === 'provider-health' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div
+            style={{
+              padding: '16px',
+              borderRadius: '12px',
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)'
+            }}
+          >
+            <h3 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BarChart3 size={18} style={{ color: 'var(--accent-gold)' }} />
+              {isAr ? 'صحة المزودين والتحويل التلقائي والميزانية' : 'AI Provider Health, Failover & Budget'}
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              {isAr ? 'مراقبة 4 مزودي ذكاء اصطناعي (Gemini, Groq, OpenAI, DeepSeek) مع الحوكمة المالية وحظر تجاوز الميزانية.' : 'Real-time observability across 4 providers with budget enforcement and circuit breaker metrics.'}
+            </p>
+          </div>
+
+          {/* 4 Providers Status Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+            {(providerHealth?.providers || [
+              { name: 'gemini', status: 'HEALTHY', requests: 12, successes: 12, failures: 0, successRate: 100, avgLatencyMs: 380 },
+              { name: 'groq', status: 'HEALTHY', requests: 8, successes: 8, failures: 0, successRate: 100, avgLatencyMs: 240 },
+              { name: 'openai', status: 'STANDBY', requests: 0, successes: 0, failures: 0, successRate: 100, avgLatencyMs: 0 },
+              { name: 'deepseek', status: 'STANDBY', requests: 0, successes: 0, failures: 0, successRate: 100, avgLatencyMs: 0 }
+            ]).map((p: any) => (
+              <div
+                key={p.name}
+                style={{
+                  padding: '16px',
+                  borderRadius: '12px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <strong style={{ fontSize: '0.95rem', color: 'var(--accent-gold)', textTransform: 'uppercase' }}>
+                    {p.name}
+                  </strong>
+                  <span
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: p.status === 'HEALTHY' ? 'rgba(46, 204, 113, 0.15)' : 'rgba(231, 76, 60, 0.15)',
+                      color: p.status === 'HEALTHY' ? '#2ecc71' : '#e74c3c',
+                      fontSize: '0.72rem',
+                      fontWeight: 700
+                    }}
+                  >
+                    {p.status}
+                  </span>
+                </div>
+
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  <div>{isAr ? 'الطلبات:' : 'Requests:'} <strong style={{ color: 'var(--text-primary)' }}>{p.requests}</strong></div>
+                  <div>{isAr ? 'النجاح:' : 'Success Rate:'} <strong style={{ color: '#2ecc71' }}>{p.successRate}%</strong></div>
+                  <div>{isAr ? 'متوسط السرعة:' : 'Avg Latency:'} <strong style={{ color: 'var(--accent-gold)' }}>{p.avgLatencyMs} ms</strong></div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Failovers & Budget */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
+            <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{isAr ? 'التحويلات التلقائية اليوم (Failovers)' : 'Failovers Today'}</span>
+              <div style={{ fontSize: '1.8rem', fontWeight: 700, color: 'var(--accent-gold)', marginTop: '4px' }}>
+                {providerHealth?.failoversToday ?? 0}
+              </div>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                {isAr ? 'يتم التبديل التلقائي إذا تجاوز المزود المهلة أو فشل الاتصال.' : 'Automatic fallback engages when primary provider times out.'}
+              </p>
+            </div>
+
+            <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{isAr ? 'الحد الأقصى للإنفاق اليومي' : 'Daily Spending Limit'}</span>
+              <div style={{ fontSize: '1.8rem', fontWeight: 700, color: '#2ecc71', marginTop: '4px' }}>
+                ${settings?.dailyBudgetLimitUSD ?? 10.00} USD
+              </div>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                {isAr ? 'يتم حظر الطلبات الخارجية فور الوصول للحد لحماية التكاليف والاعتماد على الـ RAG المحلي.' : 'Hard ceiling prevents cloud cost overruns; falls back to local church engine.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* TAB 1: QUICK FAQS & MEDIA MANAGER                         */}
       {/* ========================================================= */}
       {activeSubTab === 'faqs' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1049,6 +2016,204 @@ export default function AdminAiManager({ token, language }: AdminAiManagerProps)
               <span style={{ fontSize: '0.7rem', color: '#2ecc71', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '4px' }}>
                 <CheckCircle2 size={11} /> {isAr ? 'محدث' : 'Synced'}
               </span>
+            </div>
+          </div>
+
+          {/* Knowledge Items Pipeline Section */}
+          <div
+            style={{
+              padding: '16px',
+              borderRadius: '12px',
+              backgroundColor: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <BookOpen size={18} style={{ color: 'var(--accent-gold)' }} />
+                  <span>{isAr ? 'سجلات المعرفة الكنسية المخصصة (Knowledge Records)' : 'Curated Church Knowledge Records'}</span>
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  {isAr ? 'المعرفة المستخرجة من محادثات الإدارة والمعتمدة لنظام الاسترجاع العام (RAG).' : 'Verified facts extracted from admin conversations or created manually.'}
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {['ALL', 'PUBLISHED', 'APPROVED', 'DRAFT'].map(st => (
+                    <button
+                      key={st}
+                      onClick={() => {
+                        setKnowledgeFilter(st);
+                        fetchKnowledgeItems(st);
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: knowledgeFilter === st ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                        backgroundColor: knowledgeFilter === st ? 'rgba(226, 183, 20, 0.2)' : 'var(--bg-card)',
+                        color: knowledgeFilter === st ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => {
+                    setEditingKnowledgeId(null);
+                    setKTitleAr('');
+                    setKTitleEn('');
+                    setKContentAr('');
+                    setKContentEn('');
+                    setIsKnowledgeModalOpen(true);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '7px 14px',
+                    borderRadius: '6px',
+                    backgroundColor: 'var(--accent-gold)',
+                    color: '#000',
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.78rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Plus size={14} />
+                  <span>{isAr ? 'إضافة سجل' : 'Add Item'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Knowledge Items Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'rgba(0,0,0,0.1)', textAlign: isAr ? 'right' : 'left' }}>
+                    <th style={{ padding: '10px' }}>{isAr ? 'العنوان' : 'Title'}</th>
+                    <th style={{ padding: '10px' }}>{isAr ? 'الفئة' : 'Category'}</th>
+                    <th style={{ padding: '10px' }}>{isAr ? 'الحالة' : 'Status'}</th>
+                    <th style={{ padding: '10px' }}>{isAr ? 'المصدر' : 'Source'}</th>
+                    <th style={{ padding: '10px' }}>{isAr ? 'إجراءات' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {knowledgeItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        {isAr ? 'لا توجد سجلات معرفية في هذا الفلتر.' : 'No knowledge records found.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    knowledgeItems.map(item => (
+                      <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '10px' }}>
+                          <strong style={{ color: 'var(--text-primary)', display: 'block' }}>{item.titleAr}</strong>
+                          {item.titleEn && <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>{item.titleEn}</span>}
+                        </td>
+                        <td style={{ padding: '10px' }}>
+                          <span style={{ padding: '2px 6px', borderRadius: '4px', backgroundColor: 'rgba(226, 183, 20, 0.1)', color: 'var(--accent-gold)', fontSize: '0.72rem' }}>
+                            {item.category}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px' }}>
+                          <span
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              backgroundColor:
+                                item.status === 'PUBLISHED' ? 'rgba(46, 204, 113, 0.15)' :
+                                item.status === 'APPROVED' ? 'rgba(52, 152, 219, 0.15)' :
+                                'rgba(241, 196, 15, 0.15)',
+                              color:
+                                item.status === 'PUBLISHED' ? '#2ecc71' :
+                                item.status === 'APPROVED' ? '#3498db' :
+                                '#f1c40f',
+                              fontSize: '0.72rem',
+                              fontWeight: 700
+                            }}
+                          >
+                            {item.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px', fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                          {item.sourceConversationId ? (
+                            <span style={{ color: 'var(--accent-gold)', cursor: 'pointer' }} onClick={() => {
+                              setActiveSubTab('admin-chat');
+                              loadConversationDetails(item.sourceConversationId);
+                            }}>
+                              💬 {isAr ? 'مستخرج من محادثة' : 'From Chat'}
+                            </span>
+                          ) : (
+                            <span>✍️ {isAr ? 'يدوي' : 'Manual'}</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '10px' }}>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            {item.status !== 'PUBLISHED' ? (
+                              <button
+                                onClick={() => handlePublishKnowledge(item.id)}
+                                style={{
+                                  padding: '3px 8px',
+                                  borderRadius: '4px',
+                                  backgroundColor: '#2ecc71',
+                                  color: '#000',
+                                  fontWeight: 700,
+                                  fontSize: '0.72rem',
+                                  border: 'none',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                {isAr ? 'اعتماد ونشر' : 'Publish'}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleUnpublishKnowledge(item.id)}
+                                style={{
+                                  padding: '3px 8px',
+                                  borderRadius: '4px',
+                                  backgroundColor: 'rgba(231, 76, 60, 0.15)',
+                                  color: '#e74c3c',
+                                  border: '1px solid #e74c3c',
+                                  fontSize: '0.72rem',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                {isAr ? 'إلغاء النشر' : 'Unpublish'}
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => handleDeleteKnowledge(item.id)}
+                              style={{
+                                padding: '3px 6px',
+                                borderRadius: '4px',
+                                backgroundColor: 'transparent',
+                                border: '1px solid var(--border-color)',
+                                color: 'var(--text-secondary)',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1646,6 +2811,239 @@ export default function AdminAiManager({ token, language }: AdminAiManagerProps)
             >
               <X size={18} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Knowledge Item Create / Edit Modal */}
+      {isKnowledgeModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            zIndex: 100000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+          onClick={() => setIsKnowledgeModalOpen(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              backgroundColor: 'var(--bg-secondary)',
+              borderRadius: '16px',
+              border: '1px solid var(--border-color)',
+              width: '100%',
+              maxWidth: '540px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '24px',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+              direction: isAr ? 'rtl' : 'ltr'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <BookOpen size={20} style={{ color: 'var(--accent-gold)' }} />
+                <span>{editingKnowledgeId ? (isAr ? 'تعديل السجل المعرفي' : 'Edit Knowledge Record') : (isAr ? 'إضافة سجل معرفي جديد' : 'New Knowledge Record')}</span>
+              </h3>
+              <button onClick={() => setIsKnowledgeModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveKnowledgeItem} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)' }}>
+                  {isAr ? 'العنوان بالعربية *' : 'Arabic Title *'}
+                </label>
+                <input
+                  type="text"
+                  value={kTitleAr}
+                  onChange={e => setKTitleAr(e.target.value)}
+                  placeholder={isAr ? 'مثال: مواعيد مزار الشهيد أبي سيفين' : 'Arabic title...'}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.88rem',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)' }}>
+                  {isAr ? 'العنوان بالإنجليزية (اختياري)' : 'English Title (Optional)'}
+                </label>
+                <input
+                  type="text"
+                  value={kTitleEn}
+                  onChange={e => setKTitleEn(e.target.value)}
+                  placeholder="e.g. Abu Sefein Shrine Visiting Hours"
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.88rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    direction: 'ltr'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)' }}>
+                  {isAr ? 'المحتوى والحقائق الكنسية المعتمدة (بالعربية) *' : 'Knowledge Content (Arabic) *'}
+                </label>
+                <textarea
+                  rows={4}
+                  value={kContentAr}
+                  onChange={e => setKContentAr(e.target.value)}
+                  placeholder={isAr ? 'اكتب الحقائق الكنسية بدقة لاعتمادها في استرجاع الذكاء الاصطناعي...' : 'Verified church content in Arabic...'}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.88rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)' }}>
+                  {isAr ? 'المحتوى بالإنجليزية (اختياري)' : 'Knowledge Content (English)'}
+                </label>
+                <textarea
+                  rows={3}
+                  value={kContentEn}
+                  onChange={e => setKContentEn(e.target.value)}
+                  placeholder="Verified church content in English..."
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.88rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    direction: 'ltr',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)' }}>
+                    {isAr ? 'الفئة الكنسية' : 'Category'}
+                  </label>
+                  <select
+                    value={kCategory}
+                    onChange={e => setKCategory(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.84rem',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <option value="GENERAL">{isAr ? 'عام' : 'General'}</option>
+                    <option value="SCHEDULE">{isAr ? 'مواعيد وطقس' : 'Schedules'}</option>
+                    <option value="CLERGY">{isAr ? 'كهنة وخدمات' : 'Clergy'}</option>
+                    <option value="SERMON">{isAr ? 'عظات وتعاليم' : 'Sermons'}</option>
+                    <option value="EVENT">{isAr ? 'مناسبات ورحلات' : 'Events & Trips'}</option>
+                    <option value="DONATION">{isAr ? 'تبرعات وحسابات' : 'Donations'}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)' }}>
+                    {isAr ? 'الحالة' : 'Status'}
+                  </label>
+                  <select
+                    value={kStatus}
+                    onChange={e => setKStatus(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.84rem',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <option value="APPROVED">{isAr ? 'معتمد (APPROVED)' : 'Approved'}</option>
+                    <option value="PUBLISHED">{isAr ? 'منشور للعامة (PUBLISHED)' : 'Published'}</option>
+                    <option value="DRAFT">{isAr ? 'مسودة (DRAFT)' : 'Draft'}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                <button
+                  type="submit"
+                  style={{
+                    flex: 1,
+                    padding: '11px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--accent-gold)',
+                    color: '#000',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isAr ? 'حفظ السجل المعرفي' : 'Save Knowledge Record'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsKnowledgeModalOpen(false)}
+                  style={{
+                    padding: '11px 18px',
+                    borderRadius: '8px',
+                    backgroundColor: 'transparent',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

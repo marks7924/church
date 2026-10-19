@@ -1,6 +1,7 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -65,6 +66,7 @@ model User {
   priestProfile    PriestProfile?
   appointments     Appointment[]     @relation("MemberAppointments")
   newsPosts        News[]            @relation("UserNews")
+  adminAiConversations AiAdminConversation[] @relation("UserAdminAiConversations")
 }
 
 model PriestProfile {
@@ -255,3 +257,97 @@ model TripBooking {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 }
+
+model AiKnowledgeItem {
+  id                   String   @id @default(uuid())
+  titleAr              String
+  titleEn              String
+  contentAr            String
+  contentEn            String
+  category             String   @default("GENERAL") // SCHEDULE, CLERGY, POLICY, FAQ, EVENT, GENERAL
+  status               String   @default("APPROVED") // DRAFT, REVIEW, APPROVED, PUBLISHED, ARCHIVED
+  sourceType           String   @default("ADMIN_CHAT") // ADMIN_CHAT, MANUAL, IMPORTED, DOCUMENT
+  sourceConversationId String?
+  sourceMessageId      String?
+  version              Int      @default(1)
+  createdById          String?
+  updatedById          String?
+  lastVerifiedAt       DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([status])
+  @@index([category])
+}
+
+model AiAdminConversation {
+  id         String           @id @default(uuid())
+  title      String
+  creatorId  String
+  creator    User             @relation("UserAdminAiConversations", fields: [creatorId], references: [id], onDelete: Cascade)
+  status     String           @default("ACTIVE") // ACTIVE, ARCHIVED, DELETED
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  messages   AiAdminMessage[]
+
+  @@index([creatorId])
+  @@index([status])
+}
+
+model AiAdminMessage {
+  id                   String              @id @default(uuid())
+  conversationId       String
+  conversation         AiAdminConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId             String?
+  senderType           String              // 'ADMIN' or 'AI'
+  content              String
+  language             String              @default("ar")
+  provider             String?
+  model                String?
+  tokensUsed           Int                 @default(0)
+  extractedKnowledgeId String?
+  createdAt            DateTime            @default(now())
+
+  @@index([conversationId])
+}
+
+model AiSupportRequest {
+  id            String   @id @default(uuid())
+  referenceCode String   @unique
+  userId        String?
+  name          String
+  phone         String
+  email         String?
+  category      String   @default("GENERAL") // PASTORAL, GENERAL, CONFESSION_BOOKING, TECHNICAL
+  message       String
+  status        String   @default("PENDING") // PENDING, IN_PROGRESS, RESOLVED, CANCELLED
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+  @@index([referenceCode])
+}
+
+model AiEvaluationCase {
+  id                String    @id @default(uuid())
+  title             String
+  category          String    // SCHEDULE, CLERGY, EVENTS, SACRAMENT, SECURITY, BILINGUAL, GENERAL
+  promptAr          String
+  promptEn          String
+  expectedKeywords  String    // JSON string array
+  forbiddenKeywords String?   // JSON string array
+  targetAction      String?
+  lastRunAt         DateTime?
+  lastPassed        Boolean?
+  lastScore         Float?
+  lastLatencyMs     Int?
+  lastProvider      String?
+  lastActualOutput  String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([category])
+}
+

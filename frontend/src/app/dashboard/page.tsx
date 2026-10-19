@@ -8,7 +8,7 @@ import { API_URL } from '../../config';
 import { formatTimeSlot, formatDateTime } from '../../utils/format';
 import { 
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
-  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown, Scissors, Clock, Sparkles 
+  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown, Scissors, Clock, Sparkles, MessageSquare 
 } from 'lucide-react';
 import PriestScheduleManager from '../../components/PriestScheduleManager';
 import ImageCropModal from '../../components/ImageCropModal';
@@ -378,9 +378,16 @@ export default function DashboardPage() {
       }
 
       tabs.push({
+        id: 'ai-knowledge-chat',
+        labelAr: language === 'ar' ? 'محادثة المعرفة الكنسية (AI Knowledge Chat)' : 'AI Knowledge Chat',
+        labelEn: language === 'ar' ? 'محادثة المعرفة الكنسية (AI Knowledge Chat)' : 'AI Knowledge Chat',
+        icon: <MessageSquare size={16} />
+      });
+
+      tabs.push({
         id: 'ai-assistant',
-        labelAr: language === 'ar' ? 'المساعد الذكي (AI)' : 'AI Assistant',
-        labelEn: language === 'ar' ? 'المساعد الذكي (AI)' : 'AI Assistant',
+        labelAr: language === 'ar' ? 'إدارة المساعد الذكي (AI Manager)' : 'AI Assistant Manager',
+        labelEn: language === 'ar' ? 'إدارة المساعد الذكي (AI Manager)' : 'AI Assistant Manager',
         icon: <Sparkles size={16} />
       });
     }
@@ -4423,6 +4430,11 @@ export default function DashboardPage() {
             </p>
           )}
         </div>
+      )}
+
+      {/* Tab: AI Knowledge Chat */}
+      {activeTab === 'ai-knowledge-chat' && (
+        <AdminAiManager token={token} language={language} initialSubTab="admin-chat" />
       )}
 
       {/* Tab: AI Assistant Administration & Safe Testing Playground */}

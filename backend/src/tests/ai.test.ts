@@ -57,9 +57,73 @@ async function runAiIntegrationTests() {
   const groqModelConfigured = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
   assert(groqModelConfigured !== 'llama-3.3-70b-versatile', `Groq model correctly configured to supported non-deprecated model: ${groqModelConfigured}`);
 
+  // 9. Action Registry & Execution Test
+  const { ACTION_REGISTRY, ChurchAiActionService } = await import('../services/aiAction.service');
+  const actionKeys = Object.keys(ACTION_REGISTRY);
+  assert(actionKeys.length === 9, `Action registry has 9 strictly typed actions (found ${actionKeys.length})`);
+  const scheduleAction = await ChurchAiActionService.executeAction('open_schedule', { day: 'Friday' });
+  assert(scheduleAction.success && Array.isArray(scheduleAction.data) && scheduleAction.data.length > 0, 'open_schedule action executes against real database');
+  const clergyAction = await ChurchAiActionService.executeAction('open_clergy', {});
+  assert(clergyAction.success && Array.isArray(clergyAction.data) && clergyAction.data.length > 0, 'open_clergy action executes and returns approved clergy directory');
+  const eventsAction = await ChurchAiActionService.executeAction('view_events', {});
+  assert(eventsAction.success, 'view_events action executes and returns active church events');
+
+  // 10. Smart Conversation Memory: Follow-up Reference Resolution
+  const resolvedQuery = ChurchAiService.resolveFollowUpQuery('وفين مكانه؟', [
+    { role: 'user', content: 'إمتى قداس الجمعة؟' },
+    { role: 'assistant', content: 'قداس الجمعة يبدأ الساعة 7:30 صباحاً في الكنيسة الكبرى.' }
+  ]);
+  assert(resolvedQuery.includes('الجمعة') || resolvedQuery.includes('قداس'), `Follow-up reference resolved: "${resolvedQuery}"`);
+
+  // 11. Context-Aware Suggested Questions for Routes
+  const scheduleSuggestionsAr = ChurchAiService.getSuggestionsForRoute('/schedule', 'ar');
+  assert(scheduleSuggestionsAr.length >= 3 && scheduleSuggestionsAr[0].includes('قداس'), 'Schedule route generates context-aware Arabic liturgy suggestions');
+  const donationsSuggestionsEn = ChurchAiService.getSuggestionsForRoute('/donations', 'en');
+  assert(donationsSuggestionsEn.some(s => s.toLowerCase().includes('banque') || s.toLowerCase().includes('donate')), 'Donations route generates English donation suggestions');
+
+  // 12. Multi-Provider Health Metrics Tracking
+  const { recordProviderCall, getProviderHealthMetrics } = await import('../utils/aiBudget');
+  recordProviderCall('gemini', true, 120);
+  recordProviderCall('groq', true, 85);
+  const health = getProviderHealthMetrics();
+  const geminiMetric = health.providers.find(p => p.name === 'gemini');
+  const groqMetric = health.providers.find(p => p.name === 'groq');
+  assert(!!geminiMetric && geminiMetric.requests >= 1 && !!groqMetric && groqMetric.requests >= 1, 'Provider health tracker logs requests, latencies, and token counts');
+  assert(geminiMetric?.status === 'HEALTHY', 'Active provider is flagged HEALTHY');
+
+  // 13. AI Evaluation Lab Test Suite
+  const { ChurchAiEvaluationService } = await import('../services/aiEvaluation.service');
+  const evalResult = await ChurchAiEvaluationService.runEvaluationSuite('sacrament');
+  assert(evalResult.passed > 0, `AI Evaluation Lab sacrament suite evaluated (${evalResult.passed}/${evalResult.total} passed)`);
+
+  // 14. Admin Knowledge Chat & Candidate Extraction Persistence
+  const { ChurchAiAdminChatService } = await import('../services/aiAdminChat.service');
+  // Find or use an admin user from DB
+  const testAdmin = await prisma.user.findFirst({ where: { role: 'SUPER_ADMIN' } }) || await prisma.user.findFirst();
+  if (testAdmin) {
+    const adminConv = await ChurchAiAdminChatService.createConversation(testAdmin.id, 'مراجعة مواعيد مدارس الأحد التجريبية');
+    assert(adminConv.id.length > 0, `Admin knowledge chat conversation created persistently: ${adminConv.id}`);
+    
+    const msgRes = await ChurchAiAdminChatService.sendAdminMessage(
+      adminConv.id,
+      testAdmin.id,
+      'هل تم تحديث مواعيد مدارس الأحد لتبدأ الساعة 11 صباحاً بعد القداس؟',
+      'ar'
+    );
+    assert(!!msgRes.userMessage && !!msgRes.aiMessage, 'Admin message and AI response stored persistently');
+
+    const candidate = await ChurchAiAdminChatService.extractKnowledgeCandidate(adminConv.id, msgRes.userMessage.id, testAdmin.id);
+    assert(candidate.id.length > 0 && candidate.status === 'DRAFT', 'Extracted knowledge candidate is in DRAFT status linked to source conversation');
+
+    // Clean up test admin chat records
+    await prisma.aiKnowledgeItem.deleteMany({ where: { sourceConversationId: adminConv.id } });
+    await prisma.aiAdminMessage.deleteMany({ where: { conversationId: adminConv.id } });
+    await prisma.aiAdminConversation.delete({ where: { id: adminConv.id } });
+  }
+
   console.log(`\n=== TEST RESULTS: ${passedTests}/${totalTests} TESTS PASSED ===`);
   if (passedTests === totalTests) {
-    console.log('🎉 ALL INTEGRATION, DUAL PROVIDER & SECURITY TESTS PASSED SUCCESSFULLY!');
+    console.log('🎉 ALL 14 TEST SUITES (11 UPGRADE FEATURES + ADMIN CHAT PIPELINE) PASSED SUCCESSFULLY!');
   } else {
     process.exit(1);
   }

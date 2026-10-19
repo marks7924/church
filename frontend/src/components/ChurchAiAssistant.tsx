@@ -14,6 +14,17 @@ interface SourceReference {
   title: string;
   url: string;
   type: string;
+  verifiedDate?: string;
+}
+
+interface ActionPayload {
+  actionId: string;
+  nameAr?: string;
+  nameEn?: string;
+  messageAr?: string;
+  messageEn?: string;
+  redirectUrl?: string;
+  data?: any;
 }
 
 interface ChatMessage {
@@ -22,6 +33,7 @@ interface ChatMessage {
   text: string;
   sources?: SourceReference[];
   suggestedQuestions?: string[];
+  action?: ActionPayload;
   timestamp: string;
 }
 
@@ -44,6 +56,19 @@ export default function ChurchAiAssistant() {
   const [showPrivacyBanner, setShowPrivacyBanner] = useState(true);
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [isFooterVisible, setIsFooterVisible] = useState(false);
+  
+  // Dynamic Route-Aware Suggestions
+  const [routeSuggestions, setRouteSuggestions] = useState<string[]>([]);
+
+  // Human Handoff / Support Escalation Modal
+  const [isHandoffModalOpen, setIsHandoffModalOpen] = useState(false);
+  const [handoffName, setHandoffName] = useState('');
+  const [handoffPhone, setHandoffPhone] = useState('');
+  const [handoffCategory, setHandoffCategory] = useState<'GENERAL' | 'PASTORAL' | 'MEMBERSHIP' | 'TECHNICAL'>('GENERAL');
+  const [handoffMessage, setHandoffMessage] = useState('');
+  const [isSubmittingHandoff, setIsSubmittingHandoff] = useState(false);
+  const [handoffSuccessCode, setHandoffSuccessCode] = useState<string | null>(null);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
 
   // Hide AI trigger button whenever the mobile navigation drawer is open
   useEffect(() => {
@@ -186,6 +211,57 @@ export default function ChurchAiAssistant() {
   }, [isOpen, isMinimized]);
 
   // Send message to backend
+  // Fetch dynamic suggestions whenever route or language changes
+  useEffect(() => {
+    if (!isOpen) return;
+    fetch(`${API_URL}/ai/suggestions?route=${encodeURIComponent(pathname || '/')}&lang=${isAr ? 'ar' : 'en'}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.suggestions)) {
+          setRouteSuggestions(data.suggestions);
+        }
+      })
+      .catch(() => {});
+  }, [pathname, isAr, isOpen]);
+
+  // Submit human support / handoff escalation
+  const handleSubmitHandoff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setHandoffError(null);
+    setHandoffSuccessCode(null);
+
+    if (!handoffName.trim() || !handoffPhone.trim() || !handoffMessage.trim()) {
+      setHandoffError(isAr ? 'يرجى ملء جميع الحقول المطلوبة.' : 'Please fill all required fields.');
+      return;
+    }
+
+    setIsSubmittingHandoff(true);
+    try {
+      const res = await fetch(`${API_URL}/ai/support-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: handoffName.trim(),
+          phone: handoffPhone.trim(),
+          category: handoffCategory,
+          message: handoffMessage.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setHandoffSuccessCode(data.referenceCode);
+        setHandoffMessage('');
+      } else {
+        setHandoffError(data.error || (isAr ? 'فشل إرسال الطلب.' : 'Failed to submit request.'));
+      }
+    } catch (err) {
+      setHandoffError(isAr ? 'تعذر الاتصال بالخادم.' : 'Connection error.');
+    } finally {
+      setIsSubmittingHandoff(false);
+    }
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || inputText).trim();
     if (!query || isLoading) return;
@@ -205,8 +281,8 @@ export default function ChurchAiAssistant() {
     setIsLoading(true);
 
     try {
-      // Build history payload (last 4 messages)
-      const historyPayload = messages.slice(-4).map(m => ({
+      // Build history payload (last 6 messages for multi-turn context)
+      const historyPayload = messages.slice(-6).map(m => ({
         role: m.role,
         content: m.text
       }));
@@ -234,6 +310,7 @@ export default function ChurchAiAssistant() {
         text: data.response || (isAr ? 'عذراً، لم أتمكن من الحصول على الإجابة.' : 'Sorry, could not retrieve answer.'),
         sources: data.sources || [],
         suggestedQuestions: data.suggestedQuestions || [],
+        action: data.action || undefined,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
@@ -530,6 +607,27 @@ export default function ChurchAiAssistant() {
             {/* Header Actions */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <button
+                onClick={() => setIsHandoffModalOpen(true)}
+                title={isAr ? 'طلب مساعدة خادم / سكرتارية' : 'Human Help / Servant Support'}
+                style={{
+                  background: 'rgba(226, 183, 20, 0.15)',
+                  border: '1px solid rgba(226, 183, 20, 0.35)',
+                  color: 'var(--accent-gold)',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.72rem',
+                  fontWeight: 600
+                }}
+              >
+                <HeartHandshake size={13} />
+                <span className="hidden sm:inline">{isAr ? 'مساعدة بشرية' : 'Human Help'}</span>
+              </button>
+
+              <button
                 onClick={() => setSoundEnabled(prev => !prev)}
                 title={soundEnabled ? (isAr ? 'كتم الصوت' : 'Mute sound') : (isAr ? 'تفعيل الصوت' : 'Enable sound')}
                 style={{
@@ -650,6 +748,46 @@ export default function ChurchAiAssistant() {
                   gap: '16px'
                 }}
               >
+                {/* Route Context Banner when starting chat */}
+                {messages.length <= 1 && routeSuggestions.length > 0 && (
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '12px',
+                      backgroundColor: 'rgba(226, 183, 20, 0.08)',
+                      border: '1px solid rgba(226, 183, 20, 0.25)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.76rem', color: 'var(--accent-gold)', fontWeight: 600 }}>
+                      <Sparkles size={14} />
+                      <span>{isAr ? 'أسئلة مقترحة خاصة بهذه الصفحة:' : 'Suggested for this page:'}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {routeSuggestions.slice(0, 4).map((sug, sIdx) => (
+                        <button
+                          key={sIdx}
+                          onClick={() => handleSendMessage(sug)}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '14px',
+                            backgroundColor: 'var(--bg-card)',
+                            border: '1px solid var(--border-color)',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                            textAlign: 'start'
+                          }}
+                        >
+                          📍 {sug}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {messages.map(msg => {
                   const isAssistant = msg.role === 'assistant';
                   return (
@@ -676,6 +814,68 @@ export default function ChurchAiAssistant() {
                         }}
                       >
                         {renderFormattedText(msg.text)}
+
+                        {/* Interactive Church Action Card */}
+                        {isAssistant && msg.action && (
+                          <div
+                            style={{
+                              marginTop: '12px',
+                              padding: '10px 12px',
+                              borderRadius: '10px',
+                              backgroundColor: 'rgba(226, 183, 20, 0.12)',
+                              border: '1px solid rgba(226, 183, 20, 0.35)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '6px'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontSize: '1.1rem' }}>
+                                {msg.action.actionId.includes('schedule') ? '⛪' : 
+                                 msg.action.actionId.includes('clergy') || msg.action.actionId.includes('appointment') ? '✝️' :
+                                 msg.action.actionId.includes('trip') || msg.action.actionId.includes('event') ? '🚌' :
+                                 msg.action.actionId.includes('donation') ? '💝' :
+                                 msg.action.actionId.includes('member') ? '📋' : '⚡'}
+                              </span>
+                              <strong style={{ fontSize: '0.84rem', color: 'var(--accent-gold)' }}>
+                                {isAr ? (msg.action.nameAr || 'إجراء كنسي مباشر') : (msg.action.nameEn || 'Church Action')}
+                              </strong>
+                            </div>
+                            
+                            <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                              {isAr ? (msg.action.messageAr || 'يمكنك تنفيذ الإجراء مباشرة من هنا:') : (msg.action.messageEn || 'You can perform this action directly:')}
+                            </p>
+
+                            {msg.action.redirectUrl && (
+                              <button
+                                onClick={() => {
+                                  router.push(msg.action!.redirectUrl!);
+                                  if (window.innerWidth < 640) setIsMinimized(true);
+                                }}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '6px',
+                                  padding: '7px 14px',
+                                  borderRadius: '8px',
+                                  backgroundColor: 'var(--accent-gold)',
+                                  color: '#000',
+                                  fontWeight: 700,
+                                  fontSize: '0.8rem',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  marginTop: '4px',
+                                  boxShadow: '0 2px 8px rgba(226, 183, 20, 0.3)',
+                                  transition: 'all 0.2s ease'
+                                }}
+                              >
+                                <span>{isAr ? 'الانتقال للخدمة' : 'Open Service'}</span>
+                                <ExternalLink size={13} />
+                              </button>
+                            )}
+                          </div>
+                        )}
 
                         {/* Verified Sources Badges */}
                         {isAssistant && msg.sources && msg.sources.length > 0 && (
@@ -947,6 +1147,318 @@ export default function ChurchAiAssistant() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Human Handoff / Pastoral Support Modal */}
+      {isHandoffModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10001,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+          onClick={() => setIsHandoffModalOpen(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              backgroundColor: 'var(--bg-secondary)',
+              borderRadius: '20px',
+              border: '1px solid var(--border-color)',
+              width: '100%',
+              maxWidth: '480px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '24px',
+              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 30px rgba(226, 183, 20, 0.2)',
+              direction: isAr ? 'rtl' : 'ltr',
+              fontFamily: isAr ? 'var(--font-arabic)' : 'var(--font-english)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '10px',
+                    backgroundColor: 'rgba(226, 183, 20, 0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--accent-gold)'
+                  }}
+                >
+                  <HeartHandshake size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {isAr ? 'تواصل مع خادم / سكرتارية الكنيسة' : 'Contact Church Servant / Office'}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    {isAr ? 'مساعدة شخصية ومتابعة من الخدام المعتمدين' : 'Personal assistance from verified church servants'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsHandoffModalOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  padding: '6px'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Sacredness & Confession Warning */}
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(226, 183, 20, 0.08)',
+                border: '1px solid rgba(226, 183, 20, 0.3)',
+                fontSize: '0.78rem',
+                color: 'var(--text-primary)',
+                marginBottom: '16px',
+                lineHeight: 1.5
+              }}
+            >
+              <strong style={{ color: 'var(--accent-gold)' }}>⚠️ {isAr ? 'تنبيه طقسي هام:' : 'Important Notice:'} </strong>
+              {isAr
+                ? 'سر الاعتراف الطقسي مقدس ويتم شفاهاً وشخصياً مع الأب الكاهن في الكنيسة فقط. برجاء عدم كتابة أي خطايا أو أسرار اعتراف في هذه الاستمارة.'
+                : 'Sacramental confession is strictly in-person with a priest at church. Please do not submit confidential confession disclosures here.'}
+            </div>
+
+            {handoffSuccessCode ? (
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <div
+                  style={{
+                    width: '54px',
+                    height: '54px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(46, 204, 113, 0.2)',
+                    color: '#2ecc71',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 12px'
+                  }}
+                >
+                  <Check size={28} />
+                </div>
+                <h4 style={{ margin: '0 0 8px', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+                  {isAr ? 'تم استلام طلبك بنجاح!' : 'Request Received Successfully!'}
+                </h4>
+                <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+                  {isAr ? 'كود المتابعة المرجعي الخاص بك:' : 'Your Reference Tracking Code:'}
+                </p>
+                <div
+                  style={{
+                    display: 'inline-block',
+                    padding: '8px 18px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '2px dashed var(--accent-gold)',
+                    borderRadius: '8px',
+                    fontSize: '1.2rem',
+                    fontWeight: 700,
+                    letterSpacing: '1px',
+                    color: 'var(--accent-gold)',
+                    marginBottom: '16px'
+                  }}
+                >
+                  {handoffSuccessCode}
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  {isAr
+                    ? 'سيقوم الخادم أو سكرتارية الكنيسة بالتواصل معك عبر الهاتف أو الواتساب لمتابعة طلبك.'
+                    : 'A servant or church secretary will reach out to you via phone or WhatsApp.'}
+                </p>
+                <button
+                  onClick={() => {
+                    setHandoffSuccessCode(null);
+                    setIsHandoffModalOpen(false);
+                  }}
+                  style={{
+                    marginTop: '16px',
+                    padding: '9px 24px',
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--accent-gold)',
+                    color: '#000',
+                    fontWeight: 700,
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isAr ? 'تم، حسناً' : 'Done'}
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmitHandoff} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {handoffError && (
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(231, 76, 60, 0.15)',
+                      border: '1px solid #e74c3c',
+                      color: '#e74c3c',
+                      fontSize: '0.82rem'
+                    }}
+                  >
+                    {handoffError}
+                  </div>
+                )}
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '5px', color: 'var(--text-primary)' }}>
+                    {isAr ? 'الاسم بالكامل *' : 'Full Name *'}
+                  </label>
+                  <input
+                    type="text"
+                    value={handoffName}
+                    onChange={e => setHandoffName(e.target.value)}
+                    placeholder={isAr ? 'اكتب اسمك الثلاثي' : 'Your full name'}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.88rem',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '5px', color: 'var(--text-primary)' }}>
+                    {isAr ? 'رقم الهاتف / الواتساب *' : 'Phone / WhatsApp *'}
+                  </label>
+                  <input
+                    type="tel"
+                    value={handoffPhone}
+                    onChange={e => setHandoffPhone(e.target.value)}
+                    placeholder={isAr ? 'مثال: 01234567890' : 'e.g. +20 123 456 7890'}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.88rem',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                      direction: 'ltr',
+                      textAlign: isAr ? 'right' : 'left'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '5px', color: 'var(--text-primary)' }}>
+                    {isAr ? 'قسم الاستفسار' : 'Category'}
+                  </label>
+                  <select
+                    value={handoffCategory}
+                    onChange={e => setHandoffCategory(e.target.value as any)}
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.88rem',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <option value="GENERAL">{isAr ? 'استفسار عام / خدمات الكنيسة' : 'General Inquiry'}</option>
+                    <option value="PASTORAL">{isAr ? 'استفسار رعوي / مقابلة مع أبونا' : 'Pastoral Meeting Inquiry'}</option>
+                    <option value="MEMBERSHIP">{isAr ? 'شؤون العضوية واستمارة الأسرة' : 'Membership / Family Registry'}</option>
+                    <option value="TECHNICAL">{isAr ? 'دعم فني في الموقع والحساب' : 'Technical Support'}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '5px', color: 'var(--text-primary)' }}>
+                    {isAr ? 'تفاصيل رسالتك أو استفسارك *' : 'Message Details *'}
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={handoffMessage}
+                    onChange={e => setHandoffMessage(e.target.value)}
+                    placeholder={isAr ? 'اكتب ما تود الاستفسار عنه بموضوعية وسيقوم الخادم بالرد عليك...' : 'Describe your inquiry...'}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.88rem',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                      resize: 'vertical'
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingHandoff}
+                    style={{
+                      flex: 1,
+                      padding: '11px',
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--accent-gold)',
+                      color: '#000',
+                      fontWeight: 700,
+                      fontSize: '0.9rem',
+                      border: 'none',
+                      cursor: isSubmittingHandoff ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {isSubmittingHandoff ? (isAr ? 'جاري الإرسال...' : 'Submitting...') : (isAr ? 'إرسال الطلب للخادم' : 'Submit Request')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsHandoffModalOpen(false)}
+                    style={{
+                      padding: '11px 18px',
+                      borderRadius: '8px',
+                      backgroundColor: 'transparent',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {isAr ? 'إلغاء' : 'Cancel'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       )}
     </>

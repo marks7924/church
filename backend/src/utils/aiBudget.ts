@@ -68,3 +68,77 @@ export function getBudgetStatus() {
     resetTimeUTC: `${budgetState.currentDay}T23:59:59.999Z`
   };
 }
+
+interface ProviderMetric {
+  requests: number;
+  successes: number;
+  failures: number;
+  timeouts: number;
+  totalLatencyMs: number;
+  lastCallAt: string | null;
+  lastError: string | null;
+}
+
+const providerMetrics: Record<string, ProviderMetric> = {
+  gemini: { requests: 0, successes: 0, failures: 0, timeouts: 0, totalLatencyMs: 0, lastCallAt: null, lastError: null },
+  groq: { requests: 0, successes: 0, failures: 0, timeouts: 0, totalLatencyMs: 0, lastCallAt: null, lastError: null },
+  openai: { requests: 0, successes: 0, failures: 0, timeouts: 0, totalLatencyMs: 0, lastCallAt: null, lastError: null },
+  deepseek: { requests: 0, successes: 0, failures: 0, timeouts: 0, totalLatencyMs: 0, lastCallAt: null, lastError: null },
+  local: { requests: 0, successes: 0, failures: 0, timeouts: 0, totalLatencyMs: 0, lastCallAt: null, lastError: null }
+};
+
+let totalFailoversToday = 0;
+
+export function recordProviderCall(
+  provider: string,
+  success: boolean,
+  latencyMs: number,
+  isTimeout = false,
+  errorMsg?: string,
+  isFailover = false
+): void {
+  const norm = provider.toLowerCase().split(' ')[0];
+  if (!providerMetrics[norm]) {
+    providerMetrics[norm] = { requests: 0, successes: 0, failures: 0, timeouts: 0, totalLatencyMs: 0, lastCallAt: null, lastError: null };
+  }
+  const m = providerMetrics[norm];
+  m.requests += 1;
+  if (success) {
+    m.successes += 1;
+  } else {
+    m.failures += 1;
+    if (isTimeout) m.timeouts += 1;
+    if (errorMsg) m.lastError = errorMsg.slice(0, 160);
+  }
+  m.totalLatencyMs += latencyMs;
+  m.lastCallAt = new Date().toISOString();
+  if (isFailover) {
+    totalFailoversToday += 1;
+  }
+}
+
+export function getProviderHealthMetrics() {
+  const providers = Object.entries(providerMetrics).map(([name, m]) => {
+    const avgLatency = m.requests > 0 ? Math.round(m.totalLatencyMs / m.requests) : 0;
+    const successRate = m.requests > 0 ? Math.round((m.successes / m.requests) * 100) : 100;
+    const status = m.requests === 0 ? 'STANDBY' : (successRate >= 80 ? 'HEALTHY' : (successRate >= 50 ? 'DEGRADED' : 'UNHEALTHY'));
+    return {
+      name,
+      status,
+      requests: m.requests,
+      successes: m.successes,
+      failures: m.failures,
+      timeouts: m.timeouts,
+      successRate,
+      avgLatencyMs: avgLatency,
+      lastCallAt: m.lastCallAt,
+      lastError: m.lastError
+    };
+  });
+
+  return {
+    failoversToday: totalFailoversToday,
+    providers
+  };
+}
+

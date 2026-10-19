@@ -2,6 +2,10 @@ import { Router, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import prisma from '../db';
 import { ChurchAiService, ChurchKnowledgeRetriever, CHURCH_INFO } from '../services/ai.service';
+import { ChurchAiActionService, ACTION_REGISTRY } from '../services/aiAction.service';
+import { ChurchAiAdminChatService } from '../services/aiAdminChat.service';
+import { ChurchAiEvaluationService } from '../services/aiEvaluation.service';
+import { getBudgetStatus, getProviderHealthMetrics } from '../utils/aiBudget';
 import { requireAuth, requireRoles } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types';
 import { Role } from '@prisma/client';
@@ -98,6 +102,7 @@ router.post('/chat', async (req: Request, res: Response) => {
       sources: aiResult.sources,
       suggestedQuestions: aiResult.suggestedQuestions,
       latencyMs: aiResult.latencyMs,
+      action: aiResult.action,
       conversationId: conversationId || `conv-${Date.now()}`
     });
   } catch (error: any) {
@@ -137,8 +142,6 @@ router.post('/feedback', async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Failed to record feedback.' });
   }
 });
-
-import { getBudgetStatus } from '../utils/aiBudget';
 
 /**
  * 3. GET /api/ai/admin/settings
@@ -521,6 +524,460 @@ router.delete(
     } catch (error) {
       console.error('Error deleting FAQ:', error);
       return res.status(500).json({ error: 'Failed to delete FAQ.' });
+    }
+  }
+);
+
+/**
+ * 13. GET /api/ai/suggestions
+ * Route-aware dynamic suggested questions
+ */
+router.get('/suggestions', (req: Request, res: Response) => {
+  const route = (req.query.route as string) || '/';
+  const lang = (req.query.lang as string) === 'en' ? 'en' : 'ar';
+  const suggestions = ChurchAiService.getSuggestionsForRoute(route, lang);
+  return res.status(200).json(suggestions);
+});
+
+/**
+ * 14. GET /api/ai/actions
+ * List supported church platform actions
+ */
+router.get('/actions', (req: Request, res: Response) => {
+  return res.status(200).json(Object.values(ACTION_REGISTRY));
+});
+
+/**
+ * 15. POST /api/ai/actions/execute
+ * Execute an approved church platform action safely
+ */
+router.post('/actions/execute', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req) as any;
+    const { actionId, params } = req.body;
+
+    if (!actionId) {
+      return res.status(400).json({ error: 'actionId is required' });
+    }
+
+    const result = await ChurchAiActionService.executeAction(actionId, params || {}, user);
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (error: any) {
+    console.error('Error executing AI action:', error);
+    return res.status(500).json({
+      success: false,
+      messageAr: 'حدث خطأ أثناء تنفيذ الإجراء.',
+      messageEn: 'Error executing action.'
+    });
+  }
+});
+
+/**
+ * 16. POST /api/ai/support-request
+ * Create a persistent human handoff / pastoral support ticket
+ */
+router.post('/support-request', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    const { name, phone, email, category, message } = req.body;
+
+    if (!name || !phone || !message) {
+      return res.status(400).json({
+        errorAr: 'الاسم ورقم الهاتف والرسالة حقول إلزامية.',
+        error: 'Name, phone, and message are required.'
+      });
+    }
+
+    // Sacredness guard: Reject confession secret submissions in text
+    const lowerMsg = String(message).toLowerCase();
+    if (lowerMsg.includes('خطيئة') || lowerMsg.includes('اعترف ب') || lowerMsg.includes('أخطأت في')) {
+      return res.status(400).json({
+        errorAr: 'تنبيه روحي: سر الاعتراف مقدس ويتم شفاهاً فقط في جلسة خاصة مع الأب الكاهن. يرجى حجز موعد اعتراف بدلاً من كتابة الخطايا في الرسالة.',
+        error: 'Sacramental notice: Confession is sacred and performed in-person with the priest. Please book a confession appointment.'
+      });
+    }
+
+    const refCode = `REQ-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const supportRequest = await prisma.aiSupportRequest.create({
+      data: {
+        referenceCode: refCode,
+        userId: user ? user.id : null,
+        name: String(name).trim(),
+        phone: String(phone).trim(),
+        email: email ? String(email).trim() : null,
+        category: category || 'GENERAL',
+        message: String(message).trim(),
+        status: 'PENDING'
+      }
+    });
+
+    logAction(
+      user ? user.id : 'VISITOR',
+      user ? user.email : 'visitor@church.org',
+      String(name),
+      'AI_SUPPORT_REQUEST',
+      JSON.stringify({ refCode, category })
+    );
+
+    return res.status(201).json({
+      success: true,
+      referenceCode: refCode,
+      messageAr: `تم تسجيل طلبك بنجاح برقم مرجعي (#${refCode}). سيقوم أحد الخدام أو الأب الكاهن بالتواصل معك في أقرب وقت.`,
+      messageEn: `Your support request has been submitted with reference (#${refCode}). A church representative will contact you shortly.`
+    });
+  } catch (error) {
+    console.error('Error submitting support request:', error);
+    return res.status(500).json({ error: 'Failed to submit support request.' });
+  }
+});
+
+/**
+ * 17. GET /api/ai/support-request/:refCode
+ * Check status of a support request
+ */
+router.get('/support-request/:refCode', async (req: Request, res: Response) => {
+  try {
+    const { refCode } = req.params;
+    const item = await prisma.aiSupportRequest.findUnique({
+      where: { referenceCode: refCode },
+      select: {
+        referenceCode: true,
+        category: true,
+        status: true,
+        createdAt: true
+      }
+    });
+
+    if (!item) {
+      return res.status(404).json({ error: 'Support request not found.' });
+    }
+
+    return res.status(200).json(item);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch support request status.' });
+  }
+});
+
+/**
+ * 18. Admin Knowledge Chat: GET /api/ai/admin/conversations
+ */
+router.get(
+  '/admin/conversations',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { status, search, page, limit } = req.query;
+      const result = await ChurchAiAdminChatService.listConversations({
+        status: status as string,
+        search: search as string,
+        page: page ? parseInt(page as string, 10) : 1,
+        limit: limit ? parseInt(limit as string, 10) : 30
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error('Error listing admin conversations:', error);
+      return res.status(500).json({ error: 'Failed to list conversations.' });
+    }
+  }
+);
+
+/**
+ * 19. Admin Knowledge Chat: POST /api/ai/admin/conversations
+ */
+router.post(
+  '/admin/conversations',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { title } = req.body;
+      const conversation = await ChurchAiAdminChatService.createConversation(req.user!.userId, title);
+      return res.status(201).json(conversation);
+    } catch (error) {
+      console.error('Error creating admin conversation:', error);
+      return res.status(500).json({ error: 'Failed to create conversation.' });
+    }
+  }
+);
+
+/**
+ * 20. Admin Knowledge Chat: GET /api/ai/admin/conversations/:id
+ */
+router.get(
+  '/admin/conversations/:id',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const conversation = await ChurchAiAdminChatService.getConversation(id);
+      if (!conversation) return res.status(404).json({ error: 'Conversation not found.' });
+      return res.status(200).json(conversation);
+    } catch (error) {
+      console.error('Error retrieving conversation:', error);
+      return res.status(500).json({ error: 'Failed to retrieve conversation.' });
+    }
+  }
+);
+
+/**
+ * 21. Admin Knowledge Chat: PATCH /api/ai/admin/conversations/:id
+ */
+router.patch(
+  '/admin/conversations/:id',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { title, status } = req.body;
+      const updated = await ChurchAiAdminChatService.updateConversation(id, { title, status });
+      return res.status(200).json(updated);
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to update conversation.' });
+    }
+  }
+);
+
+/**
+ * 22. Admin Knowledge Chat: POST /api/ai/admin/conversations/:id/messages
+ */
+router.post(
+  '/admin/conversations/:id/messages',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { content, language } = req.body;
+
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        return res.status(400).json({ error: 'Message content is required.' });
+      }
+
+      const result = await ChurchAiAdminChatService.sendAdminMessage(
+        id,
+        req.user!.userId,
+        content,
+        language === 'en' ? 'en' : 'ar'
+      );
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error('Error in admin knowledge chat message:', error);
+      return res.status(500).json({ error: 'Failed to process admin message.' });
+    }
+  }
+);
+
+/**
+ * 23. Admin Knowledge Chat: POST /api/ai/admin/conversations/:id/extract-knowledge
+ */
+router.post(
+  '/admin/conversations/:id/extract-knowledge',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { messageId } = req.body;
+      const candidate = await ChurchAiAdminChatService.extractKnowledgeCandidate(id, messageId, req.user!.userId);
+      return res.status(201).json(candidate);
+    } catch (error: any) {
+      console.error('Error extracting knowledge candidate:', error);
+      return res.status(500).json({ error: error.message || 'Failed to extract knowledge.' });
+    }
+  }
+);
+
+/**
+ * 24. Admin Knowledge Management: GET /api/ai/admin/knowledge
+ */
+router.get(
+  '/admin/knowledge',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { status, category, search } = req.query;
+      const items = await ChurchAiAdminChatService.listKnowledgeItems({
+        status: status as string,
+        category: category as string,
+        search: search as string
+      });
+      return res.status(200).json(items);
+    } catch (error) {
+      console.error('Error listing knowledge items:', error);
+      return res.status(500).json({ error: 'Failed to list knowledge items.' });
+    }
+  }
+);
+
+/**
+ * 25. Admin Knowledge Management: POST /api/ai/admin/knowledge
+ */
+router.post(
+  '/admin/knowledge',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { titleAr, titleEn, contentAr, contentEn, category, status } = req.body;
+      if (!titleAr || !contentAr) {
+        return res.status(400).json({ error: 'Arabic title and content are required.' });
+      }
+
+      const item = await prisma.aiKnowledgeItem.create({
+        data: {
+          titleAr: String(titleAr).trim(),
+          titleEn: String(titleEn || titleAr).trim(),
+          contentAr: String(contentAr).trim(),
+          contentEn: String(contentEn || contentAr).trim(),
+          category: category || 'GENERAL',
+          status: status || 'APPROVED',
+          sourceType: 'MANUAL',
+          createdById: req.user!.userId
+        }
+      });
+
+      const { invalidateKnowledgeCache } = await import('../services/ai.service');
+      invalidateKnowledgeCache();
+
+      return res.status(201).json(item);
+    } catch (error) {
+      console.error('Error creating knowledge item:', error);
+      return res.status(500).json({ error: 'Failed to create knowledge item.' });
+    }
+  }
+);
+
+/**
+ * 26. Admin Knowledge Management: PUT /api/ai/admin/knowledge/:id
+ */
+router.put(
+  '/admin/knowledge/:id',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const updated = await ChurchAiAdminChatService.updateKnowledgeItem(id, req.body, req.user!.userId);
+      return res.status(200).json(updated);
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to update knowledge item.' });
+    }
+  }
+);
+
+/**
+ * 27. Admin Knowledge Management: PATCH /api/ai/admin/knowledge/:id/publish
+ */
+router.patch(
+  '/admin/knowledge/:id/publish',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const published = await ChurchAiAdminChatService.publishKnowledgeItem(id, req.user!.userId);
+      return res.status(200).json(published);
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to publish knowledge item.' });
+    }
+  }
+);
+
+/**
+ * 28. Admin Knowledge Management: PATCH /api/ai/admin/knowledge/:id/unpublish
+ */
+router.patch(
+  '/admin/knowledge/:id/unpublish',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const unpublished = await ChurchAiAdminChatService.unpublishKnowledgeItem(id, 'DRAFT', req.user!.userId);
+      return res.status(200).json(unpublished);
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to unpublish knowledge item.' });
+    }
+  }
+);
+
+/**
+ * 29. Admin Knowledge Management: DELETE /api/ai/admin/knowledge/:id
+ */
+router.delete(
+  '/admin/knowledge/:id',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      await ChurchAiAdminChatService.deleteKnowledgeItem(id);
+      return res.status(200).json({ success: true, message: 'Knowledge item deleted successfully.' });
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to delete knowledge item.' });
+    }
+  }
+);
+
+/**
+ * 30. Admin Evaluation Lab: GET /api/ai/admin/evaluations
+ */
+router.get(
+  '/admin/evaluations',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const cases = await ChurchAiEvaluationService.listEvaluationCases();
+      return res.status(200).json(cases);
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to fetch evaluation cases.' });
+    }
+  }
+);
+
+/**
+ * 31. Admin Evaluation Lab: POST /api/ai/admin/evaluations/run
+ */
+router.post(
+  '/admin/evaluations/run',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { category, language } = req.body;
+      const report = await ChurchAiEvaluationService.runEvaluationSuite(category, language || 'ar');
+      return res.status(200).json(report);
+    } catch (error) {
+      console.error('Error running evaluation suite:', error);
+      return res.status(500).json({ error: 'Failed to run evaluations.' });
+    }
+  }
+);
+
+/**
+ * 32. Provider Health & Cost Intelligence: GET /api/ai/admin/providers/health
+ */
+router.get(
+  '/admin/providers/health',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const metrics = getProviderHealthMetrics();
+      const budget = getBudgetStatus();
+      return res.status(200).json({
+        ...metrics,
+        budget
+      });
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to fetch provider health metrics.' });
     }
   }
 );

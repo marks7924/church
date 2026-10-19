@@ -1,5 +1,5 @@
 import prisma from '../db';
-import { isBudgetExceeded, recordTokenUsage, getBudgetStatus } from '../utils/aiBudget';
+import { isBudgetExceeded, recordTokenUsage, getBudgetStatus, recordProviderCall, getProviderHealthMetrics } from '../utils/aiBudget';
 
 export interface AiChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -10,7 +10,17 @@ export interface AiChatMessage {
 export interface AiSourceReference {
   title: string;
   url: string;
-  type: 'schedule' | 'sermon' | 'event' | 'clergy' | 'donation' | 'ministry' | 'contact' | 'membership' | 'live';
+  type: 'schedule' | 'sermon' | 'event' | 'clergy' | 'donation' | 'ministry' | 'contact' | 'membership' | 'live' | 'policy' | 'general';
+  verifiedDate?: string;
+}
+
+export interface AiChatAction {
+  actionId: string;
+  labelAr: string;
+  labelEn: string;
+  redirectUrl?: string;
+  requiresAuth?: boolean;
+  params?: Record<string, any>;
 }
 
 export interface AiChatResponse {
@@ -22,6 +32,7 @@ export interface AiChatResponse {
   provider: string;
   model: string;
   fallbackTriggered?: boolean;
+  action?: AiChatAction;
 }
 
 export interface ProviderResult {
@@ -406,7 +417,7 @@ export class ChurchKnowledgeRetriever {
  * Google Gemini Dedicated Provider Client
  * Uses official Google Generative Language API contract
  */
-async function callGeminiProvider(
+export async function callGeminiProvider(
   apiKey: string,
   model: string,
   systemPrompt: string,
@@ -501,7 +512,7 @@ async function callGeminiProvider(
  * Groq Dedicated Fallback Provider Client
  * Uses official Groq OpenAI-compatible contract (with strictly non-deprecated model)
  */
-async function callGroqProvider(
+export async function callGroqProvider(
   apiKey: string,
   model: string,
   systemPrompt: string,
@@ -577,6 +588,142 @@ async function callGroqProvider(
       success: false,
       isTransient: isTimeout || true,
       errorMessage: err.message || 'Groq connection failure'
+    };
+  }
+}
+
+/**
+ * OpenAI Provider Client (OpenAI-compatible)
+ */
+export async function callOpenAiProvider(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  history: AiChatMessage[],
+  userMessage: string,
+  maxTokens: number,
+  timeoutMs: number
+): Promise<ProviderResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const url = 'https://api.openai.com/v1/chat/completions';
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-6).map(h => ({ role: h.role, content: h.content })),
+      { role: 'user', content: userMessage }
+    ];
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model || 'gpt-4o-mini',
+        messages,
+        temperature: 0.3,
+        max_tokens: maxTokens
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return {
+        success: false,
+        isTransient: response.status === 429 || response.status >= 500,
+        errorMessage: `OpenAI HTTP ${response.status}: ${errText.slice(0, 200)}`
+      };
+    }
+
+    const data = (await response.json()) as any;
+    const text = data?.choices?.[0]?.message?.content;
+    const tokensUsed = data?.usage?.total_tokens || Math.round((text?.length || 0) / 4);
+
+    return {
+      success: !!text,
+      text: text || '',
+      tokensUsed
+    };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    return {
+      success: false,
+      isTransient: true,
+      errorMessage: err.message || 'OpenAI request failed'
+    };
+  }
+}
+
+/**
+ * DeepSeek Provider Client (OpenAI-compatible)
+ */
+export async function callDeepSeekProvider(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  history: AiChatMessage[],
+  userMessage: string,
+  maxTokens: number,
+  timeoutMs: number
+): Promise<ProviderResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const url = 'https://api.deepseek.com/chat/completions';
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-6).map(h => ({ role: h.role, content: h.content })),
+      { role: 'user', content: userMessage }
+    ];
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model || 'deepseek-chat',
+        messages,
+        temperature: 0.3,
+        max_tokens: maxTokens
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return {
+        success: false,
+        isTransient: response.status === 429 || response.status >= 500,
+        errorMessage: `DeepSeek HTTP ${response.status}: ${errText.slice(0, 200)}`
+      };
+    }
+
+    const data = (await response.json()) as any;
+    const text = data?.choices?.[0]?.message?.content;
+    const tokensUsed = data?.usage?.total_tokens || Math.round((text?.length || 0) / 4);
+
+    return {
+      success: !!text,
+      text: text || '',
+      tokensUsed
+    };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    return {
+      success: false,
+      isTransient: true,
+      errorMessage: err.message || 'DeepSeek request failed'
     };
   }
 }
@@ -685,6 +832,28 @@ export class ChurchAiService {
         knowledgeText += `- Q: "${f.questionAr}" (${f.questionEn}) -> A: "${f.answerAr}" (${f.answerEn}) ${f.imageUrl ? `[Image: ${f.imageUrl}]` : ''}\n`;
       });
     }
+
+    // Dynamic Published Knowledge Items from Admin Knowledge Pipeline
+    try {
+      const publishedItems = await prisma.aiKnowledgeItem.findMany({
+        where: { status: 'PUBLISHED' },
+        orderBy: { updatedAt: 'desc' },
+        take: 20
+      });
+
+      if (publishedItems && publishedItems.length > 0) {
+        knowledgeText += `\n### Approved Published Church Policies, Articles & Knowledge:\n`;
+        publishedItems.forEach(item => {
+          knowledgeText += `- [${item.category}] ${item.titleAr} (${item.titleEn}): ${item.contentAr}\n`;
+          sources.push({
+            title: userLanguage === 'ar' ? item.titleAr : item.titleEn,
+            url: item.category === 'SCHEDULE' ? '/schedule' : (item.category === 'EVENT' ? '/schedule' : '/about'),
+            type: 'policy',
+            verifiedDate: item.lastVerifiedAt ? new Date(item.lastVerifiedAt).toISOString().split('T')[0] : undefined
+          });
+        });
+      }
+    } catch {}
 
     return { knowledgeText, sources, customFaqs };
   }
@@ -962,7 +1131,165 @@ CRITICAL OPERATIONAL RULES:
   }
 
   /**
-   * Process chat request through Dual Provider Architecture (Gemini Primary -> Groq Fallback -> Grounded Engine)
+   * Resolves multi-turn references (e.g. "فين؟", "بكام؟", "طب ويوم الجمعة؟") using history context
+   */
+  static resolveFollowUpQuery(currentQuery: string, history: AiChatMessage[]): string {
+    if (!history || history.length === 0) return currentQuery;
+
+    const q = currentQuery.trim().toLowerCase();
+    const isBriefFollowUp =
+      q.length < 35 &&
+      (q.includes('فين') ||
+        q.includes('امتى') ||
+        q.includes('أين') ||
+        q.includes('متى') ||
+        q.includes('بكام') ||
+        q.includes('تكلفة') ||
+        q.includes('الجمعة') ||
+        q.includes('الأحد') ||
+        q.includes('الأربعاء') ||
+        q.includes('حجز') ||
+        q.includes('تسجيل') ||
+        q.includes('where') ||
+        q.includes('when') ||
+        q.includes('cost') ||
+        q.includes('price') ||
+        q.includes('friday') ||
+        q.includes('sunday') ||
+        q.includes('book'));
+
+    if (isBriefFollowUp) {
+      const recent = [...history].reverse().find(m => m.content && m.content.length > 5);
+      if (recent) {
+        const firstLine = recent.content.split('\n')[0].slice(0, 80);
+        return `${firstLine} - ${currentQuery}`;
+      }
+    }
+    return currentQuery;
+  }
+
+  /**
+   * Detects actionable intents to offer high-conversion interactive workflow cards
+   */
+  static detectActionIntent(query: string, lang: 'ar' | 'en'): AiChatResponse['action'] | undefined {
+    const q = query.toLowerCase();
+
+    if (q.includes('حجز رحل') || q.includes('اشتراك في رحل') || q.includes('سفر الرحل') || q.includes('book trip') || q.includes('join trip')) {
+      return {
+        actionId: 'register_trip',
+        labelAr: 'حجز رحلة كنسية',
+        labelEn: 'Book Church Trip',
+        redirectUrl: '/schedule',
+        requiresAuth: true
+      };
+    }
+
+    if (q.includes('اعتراف') || q.includes('موعد مع ابونا') || q.includes('جلسة اعتراف') || q.includes('book confession') || q.includes('confession appointment')) {
+      return {
+        actionId: 'book_appointment',
+        labelAr: 'حجز موعد اعتراف مع أبونا',
+        labelEn: 'Book Confession with Father',
+        redirectUrl: '/',
+        requiresAuth: true
+      };
+    }
+
+    if (q.includes('مواعيد قداس') || q.includes('قداسات هذا الاسبوع') || q.includes('جدول القداسات') || q.includes('تسبحة') || q.includes('عشية') || q.includes('mass schedule') || q.includes('liturgy schedule')) {
+      return {
+        actionId: 'open_schedule',
+        labelAr: 'جدول القداسات الكامل',
+        labelEn: 'Full Liturgy Schedule',
+        redirectUrl: '/schedule'
+      };
+    }
+
+    if (q.includes('تبرع') || q.includes('حساب البنك') || q.includes('عطاء') || q.includes('بنك مصر') || q.includes('donate') || q.includes('bank account') || q.includes('swift')) {
+      return {
+        actionId: 'view_donations',
+        labelAr: 'الحسابات البنكية للتبرع',
+        labelEn: 'Donation Bank Accounts',
+        redirectUrl: '/donations'
+      };
+    }
+
+    if (q.includes('استمارة') || q.includes('عضوية') || q.includes('تسجيل الاسرة') || q.includes('membership') || q.includes('family registration')) {
+      return {
+        actionId: 'register_membership',
+        labelAr: 'استمارة عضوية الأسرة',
+        labelEn: 'Family Membership Form',
+        redirectUrl: '/register-member'
+      };
+    }
+
+    if (q.includes('تواصل') || q.includes('رقم الكنيسة') || q.includes('سكرتارية') || q.includes('تليفون') || q.includes('human') || q.includes('contact')) {
+      return {
+        actionId: 'contact_church',
+        labelAr: 'تواصل مع الكنيسة',
+        labelEn: 'Contact Church',
+        redirectUrl: '/contact'
+      };
+    }
+
+    if (q.includes('حجوزاتي') || q.includes('طلباتي') || q.includes('متابعة طلبي') || q.includes('my bookings') || q.includes('my status')) {
+      return {
+        actionId: 'check_my_status',
+        labelAr: 'متابعة طلباتي وحجوزاتي',
+        labelEn: 'Check My Requests & Bookings',
+        requiresAuth: true
+      };
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Generates dynamic, context-aware suggestions tailored to the active route and language
+   */
+  static getSuggestionsForRoute(route: string, lang: 'ar' | 'en'): string[] {
+    const isAr = lang === 'ar';
+    const cleanRoute = (route || '/').split('?')[0].replace(/\/$/, '') || '/';
+
+    switch (cleanRoute) {
+      case '/schedule':
+        return isAr
+          ? ['ما هي مواعيد قداسات يوم الجمعة؟', 'متى تبدأ صلاة العشية والتسبحة؟', 'ما هي الرحلات المتاحة للتسجيل؟', 'هل يوجد قداس باكر يوم الأحد؟']
+          : ['What time is Friday Liturgy?', 'When do Vespers start?', 'What trips are open for registration?', 'Is there an early Sunday Mass?'];
+
+      case '/sermons':
+        return isAr
+          ? ['أين أجد عظات أبونا عن الصوم؟', 'هل يوجد بث مباشر للقداس الآن؟', 'أحدث العظات الروحية المتاحة', 'كيف أشاهد عظات الأعياد السابقة؟']
+          : ['Sermons about fasting?', 'Is there a live stream now?', 'Latest spiritual teachings', 'How to watch previous feast sermons?'];
+
+      case '/ministries':
+        return isAr
+          ? ['ما هي مواعيد مدارس الأحد للمرحلة الابتدائية؟', 'متى موعد اجتماع الشباب الأسبوعي؟', 'كيفية الانضمام لكورال الكنيسة', 'خدمة أخوة الرب والرعاية الاجتماعية']
+          : ['Sunday School schedule for primary stage?', 'When is the weekly Youth meeting?', 'How to join church choir?', 'Mercy and social care ministry'];
+
+      case '/donations':
+        return isAr
+          ? ['ما هو رقم حساب بنك مصر بالجنيه؟', 'كود السويفت لتحويل التبرعات بالدولار', 'هل تقبل الكنيسة الدفع بالفيزا على الموقع؟', 'كيف أتبرع لصالح بناء وتطوير الكنيسة؟']
+          : ['Banque Misr EGP account number?', 'SWIFT code for USD wire transfers', 'Does the church accept credit cards on the site?', 'How to donate to church building?'];
+
+      case '/contact':
+      case '/about':
+        return isAr
+          ? ['أين تقع الكنيسة وأرقام التواصل الرسمية؟', 'ما هي مواعيد مزار الشهيد العظيم أبي سيفين؟', 'من هم الآباء الكهنة المباركين بالخدمة؟', 'ساعات العمل الرسمية للكنيسة']
+          : ['Where is the church located and contacts?', 'What are the shrine visiting hours?', 'Who are the serving priests?', 'Official church opening hours'];
+
+      case '/register-member':
+        return isAr
+          ? ['ما هي المستندات المطلوبة لاستمارة العضوية؟', 'كيف يتم اعتماد استمارة الأسرة؟', 'هل يمكن تعديل بيانات أفراد الأسرة لاحقاً؟', 'أين أجد كود الأسرة الكنسي؟']
+          : ['What documents are needed for membership?', 'How is family membership approved?', 'Can family member details be updated later?', 'Where to find church family code?'];
+
+      default:
+        return isAr
+          ? ['إمتى قداس يوم الجمعة؟', 'عايز أحجز موعد اعتراف مع أبونا', 'ما هي الرحلات الكنسية المتاحة؟', 'أين يقع مزار الشهيد أبي سيفين؟', 'ما هي حسابات التبرع الرسمية؟']
+          : ['When is Friday Liturgy?', 'How can I book confession with Father?', 'What trips are available?', 'Where is the Abu Sefein shrine?', 'Official donation bank accounts'];
+    }
+  }
+
+  /**
+   * Process chat request through Multi-Provider Architecture (Gemini -> Groq -> OpenAI -> DeepSeek -> Grounded Engine)
    */
   static async processChat(
     userMessage: string,
@@ -972,19 +1299,30 @@ CRITICAL OPERATIONAL RULES:
     const startTime = Date.now();
     const lang = preferredLanguage || detectLanguage(userMessage);
 
-    // 1. Retrieve Grounded Context
-    const { knowledgeText, sources, customFaqs } = await ChurchAiService.buildContext(userMessage, lang);
+    // 1. Resolve multi-turn conversational memory & references
+    const resolvedQuery = ChurchAiService.resolveFollowUpQuery(userMessage, history);
 
-    // 2. Read Configuration
+    // 2. Retrieve Grounded Context
+    const { knowledgeText, sources, customFaqs } = await ChurchAiService.buildContext(resolvedQuery, lang);
+
+    // 3. Detect Action Intent
+    const action = ChurchAiService.detectActionIntent(userMessage, lang);
+
+    // 4. Read Configuration & Provider Keys
     const geminiKey = process.env.GEMINI_API_KEY?.trim() || '';
     const geminiModel = process.env.GEMINI_MODEL?.trim() || 'gemini-1.5-flash';
 
     const groqKey = process.env.GROQ_API_KEY?.trim() || '';
-    // Ensure Groq model is strictly supported and never the deprecated model
     let groqModel = process.env.GROQ_MODEL?.trim() || 'llama-3.1-8b-instant';
     if (groqModel === 'llama-3.3-70b-versatile') {
       groqModel = 'llama-3.1-8b-instant';
     }
+
+    const openaiKey = process.env.OPENAI_API_KEY?.trim() || '';
+    const openaiModel = process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini';
+
+    const deepseekKey = process.env.DEEPSEEK_API_KEY?.trim() || '';
+    const deepseekModel = process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-chat';
 
     const primaryProvider = (process.env.AI_PROVIDER || 'gemini').toLowerCase();
     const fallbackProvider = (process.env.AI_FALLBACK_PROVIDER || 'groq').toLowerCase();
@@ -993,7 +1331,7 @@ CRITICAL OPERATIONAL RULES:
 
     const systemPrompt = `${ChurchAiService.getSystemPrompt(lang)}\n\n=== VERIFIED CHURCH KNOWLEDGE BASE ===\n${knowledgeText}`;
 
-    // 3. Shared Budget Check
+    // 5. Shared Daily Budget Check
     if (isBudgetExceeded()) {
       console.warn('AI shared daily budget limit reached. Serving via verified local knowledge engine.');
       const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources, customFaqs });
@@ -1004,70 +1342,95 @@ CRITICAL OPERATIONAL RULES:
         latencyMs: Date.now() - startTime,
         tokensUsed: 0,
         provider: 'local-knowledge-engine (budget-cap-active)',
-        model: 'church-grounded-v1'
+        model: 'church-grounded-v1',
+        action
       };
     }
 
-    // 4. Dual Provider Execution Strategy
-    let primarySuccess = false;
+    // 6. Unified Multi-Provider Execution Strategy
     let chosenText = '';
     let chosenProvider = '';
     let chosenModel = '';
     let chosenTokens = 0;
     let fallbackTriggered = false;
 
-    // A. Attempt Primary Provider
-    if (primaryProvider === 'gemini' && geminiKey) {
-      const geminiRes = await callGeminiProvider(geminiKey, geminiModel, systemPrompt, history, userMessage, maxTokens, timeoutMs);
-      if (geminiRes.success && geminiRes.text) {
-        primarySuccess = true;
-        chosenText = geminiRes.text;
-        chosenProvider = 'gemini';
-        chosenModel = geminiModel;
-        chosenTokens = geminiRes.tokensUsed || 0;
-      } else {
-        console.warn(`Primary provider (Gemini) failed: ${geminiRes.errorMessage}`);
-        // Check if transient and eligible for fallback to Groq
-        if (geminiRes.isTransient && groqKey && fallbackProvider === 'groq') {
-          console.warn('Transient failure on Gemini. Switching safely to fallback provider (Groq)...');
-          fallbackTriggered = true;
-          const groqRes = await callGroqProvider(groqKey, groqModel, systemPrompt, history, userMessage, maxTokens, timeoutMs);
-          if (groqRes.success && groqRes.text) {
-            chosenText = groqRes.text;
-            chosenProvider = 'groq (fallback)';
-            chosenModel = groqModel;
-            chosenTokens = groqRes.tokensUsed || 0;
-          } else {
-            console.warn(`Fallback provider (Groq) also failed: ${groqRes.errorMessage}`);
-          }
-        }
-      }
-    } else if (primaryProvider === 'groq' && groqKey) {
-      // Groq configured as primary
-      const groqRes = await callGroqProvider(groqKey, groqModel, systemPrompt, history, userMessage, maxTokens, timeoutMs);
-      if (groqRes.success && groqRes.text) {
-        primarySuccess = true;
-        chosenText = groqRes.text;
-        chosenProvider = 'groq';
-        chosenModel = groqModel;
-        chosenTokens = groqRes.tokensUsed || 0;
-      } else if (groqRes.isTransient && geminiKey && fallbackProvider === 'gemini') {
-        console.warn('Transient failure on Groq. Switching to fallback provider (Gemini)...');
-        fallbackTriggered = true;
-        const geminiRes = await callGeminiProvider(geminiKey, geminiModel, systemPrompt, history, userMessage, maxTokens, timeoutMs);
-        if (geminiRes.success && geminiRes.text) {
-          chosenText = geminiRes.text;
-          chosenProvider = 'gemini (fallback)';
+    // Helper to call a specific provider
+    const tryCallProvider = async (pName: string): Promise<boolean> => {
+      const callStart = Date.now();
+      let res: ProviderResult = { success: false };
+
+      if (pName === 'gemini' && geminiKey) {
+        res = await callGeminiProvider(geminiKey, geminiModel, systemPrompt, history, userMessage, maxTokens, timeoutMs);
+        if (res.success && res.text) {
+          chosenText = res.text;
+          chosenProvider = 'gemini';
           chosenModel = geminiModel;
-          chosenTokens = geminiRes.tokensUsed || 0;
+          chosenTokens = res.tokensUsed || 0;
+          recordProviderCall('gemini', true, Date.now() - callStart);
+          return true;
+        }
+        recordProviderCall('gemini', false, Date.now() - callStart, false, res.errorMessage, fallbackTriggered);
+      } else if (pName === 'groq' && groqKey) {
+        res = await callGroqProvider(groqKey, groqModel, systemPrompt, history, userMessage, maxTokens, timeoutMs);
+        if (res.success && res.text) {
+          chosenText = res.text;
+          chosenProvider = 'groq';
+          chosenModel = groqModel;
+          chosenTokens = res.tokensUsed || 0;
+          recordProviderCall('groq', true, Date.now() - callStart);
+          return true;
+        }
+        recordProviderCall('groq', false, Date.now() - callStart, false, res.errorMessage, fallbackTriggered);
+      } else if (pName === 'openai' && openaiKey) {
+        res = await callOpenAiProvider(openaiKey, openaiModel, systemPrompt, history, userMessage, maxTokens, timeoutMs);
+        if (res.success && res.text) {
+          chosenText = res.text;
+          chosenProvider = 'openai';
+          chosenModel = openaiModel;
+          chosenTokens = res.tokensUsed || 0;
+          recordProviderCall('openai', true, Date.now() - callStart);
+          return true;
+        }
+        recordProviderCall('openai', false, Date.now() - callStart, false, res.errorMessage, fallbackTriggered);
+      } else if (pName === 'deepseek' && deepseekKey) {
+        res = await callDeepSeekProvider(deepseekKey, deepseekModel, systemPrompt, history, userMessage, maxTokens, timeoutMs);
+        if (res.success && res.text) {
+          chosenText = res.text;
+          chosenProvider = 'deepseek';
+          chosenModel = deepseekModel;
+          chosenTokens = res.tokensUsed || 0;
+          recordProviderCall('deepseek', true, Date.now() - callStart);
+          return true;
+        }
+        recordProviderCall('deepseek', false, Date.now() - callStart, false, res.errorMessage, fallbackTriggered);
+      }
+
+      return false;
+    };
+
+    // Attempt Primary Provider
+    const primaryOk = await tryCallProvider(primaryProvider);
+
+    // If Primary fails, attempt Fallback Provider
+    if (!primaryOk) {
+      fallbackTriggered = true;
+      const fallbackOk = await tryCallProvider(fallbackProvider);
+
+      // If both fail, try any available provider with a key
+      if (!fallbackOk) {
+        const pool = ['gemini', 'groq', 'openai', 'deepseek'].filter(p => p !== primaryProvider && p !== fallbackProvider);
+        for (const p of pool) {
+          const ok = await tryCallProvider(p);
+          if (ok) break;
         }
       }
     }
 
-    // B. If neither external provider generated a response (keys missing, permanent error, or both down)
+    // 7. Grounded Local Engine Fallback (If no provider keys or all external offline)
     if (!chosenText) {
       const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources, customFaqs });
       const latencyMs = Date.now() - startTime;
+      recordProviderCall('local', true, latencyMs);
       return {
         response: fallback.text,
         sources: fallback.matchedSources,
@@ -1076,7 +1439,8 @@ CRITICAL OPERATIONAL RULES:
         tokensUsed: Math.round(fallback.text.length / 4),
         provider: 'local-knowledge-engine',
         model: 'church-grounded-v1',
-        fallbackTriggered
+        fallbackTriggered,
+        action
       };
     }
 
@@ -1108,7 +1472,9 @@ CRITICAL OPERATIONAL RULES:
       tokensUsed: chosenTokens,
       provider: chosenProvider,
       model: chosenModel,
-      fallbackTriggered
+      fallbackTriggered,
+      action
     };
   }
 }
+
