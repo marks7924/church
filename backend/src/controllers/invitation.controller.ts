@@ -27,7 +27,7 @@ function getOptionalUser(req: Request): any | null {
  * Public or Member view of visible published events
  * Hidden / Draft events are strictly excluded from public viewers
  */
-router.get('/events', async (req: Request, res: Response) => {
+router.get(['/events', '/admin/events'], async (req: Request, res: Response) => {
   try {
     const optionalUser = getOptionalUser(req);
     const isStaff = optionalUser && [Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY].includes(optionalUser.role);
@@ -340,6 +340,67 @@ router.get('/my-invitations', requireAuth, async (req: AuthRequest, res: Respons
 });
 
 /**
+ * 4b. GET /api/invitations/admin/events/:eventId/invitations
+ * Admin: List all invitations for a specific event
+ */
+router.get(
+  '/admin/events/:eventId/invitations',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { eventId } = req.params;
+      const invitations = await prisma.eventInvitation.findMany({
+        where: { eventId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          location: true,
+          user: { select: { id: true, fullName: true, email: true, phone: true } }
+        }
+      });
+      return res.status(200).json(invitations);
+    } catch (error: any) {
+      console.error('Error fetching event invitations:', error);
+      return res.status(500).json({ error: 'Failed to fetch event invitations.' });
+    }
+  }
+);
+
+/**
+ * 4c. GET /api/invitations/admin/events/:eventId/checkins
+ * Admin: List all check-ins for a specific event
+ */
+router.get(
+  '/admin/events/:eventId/checkins',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { eventId } = req.params;
+      const checkIns = await prisma.eventCheckInLog.findMany({
+        where: {
+          invitation: { eventId }
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          invitation: {
+            include: { location: true }
+          }
+        }
+      });
+      const formatted = checkIns.map(c => ({
+        ...c,
+        scannedAt: c.createdAt
+      }));
+      return res.status(200).json(formatted);
+    } catch (error: any) {
+      console.error('Error fetching event check-ins:', error);
+      return res.status(500).json({ error: 'Failed to fetch event check-ins.' });
+    }
+  }
+);
+
+/**
  * 5. POST /api/invitations/admin/issue
  * Admin: Issue single, multi-recipient, group, or VIP invitations
  */
@@ -349,7 +410,18 @@ router.post(
   requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY]),
   async (req: AuthRequest, res: Response) => {
     try {
-      const { eventId, locationId, recipients, type = 'STANDARD' } = req.body;
+      const { eventId, locationId, isVip } = req.body;
+      let recipients = req.body.recipients;
+
+      if (!recipients && (req.body.recipientEmail || req.body.recipientName || req.body.userId)) {
+        recipients = [{
+          email: req.body.recipientEmail,
+          name: req.body.recipientName,
+          userId: req.body.userId
+        }];
+      }
+
+      const type = (isVip || req.body.type === 'VIP') ? 'VIP' : 'STANDARD';
 
       if (!eventId || !locationId || !Array.isArray(recipients) || recipients.length === 0) {
         return res.status(400).json({
@@ -659,16 +731,27 @@ router.post(
  * Authorized check-in reversal for accidental scans with reason and audit log
  */
 router.post(
-  '/admin/reversal',
+  ['/admin/reversal', '/admin/checkins/:id/revert'],
   requireAuth,
   requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER]),
   async (req: AuthRequest, res: Response) => {
     try {
-      const { invitationId, reason } = req.body;
+      let invitationId = req.body.invitationId;
+      const targetParamId = req.params.id || req.body.checkInId;
+      const reason = req.body.reason || 'Accidental scan reversal';
+
+      if (!invitationId && targetParamId) {
+        const checkIn = await prisma.eventCheckInLog.findUnique({ where: { id: targetParamId } });
+        if (checkIn) {
+          invitationId = checkIn.invitationId;
+        } else {
+          invitationId = targetParamId;
+        }
+      }
 
       if (!invitationId || !reason) {
         return res.status(400).json({
-          error: 'Invitation ID and reversal reason are required.',
+          error: 'Invitation ID or Check-in ID and reversal reason are required.',
           errorAr: 'يرجى تحديد الدعوة وكتابة سبب إلغاء الحضور.'
         });
       }

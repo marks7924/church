@@ -31,7 +31,7 @@ function getOptionalUser(req: Request): any | null {
  */
 router.get('/verse-of-day', async (req: Request, res: Response) => {
   try {
-    const { lang = 'ar' } = req.query;
+    const { lang = 'ar', translationCode = 'van-dyck' } = req.query;
     const todayStr = new Date().toISOString().split('T')[0];
 
     let verse = await prisma.bibleVerseOfDay.findUnique({
@@ -45,30 +45,33 @@ router.get('/verse-of-day', async (req: Request, res: Response) => {
       });
     }
 
-    if (!verse) {
-      // Default initial Scripture
-      return res.status(200).json({
-        date: todayStr,
-        reference: lang === 'en' ? 'Philippians 4:13' : 'رسالة فيلبي 4: 13',
-        text:
-          lang === 'en'
-            ? 'I can do all things through Christ who strengthens me.'
-            : 'أَسْتَطِيعُ كُلَّ شَيْءٍ فِي الْمَسِيحِ الَّذِي يُقَوِّينِي.',
-        translationId: 'van-dyck',
-        bookId: 'PHP',
-        chapterNumber: 4,
-        verseNumber: 13
-      });
-    }
-
-    return res.status(200).json({
+    const versePayload = verse ? {
       date: verse.date,
       reference: lang === 'en' ? verse.referenceEn : verse.referenceAr,
       text: lang === 'en' ? verse.verseTextEn : verse.verseTextAr,
-      translationId: verse.translationId,
+      translationId: verse.translationId || String(translationCode),
+      translationCode: verse.translationId || String(translationCode),
       bookId: verse.bookId,
       chapterNumber: verse.chapterNumber,
       verseNumber: verse.verseNumber
+    } : {
+      date: todayStr,
+      reference: lang === 'en' ? 'Philippians 4:13' : 'رسالة فيلبي 4: 13',
+      text:
+        lang === 'en'
+          ? 'I can do all things through Christ who strengthens me.'
+          : 'أَسْتَطِيعُ كُلَّ شَيْءٍ فِي الْمَسِيحِ الَّذِي يُقَوِّينِي.',
+      translationId: String(translationCode) || 'van-dyck',
+      translationCode: String(translationCode) || 'van-dyck',
+      bookId: 'PHP',
+      chapterNumber: 4,
+      verseNumber: 13
+    };
+
+    return res.status(200).json({
+      success: true,
+      verse: versePayload,
+      ...versePayload
     });
   } catch (error: any) {
     console.error('Error fetching Verse of the Day:', error);
@@ -89,6 +92,25 @@ router.get('/bible/translations', async (req: Request, res: Response) => {
   }
 });
 
+const BOOK_SLUG_MAP: Record<string, string> = {
+  john: 'JHN',
+  jhn: 'JHN',
+  genesis: 'GEN',
+  gen: 'GEN',
+  matthew: 'MAT',
+  mat: 'MAT',
+  psalms: 'PSA',
+  psa: 'PSA',
+  romans: 'ROM',
+  rom: 'ROM'
+};
+
+function resolveBookId(input: string): string {
+  const clean = String(input || '').trim().toLowerCase();
+  if (BOOK_SLUG_MAP[clean]) return BOOK_SLUG_MAP[clean];
+  return String(input || '').trim().toUpperCase();
+}
+
 /**
  * 3. GET /api/fy/bible/books
  * List Bible Books grouped by Testament (Public)
@@ -98,7 +120,12 @@ router.get('/bible/books', async (req: Request, res: Response) => {
     const books = await prisma.bibleBook.findMany({
       orderBy: { orderIndex: 'asc' }
     });
-    return res.status(200).json(books);
+    const enriched = books.map(b => ({
+      ...b,
+      slug: b.id.toLowerCase(),
+      code: b.id
+    }));
+    return res.status(200).json(enriched);
   } catch (error: any) {
     return res.status(500).json({ error: 'Failed to fetch Bible books.' });
   }
@@ -107,17 +134,21 @@ router.get('/bible/books', async (req: Request, res: Response) => {
 /**
  * 4. GET /api/fy/bible/chapter
  * Retrieve chapter verses with translation & navigation
+ * Accepts bookSlug or bookId, chapterNumber or chapter, translationCode or translationId
  */
 router.get('/bible/chapter', async (req: Request, res: Response) => {
   try {
-    const { translationId = 'van-dyck', bookId = 'JHN', chapter = '1' } = req.query;
-    const chapterNum = Math.max(1, parseInt(String(chapter), 10) || 1);
+    const rawTranslation = String(req.query.translationCode || req.query.translationId || 'van-dyck');
+    const rawBook = String(req.query.bookSlug || req.query.bookId || 'JHN');
+    const chapterNum = Math.max(1, parseInt(String(req.query.chapterNumber || req.query.chapter || '1'), 10) || 1);
+
+    const bookId = resolveBookId(rawBook);
 
     const chapterRecord = await prisma.bibleChapter.findUnique({
       where: {
         translationId_bookId_chapterNumber: {
-          translationId: String(translationId),
-          bookId: String(bookId).toUpperCase(),
+          translationId: rawTranslation,
+          bookId,
           chapterNumber: chapterNum
         }
       },
@@ -139,50 +170,70 @@ router.get('/bible/chapter', async (req: Request, res: Response) => {
       verses = JSON.parse(chapterRecord.versesJson);
     } catch {}
 
-    return res.status(200).json({
+    const chapterPayload = {
       translation: chapterRecord.translation,
-      book: chapterRecord.book,
+      book: {
+        ...chapterRecord.book,
+        slug: chapterRecord.book.id.toLowerCase(),
+        code: chapterRecord.book.id
+      },
       chapterNumber: chapterRecord.chapterNumber,
       verseCount: chapterRecord.verseCount,
       verses
+    };
+
+    return res.status(200).json({
+      chapter: chapterPayload,
+      ...chapterPayload
     });
   } catch (error: any) {
+    console.error('Error fetching chapter:', error);
     return res.status(500).json({ error: 'Failed to fetch Bible chapter.' });
   }
 });
 
 /**
- * 5. POST /api/fy/bible/progress
+ * 5. POST /api/fy/bible/progress & /api/fy/reading-progress
  * Toggle chapter completion for authenticated user
  */
-router.post('/bible/progress', requireAuth, async (req: AuthRequest, res: Response) => {
+router.post(['/bible/progress', '/reading-progress'], async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId;
-    const { translationId = 'van-dyck', bookId, chapterNumber, isCompleted = true } = req.body;
+    const user = getOptionalUser(req);
+    if (!user) {
+      return res.status(401).json({
+        error: 'Authentication required to save reading progress.',
+        errorAr: 'يرجى تسجيل الدخول لحفظ تقدم القراءة.'
+      });
+    }
+    const userId = user.userId || user.id;
 
-    if (!bookId || !chapterNumber) {
-      return res.status(400).json({ error: 'Book ID and chapter number are required.' });
+    const rawTranslation = String(req.body.translationCode || req.body.translationId || 'van-dyck');
+    const rawBook = String(req.body.bookSlug || req.body.bookId || '');
+    const chapterNum = parseInt(String(req.body.chapterNumber || req.body.chapter || '1'), 10);
+    const isCompleted = req.body.completed !== undefined ? Boolean(req.body.completed) : (req.body.isCompleted !== undefined ? Boolean(req.body.isCompleted) : true);
+
+    if (!rawBook || !chapterNum) {
+      return res.status(400).json({ error: 'Book and chapter number are required.' });
     }
 
-    const cleanBookId = String(bookId).toUpperCase();
-    const chapNum = parseInt(String(chapterNumber), 10);
+    const cleanBookId = resolveBookId(rawBook);
 
     if (isCompleted) {
       await prisma.bibleReadingProgress.upsert({
         where: {
           userId_translationId_bookId_chapterNumber: {
             userId,
-            translationId: String(translationId),
+            translationId: rawTranslation,
             bookId: cleanBookId,
-            chapterNumber: chapNum
+            chapterNumber: chapterNum
           }
         },
         update: { isCompleted: true, completedAt: new Date() },
         create: {
           userId,
-          translationId: String(translationId),
+          translationId: rawTranslation,
           bookId: cleanBookId,
-          chapterNumber: chapNum,
+          chapterNumber: chapterNum,
           isCompleted: true
         }
       });
@@ -190,9 +241,9 @@ router.post('/bible/progress', requireAuth, async (req: AuthRequest, res: Respon
       await prisma.bibleReadingProgress.deleteMany({
         where: {
           userId,
-          translationId: String(translationId),
+          translationId: rawTranslation,
           bookId: cleanBookId,
-          chapterNumber: chapNum
+          chapterNumber: chapterNum
         }
       });
     }
@@ -201,16 +252,16 @@ router.post('/bible/progress', requireAuth, async (req: AuthRequest, res: Respon
     await prisma.bibleLastPosition.upsert({
       where: { userId },
       update: {
-        translationId: String(translationId),
+        translationId: rawTranslation,
         bookId: cleanBookId,
-        chapterNumber: chapNum,
+        chapterNumber: chapterNum,
         updatedAt: new Date()
       },
       create: {
         userId,
-        translationId: String(translationId),
+        translationId: rawTranslation,
         bookId: cleanBookId,
-        chapterNumber: chapNum
+        chapterNumber: chapterNum
       }
     });
 
@@ -221,20 +272,32 @@ router.post('/bible/progress', requireAuth, async (req: AuthRequest, res: Respon
     return res.status(200).json({
       success: true,
       isCompleted,
-      totalCompleted
+      totalCompleted,
+      completedChaptersCount: totalCompleted
     });
   } catch (error: any) {
+    console.error('Error updating reading progress:', error);
     return res.status(500).json({ error: 'Failed to update reading progress.' });
   }
 });
 
 /**
- * 6. GET /api/fy/bible/my-progress
- * Authenticated User: Retrieve completed chapters and last position
+ * 6. GET /api/fy/bible/my-progress & /api/fy/reading-progress
+ * Retrieve completed chapters and last position
  */
-router.get('/bible/my-progress', requireAuth, async (req: AuthRequest, res: Response) => {
+router.get(['/bible/my-progress', '/reading-progress'], async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId;
+    const user = getOptionalUser(req);
+    if (!user) {
+      return res.status(200).json({
+        progress: [],
+        completedChaptersCount: 0,
+        completedChapters: [],
+        totalCompletedCount: 0,
+        lastPosition: null
+      });
+    }
+    const userId = user.userId || user.id;
 
     const [completedList, lastPosition] = await Promise.all([
       prisma.bibleReadingProgress.findMany({
@@ -246,12 +309,23 @@ router.get('/bible/my-progress', requireAuth, async (req: AuthRequest, res: Resp
       })
     ]);
 
+    const progress = completedList.map(c => ({
+      bookSlug: c.bookId.toLowerCase(),
+      bookId: c.bookId,
+      chapterNumber: c.chapterNumber,
+      completed: true,
+      completedAt: c.completedAt
+    }));
+
     return res.status(200).json({
+      progress,
+      completedChaptersCount: completedList.length,
       completedChapters: completedList,
       totalCompletedCount: completedList.length,
       lastPosition: lastPosition || null
     });
   } catch (error: any) {
+    console.error('Error fetching progress:', error);
     return res.status(500).json({ error: 'Failed to fetch user progress.' });
   }
 });
@@ -261,10 +335,11 @@ router.get('/bible/my-progress', requireAuth, async (req: AuthRequest, res: Resp
 // ==========================================
 
 /**
- * 7. GET /api/fy/categories
- * List Question Categories (Member-only)
+ * 7. GET /api/fy/categories & /api/fy/questions/categories
+ * List Question Categories (Accessible for filters & modal selectors)
+ * MUST be defined before /questions/:slug to prevent path parameter collision
  */
-router.get('/categories', async (req: Request, res: Response) => {
+router.get(['/categories', '/questions/categories'], async (req: Request, res: Response) => {
   try {
     const categories = await prisma.fyQuestionCategory.findMany({
       orderBy: { orderIndex: 'asc' },
@@ -315,15 +390,16 @@ router.get('/questions', async (req: Request, res: Response) => {
       });
     }
 
-    const { category, search, page = '1', limit = '15' } = req.query;
+    const { category, categorySlug, search, page = '1', limit = '15' } = req.query;
+    const catParam = categorySlug || category;
     const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
     const limitNum = Math.min(30, Math.max(1, parseInt(String(limit), 10) || 15));
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = { status: 'PUBLISHED' };
 
-    if (category && category !== 'ALL') {
-      where.category = { slug: String(category) };
+    if (catParam && catParam !== 'ALL') {
+      where.category = { slug: String(catParam) };
     }
 
     if (search && typeof search === 'string' && search.trim().length > 0) {
@@ -447,10 +523,13 @@ router.get('/questions/:slug', async (req: Request, res: Response) => {
  * Ask Your Question (Authenticated Members Only)
  * Named or Anonymous submissions, with moderation queue
  */
-router.post('/questions/ask', requireAuth, async (req: AuthRequest, res: Response) => {
+router.post(['/questions/ask', '/questions/submit'], requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
-    const { questionTitle, questionDetails, categorySlug, isAnonymous = false } = req.body;
+    const questionTitle = req.body.questionTitle || req.body.title;
+    const questionDetails = req.body.questionDetails || req.body.content;
+    const categorySlug = req.body.categorySlug || req.body.categoryId;
+    const isAnonymous = Boolean(req.body.isAnonymous);
 
     if (!questionTitle || !questionDetails) {
       return res.status(400).json({

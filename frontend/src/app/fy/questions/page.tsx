@@ -89,7 +89,11 @@ export default function QuestionsLibraryPage() {
         return res.json();
       })
       .then(data => {
-        if (Array.isArray(data)) setQuestions(data);
+        if (Array.isArray(data)) {
+          setQuestions(data);
+        } else if (data && Array.isArray(data.questions)) {
+          setQuestions(data.questions);
+        }
       })
       .catch(err => console.error('Error fetching questions:', err))
       .finally(() => setLoadingQuestions(false));

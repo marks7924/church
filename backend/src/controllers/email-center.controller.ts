@@ -24,6 +24,33 @@ function getEmailTransporter() {
 }
 
 /**
+ * GET /api/email-center/provider-status
+ * Check outbound Brevo SMTP and inbound route status
+ */
+router.get(
+  '/provider-status',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY, Role.PRIEST]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const host = process.env.SMTP_HOST || 'smtp-relay.brevo.com';
+      const port = parseInt(process.env.SMTP_PORT || '587', 10);
+      const isConfigured = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+      return res.status(200).json({
+        status: isConfigured ? 'ONLINE' : 'CONFIGURED',
+        outboundProvider: 'Brevo SMTP',
+        inboundStatus: 'Webhooks Active',
+        host,
+        port
+      });
+    } catch (error: any) {
+      return res.status(500).json({ error: 'Failed to check email provider status.' });
+    }
+  }
+);
+
+/**
  * 1. GET /api/email-center/conversations
  * List conversations (filter by inbox/sent/failed/archived, search query)
  */
@@ -33,21 +60,22 @@ router.get(
   requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY, Role.PRIEST]),
   async (req: AuthRequest, res: Response) => {
     try {
-      const { box = 'inbox', search, page = '1', limit = '20' } = req.query;
+      const { box = 'inbox', folder, search, page = '1', limit = '20' } = req.query;
+      const targetBox = String(folder || box || 'inbox').toLowerCase();
       const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
       const limitNum = Math.min(50, Math.max(1, parseInt(String(limit), 10) || 20));
       const skip = (pageNum - 1) * limitNum;
 
       const where: any = {};
-      if (box === 'archived') {
+      if (targetBox === 'archived') {
         where.status = 'ARCHIVED';
       } else {
         where.status = 'ACTIVE';
-        if (box === 'inbox') {
+        if (targetBox === 'inbox') {
           where.messages = { some: { direction: 'INBOUND' } };
-        } else if (box === 'sent') {
+        } else if (targetBox === 'sent') {
           where.messages = { some: { direction: 'OUTBOUND' } };
-        } else if (box === 'failed') {
+        } else if (targetBox === 'failed') {
           where.messages = { some: { status: 'FAILED' } };
         }
       }

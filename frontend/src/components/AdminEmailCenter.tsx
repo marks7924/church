@@ -47,7 +47,11 @@ export default function AdminEmailCenter({ token }: AdminEmailCenterProps) {
     })
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) setConversations(data);
+        if (Array.isArray(data)) {
+          setConversations(data);
+        } else if (data && Array.isArray(data.conversations)) {
+          setConversations(data.conversations);
+        }
       })
       .catch(err => console.error('Error fetching email conversations:', err))
       .finally(() => setLoading(false));
