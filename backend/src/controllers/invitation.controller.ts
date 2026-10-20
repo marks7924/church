@@ -6,6 +6,7 @@ import { AuthRequest } from '../types';
 import { Role } from '@prisma/client';
 import { logAction } from '../utils/logger';
 
+// System 3: Events, VIP Invitations & Continuous QR Check-in
 const router = Router();
 
 // Helper to extract optional auth user without throwing
