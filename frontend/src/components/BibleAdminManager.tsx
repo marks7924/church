@@ -242,14 +242,22 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
             </div>
           )}
 
-          {/* Metadata Grid */}
-          <div>
-            <span className="text-xs font-bold tracking-wider uppercase mb-3 block" style={{ color: 'var(--accent-gold, #e2b714)' }}>
+          {/* Section 1: Metadata Grid */}
+          <div 
+            style={{
+              padding: '1.75rem 2rem',
+              backgroundColor: 'rgba(18, 19, 26, 0.75)',
+              border: '1px solid var(--border-color, #2a2c3a)',
+              borderRadius: '8px',
+              marginBottom: '2rem'
+            }}
+          >
+            <span style={{ fontSize: '0.92rem', fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '1.25rem', display: 'block', color: 'var(--accent-gold, #e2b714)' }}>
               1. بيانات الإسناد والتاريخ
             </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.75rem' }}>
               <div>
-                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-secondary, #a0aec0)', marginBottom: '10px' }}>
                   التاريخ المجدول *
                 </label>
                 <input 
@@ -257,19 +265,22 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
                   value={votdDate}
                   onChange={e => setVotdDate(e.target.value)}
                   required
-                  className="w-full px-4 py-3 text-sm focus:outline-none transition"
                   style={{
+                    width: '100%',
+                    height: '48px',
+                    padding: '10px 16px',
+                    fontSize: '0.92rem',
                     backgroundColor: 'rgba(18, 19, 26, 0.95)',
-                    borderColor: 'var(--border-color, #2a2c3a)',
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
+                    border: '1px solid var(--border-color, #2a2c3a)',
                     borderRadius: '8px',
-                    color: '#f8f9fa'
+                    color: '#f8f9fa',
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
               <div>
-                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-secondary, #a0aec0)', marginBottom: '10px' }}>
                   كود السفر (ID)
                 </label>
                 <input 
@@ -277,66 +288,84 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
                   value={votdBookId}
                   onChange={e => setVotdBookId(e.target.value)}
                   placeholder="PHP, JHN, PSA..."
-                  className="w-full px-4 py-3 text-sm uppercase focus:outline-none transition"
                   style={{
+                    width: '100%',
+                    height: '48px',
+                    padding: '10px 16px',
+                    fontSize: '0.92rem',
+                    textTransform: 'uppercase',
                     backgroundColor: 'rgba(18, 19, 26, 0.95)',
-                    borderColor: 'var(--border-color, #2a2c3a)',
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
+                    border: '1px solid var(--border-color, #2a2c3a)',
                     borderRadius: '8px',
-                    color: '#f8f9fa'
+                    color: '#f8f9fa',
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
               <div>
-                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-secondary, #a0aec0)', marginBottom: '10px' }}>
                   رقم الإصحاح
                 </label>
                 <input 
                   type="number"
                   value={votdChapter}
                   onChange={e => setVotdChapter(e.target.value)}
-                  className="w-full px-4 py-3 text-sm focus:outline-none transition"
                   style={{
+                    width: '100%',
+                    height: '48px',
+                    padding: '10px 16px',
+                    fontSize: '0.92rem',
                     backgroundColor: 'rgba(18, 19, 26, 0.95)',
-                    borderColor: 'var(--border-color, #2a2c3a)',
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
+                    border: '1px solid var(--border-color, #2a2c3a)',
                     borderRadius: '8px',
-                    color: '#f8f9fa'
+                    color: '#f8f9fa',
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
               <div>
-                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-secondary, #a0aec0)', marginBottom: '10px' }}>
                   رقم الآية
                 </label>
                 <input 
                   type="number"
                   value={votdVerseNum}
                   onChange={e => setVotdVerseNum(e.target.value)}
-                  className="w-full px-4 py-3 text-sm focus:outline-none transition"
                   style={{
+                    width: '100%',
+                    height: '48px',
+                    padding: '10px 16px',
+                    fontSize: '0.92rem',
                     backgroundColor: 'rgba(18, 19, 26, 0.95)',
-                    borderColor: 'var(--border-color, #2a2c3a)',
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
+                    border: '1px solid var(--border-color, #2a2c3a)',
                     borderRadius: '8px',
-                    color: '#f8f9fa'
+                    color: '#f8f9fa',
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
             </div>
           </div>
 
-          {/* References Grid */}
-          <div>
-            <span className="text-xs font-bold tracking-wider uppercase mb-3 block" style={{ color: 'var(--accent-gold, #e2b714)' }}>
+          {/* Section 2: References Grid */}
+          <div 
+            style={{
+              padding: '1.75rem 2rem',
+              backgroundColor: 'rgba(18, 19, 26, 0.75)',
+              border: '1px solid var(--border-color, #2a2c3a)',
+              borderRadius: '8px',
+              marginBottom: '2rem'
+            }}
+          >
+            <span style={{ fontSize: '0.92rem', fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '1.25rem', display: 'block', color: 'var(--accent-gold, #e2b714)' }}>
               2. الشواهد الرسمية
             </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.75rem' }}>
               <div>
-                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-secondary, #a0aec0)', marginBottom: '10px' }}>
                   الشاهد بالعربية *
                 </label>
                 <input 
@@ -345,19 +374,23 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
                   onChange={e => setVotdRefAr(e.target.value)}
                   required
                   placeholder="مثال: رسالة فيلبي 4: 13"
-                  className="w-full px-4 py-3 text-sm font-serif focus:outline-none transition"
                   style={{
+                    width: '100%',
+                    height: '48px',
+                    padding: '10px 16px',
+                    fontSize: '0.95rem',
+                    fontFamily: 'Amiri, Georgia, serif',
                     backgroundColor: 'rgba(18, 19, 26, 0.95)',
-                    borderColor: 'var(--border-color, #2a2c3a)',
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
+                    border: '1px solid var(--border-color, #2a2c3a)',
                     borderRadius: '8px',
-                    color: '#f8f9fa'
+                    color: '#f8f9fa',
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
               <div>
-                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-secondary, #a0aec0)', marginBottom: '10px' }}>
                   الشاهد بالإنجليزية
                 </label>
                 <input 
@@ -365,28 +398,39 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
                   value={votdRefEn}
                   onChange={e => setVotdRefEn(e.target.value)}
                   placeholder="Example: Philippians 4:13"
-                  className="w-full px-4 py-3 text-sm font-sans focus:outline-none transition"
                   style={{
+                    width: '100%',
+                    height: '48px',
+                    padding: '10px 16px',
+                    fontSize: '0.95rem',
                     backgroundColor: 'rgba(18, 19, 26, 0.95)',
-                    borderColor: 'var(--border-color, #2a2c3a)',
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
+                    border: '1px solid var(--border-color, #2a2c3a)',
                     borderRadius: '8px',
-                    color: '#f8f9fa'
+                    color: '#f8f9fa',
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
             </div>
           </div>
 
-          {/* Verse Text Fields */}
-          <div>
-            <span className="text-xs font-bold tracking-wider uppercase mb-3 block" style={{ color: 'var(--accent-gold, #e2b714)' }}>
+          {/* Section 3: Verse Text Fields */}
+          <div 
+            style={{
+              padding: '1.75rem 2rem',
+              backgroundColor: 'rgba(18, 19, 26, 0.75)',
+              border: '1px solid var(--border-color, #2a2c3a)',
+              borderRadius: '8px',
+              marginBottom: '2rem'
+            }}
+          >
+            <span style={{ fontSize: '0.92rem', fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '1.25rem', display: 'block', color: 'var(--accent-gold, #e2b714)' }}>
               3. نصوص الآية
             </span>
-            <div className="space-y-4">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <div>
-                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-secondary, #a0aec0)', marginBottom: '10px' }}>
                   نص الآية بالعربية (مع حركات التشكيل) *
                 </label>
                 <textarea 
@@ -394,80 +438,104 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
                   value={votdTextAr}
                   onChange={e => setVotdTextAr(e.target.value)}
                   required
-                  className="w-full p-4 text-base font-serif focus:outline-none transition leading-relaxed"
                   style={{
+                    width: '100%',
+                    padding: '14px 18px',
+                    fontSize: '1.1rem',
+                    lineHeight: '2',
+                    wordSpacing: '2px',
+                    fontFamily: 'Amiri, Georgia, serif',
                     backgroundColor: 'rgba(18, 19, 26, 0.95)',
-                    borderColor: 'var(--border-color, #2a2c3a)',
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
+                    border: '1px solid var(--border-color, #2a2c3a)',
                     borderRadius: '8px',
-                    color: '#f8f9fa'
+                    color: '#f8f9fa',
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
               <div>
-                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-secondary, #a0aec0)', marginBottom: '10px' }}>
                   نص الآية بالإنجليزية (King James Version)
                 </label>
                 <textarea 
                   rows={2}
                   value={votdTextEn}
                   onChange={e => setVotdTextEn(e.target.value)}
-                  className="w-full p-4 text-sm font-sans focus:outline-none transition"
                   style={{
+                    width: '100%',
+                    padding: '12px 18px',
+                    fontSize: '0.95rem',
+                    lineHeight: '1.8',
                     backgroundColor: 'rgba(18, 19, 26, 0.95)',
-                    borderColor: 'var(--border-color, #2a2c3a)',
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
+                    border: '1px solid var(--border-color, #2a2c3a)',
                     borderRadius: '8px',
-                    color: '#f8f9fa'
+                    color: '#f8f9fa',
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
             </div>
           </div>
 
-          {/* Devotional & Practical Question */}
-          <div>
-            <span className="text-xs font-bold tracking-wider uppercase mb-3 block" style={{ color: 'var(--accent-gold, #e2b714)' }}>
+          {/* Section 4: Devotional & Practical Question */}
+          <div 
+            style={{
+              padding: '1.75rem 2rem',
+              backgroundColor: 'rgba(18, 19, 26, 0.75)',
+              border: '1px solid var(--border-color, #2a2c3a)',
+              borderRadius: '8px',
+              marginBottom: '2.5rem'
+            }}
+          >
+            <span style={{ fontSize: '0.92rem', fontWeight: 800, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '1.25rem', display: 'block', color: 'var(--accent-gold, #e2b714)' }}>
               4. التأمل الرعوي والتطبيق العملي
             </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.75rem' }}>
               <div>
-                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-secondary, #a0aec0)', marginBottom: '10px' }}>
                   التأمل الروحي المعتمد (بالعربية)
                 </label>
                 <textarea 
                   rows={4}
                   value={votdDevotionalAr}
                   onChange={e => setVotdDevotionalAr(e.target.value)}
-                  className="w-full p-4 text-sm focus:outline-none transition leading-relaxed"
                   style={{
+                    width: '100%',
+                    padding: '14px 18px',
+                    fontSize: '0.92rem',
+                    lineHeight: '1.9',
+                    wordSpacing: '1px',
                     backgroundColor: 'rgba(18, 19, 26, 0.95)',
-                    borderColor: 'var(--border-color, #2a2c3a)',
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
+                    border: '1px solid var(--border-color, #2a2c3a)',
                     borderRadius: '8px',
-                    color: '#f8f9fa'
+                    color: '#f8f9fa',
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
               <div>
-                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-secondary, #a0aec0)', marginBottom: '10px' }}>
                   سؤال التطبيق والنمو الشخصي (بالعربية)
                 </label>
                 <textarea 
                   rows={4}
                   value={votdQuestionAr}
                   onChange={e => setVotdQuestionAr(e.target.value)}
-                  className="w-full p-4 text-sm focus:outline-none transition leading-relaxed"
                   style={{
+                    width: '100%',
+                    padding: '14px 18px',
+                    fontSize: '0.92rem',
+                    lineHeight: '1.9',
+                    wordSpacing: '1px',
                     backgroundColor: 'rgba(18, 19, 26, 0.95)',
-                    borderColor: 'var(--border-color, #2a2c3a)',
-                    borderWidth: '1px',
-                    borderStyle: 'solid',
+                    border: '1px solid var(--border-color, #2a2c3a)',
                     borderRadius: '8px',
-                    color: '#f8f9fa'
+                    color: '#f8f9fa',
+                    outline: 'none',
+                    boxSizing: 'border-box'
                   }}
                 />
               </div>
@@ -475,19 +543,27 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
           </div>
 
           {/* Submit Action */}
-          <div className="pt-4 border-t flex justify-end" style={{ borderColor: 'var(--border-color, #2a2c3a)' }}>
+          <div style={{ paddingTop: '2rem', borderTop: '1px solid var(--border-color, #2a2c3a)', display: 'flex', justifyContent: 'flex-start' }}>
             <button
               type="submit"
               disabled={votdSaving}
-              className="py-3 px-8 text-sm font-bold flex items-center gap-2.5 transition-all shadow-lg hover:brightness-110 disabled:opacity-50"
               style={{
+                padding: '14px 38px',
+                fontSize: '0.98rem',
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
                 backgroundColor: 'var(--accent-gold, #e2b714)',
                 color: '#000000',
+                border: 'none',
                 borderRadius: '8px',
-                boxShadow: '0 8px 25px rgba(226, 183, 20, 0.3)'
+                boxShadow: '0 8px 30px rgba(226, 183, 20, 0.35)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
               }}
             >
-              {votdSaving ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+              {votdSaving ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />}
               <span>حفظ وجدولة آية اليوم</span>
             </button>
           </div>

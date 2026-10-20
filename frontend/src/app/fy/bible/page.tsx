@@ -1011,29 +1011,29 @@ export default function BiblePage() {
               </button>
             </div>
 
-            {/* Verses Canvas - Wide Open Manuscript with Word Spacing and Breath */}
+            {/* Verses Canvas - Comfortable, Balanced Manuscript Reading with Perfect Breathing Room */}
             <div 
               style={{
                 backgroundColor: 'rgba(28, 29, 38, 0.85)',
                 border: '1px solid var(--border-color, #2a2c3a)',
                 borderRadius: '8px',
-                padding: 'clamp(2rem, 5vw, 4.5rem) clamp(1.5rem, 5vw, 4.5rem)',
-                boxShadow: '0 20px 60px rgba(0,0,0,0.65)',
+                padding: 'clamp(1.5rem, 3.5vw, 2.75rem) clamp(1.25rem, 3.5vw, 2.5rem)',
+                boxShadow: '0 16px 50px rgba(0,0,0,0.55)',
                 fontFamily: fontFamily === 'Amiri' ? 'Amiri, Georgia, serif' : 'var(--font-arabic, Cairo, sans-serif)',
                 minHeight: '400px'
               }}
             >
               {loading ? (
-                <div style={{ textAlign: 'center', padding: '5rem 0' }}>
-                  <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                  <p style={{ fontSize: '1rem', fontWeight: 700, color: themeTokens.muted }}>جاري تحميل نصوص الإصحاح المقدس...</p>
+                <div style={{ textAlign: 'center', padding: '4rem 0' }}>
+                  <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                  <p style={{ fontSize: '0.95rem', fontWeight: 700, color: themeTokens.muted }}>جاري تحميل نصوص الإصحاح المقدس...</p>
                 </div>
               ) : chapterData?.verses?.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '5rem 0', fontSize: '1rem', color: themeTokens.muted }}>
+                <div style={{ textAlign: 'center', padding: '4rem 0', fontSize: '0.95rem', color: themeTokens.muted }}>
                   لا توجد آيات متوفرة لهذا الإصحاح حالياً.
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                   {chapterData?.verses?.map(v => {
                     const isSelected = selectedVerses.some(item => item.verseNumber === v.verseNumber);
                     const displayText = includeTashkeel ? v.text : removeArabicTashkeel(v.text);
@@ -1047,29 +1047,29 @@ export default function BiblePage() {
                           borderRadius: '8px',
                           backgroundColor: isSelected ? themeTokens.verseSelected : 'transparent',
                           border: `1px solid ${isSelected ? themeTokens.gold : 'transparent'}`,
-                          borderRight: isSelected ? `6px solid ${themeTokens.gold}` : '1px solid transparent',
-                          padding: '1.4rem 1.8rem',
+                          borderRight: isSelected ? `5px solid ${themeTokens.gold}` : '1px solid transparent',
+                          padding: '0.9rem 1.25rem',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'flex-start',
-                          gap: '1.5rem',
+                          gap: '1.15rem',
                           transition: 'all 0.15s ease',
-                          boxShadow: isSelected ? '0 6px 25px rgba(226, 183, 20, 0.2)' : 'none'
+                          boxShadow: isSelected ? '0 4px 18px rgba(226, 183, 20, 0.2)' : 'none'
                         }}
                       >
                         {/* Golden Square Badge */}
                         <span
                           style={{
-                            width: '38px',
-                            height: '38px',
+                            width: '34px',
+                            height: '34px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             fontWeight: 900,
-                            fontSize: '1rem',
+                            fontSize: '0.92rem',
                             flexShrink: 0,
                             marginTop: '4px',
-                            borderRadius: '8px',
+                            borderRadius: '6px',
                             backgroundColor: isSelected ? themeTokens.gold : themeTokens.badgeBg,
                             color: isSelected ? '#000000' : themeTokens.gold,
                             border: `1px solid ${isSelected ? themeTokens.gold : 'rgba(226, 183, 20, 0.35)'}`,
@@ -1079,15 +1079,15 @@ export default function BiblePage() {
                           {v.verseNumber}
                         </span>
 
-                        {/* Verse Text: AMPLE WORD SPACING, AMPLE BREATHING ROOM */}
+                        {/* Verse Text: Balanced Word Spacing & Line Height */}
                         <p
                           style={{
                             flex: 1,
                             margin: 0,
                             fontSize: `${fontSize}px`,
-                            lineHeight: 2.8,
-                            wordSpacing: '4px',
-                            letterSpacing: '0.3px',
+                            lineHeight: 2.35,
+                            wordSpacing: '2.5px',
+                            letterSpacing: '0.2px',
                             color: themeTokens.text
                           }}
                         >
