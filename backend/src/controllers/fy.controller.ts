@@ -652,4 +652,108 @@ router.post(
   }
 );
 
+/**
+ * 13. PUT & PATCH /api/fy/admin/questions/:id
+ * Admin: Edit an existing question and pastoral answer
+ */
+router.put(
+  ['/admin/questions/:id', '/questions/:id'],
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.PRIEST, Role.BISHOP]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { titleAr, titleEn, answerTextAr, answerAr, answerTextEn, answerEn, videoUrl, categoryId, tags, isFeatured } = req.body;
+
+      const question = await prisma.fyQuestion.findFirst({
+        where: {
+          OR: [{ id }, { slug: id }]
+        }
+      });
+
+      if (!question) {
+        return res.status(404).json({ error: 'Question not found.' });
+      }
+
+      const updated = await prisma.fyQuestion.update({
+        where: { id: question.id },
+        data: {
+          titleAr: titleAr ? String(titleAr).trim() : undefined,
+          titleEn: titleEn !== undefined ? (titleEn ? String(titleEn).trim() : null) : undefined,
+          answerTextAr: (answerTextAr || answerAr) ? String(answerTextAr || answerAr).trim() : undefined,
+          answerTextEn: (answerTextEn || answerEn) !== undefined ? String(answerTextEn || answerEn || '').trim() : undefined,
+          videoUrl: videoUrl !== undefined ? (videoUrl ? String(videoUrl).trim() : null) : undefined,
+          categoryId: categoryId !== undefined ? categoryId : undefined,
+          tags: tags ? JSON.stringify(Array.isArray(tags) ? tags : [tags]) : undefined,
+          isFeatured: isFeatured !== undefined ? Boolean(isFeatured) : undefined
+        }
+      });
+
+      logAction(
+        req.user!.userId,
+        req.user!.email,
+        req.user!.fullName || 'Admin',
+        'FY_QUESTION_UPDATED',
+        `Updated question #${updated.id} (${updated.titleAr})`
+      );
+
+      return res.status(200).json({
+        success: true,
+        messageAr: 'تم تحديث بيانات السؤال والإجابة بنجاح!',
+        messageEn: 'Question and answer updated successfully!',
+        question: updated
+      });
+    } catch (error: any) {
+      console.error('Error updating question:', error);
+      return res.status(500).json({ error: 'Failed to update question.' });
+    }
+  }
+);
+
+/**
+ * 14. DELETE /api/fy/admin/questions/:id
+ * Admin: Delete a question from the library
+ */
+router.delete(
+  ['/admin/questions/:id', '/questions/:id'],
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.PRIEST, Role.BISHOP]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const question = await prisma.fyQuestion.findFirst({
+        where: {
+          OR: [{ id }, { slug: id }]
+        }
+      });
+
+      if (!question) {
+        return res.status(404).json({ error: 'Question not found.' });
+      }
+
+      await prisma.fyQuestion.delete({
+        where: { id: question.id }
+      });
+
+      logAction(
+        req.user!.userId,
+        req.user!.email,
+        req.user!.fullName || 'Admin',
+        'FY_QUESTION_DELETED',
+        `Deleted question #${question.id} (${question.titleAr})`
+      );
+
+      return res.status(200).json({
+        success: true,
+        messageAr: 'تم حذف السؤال من مكتبة الأسئلة بنجاح!',
+        messageEn: 'Question deleted successfully from library!'
+      });
+    } catch (error: any) {
+      console.error('Error deleting question:', error);
+      return res.status(500).json({ error: 'Failed to delete question.' });
+    }
+  }
+);
+
 export default router;

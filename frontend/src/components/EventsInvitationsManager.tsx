@@ -55,8 +55,25 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
   const [reopenReason, setReopenReason] = useState<string>('');
   const [reopening, setReopening] = useState<boolean>(false);
 
-  // Fetch all events on mount
-  useEffect(() => {
+  // Create Event Modal states
+  const [showCreateEventModal, setShowCreateEventModal] = useState<boolean>(false);
+  const [newTitleAr, setNewTitleAr] = useState<string>('');
+  const [newTitleEn, setNewTitleEn] = useState<string>('');
+  const [newDescAr, setNewDescAr] = useState<string>('');
+  const [newDate, setNewDate] = useState<string>('');
+  const [newStartTime, setNewStartTime] = useState<string>('18:00');
+  const [newEndTime, setNewEndTime] = useState<string>('21:00');
+  const [newLocationsList, setNewLocationsList] = useState<Array<{ nameAr: string; maxCapacity: number }>>([
+    { nameAr: 'الكنيسة الكبرى', maxCapacity: 150 },
+    { nameAr: 'القاعة الملحقة', maxCapacity: 80 }
+  ]);
+  const [newRequireMember, setNewRequireMember] = useState<boolean>(false);
+  const [newMinAge, setNewMinAge] = useState<number | ''>('');
+  const [newIsPublicVisible, setNewIsPublicVisible] = useState<boolean>(true);
+  const [newIsApplicationActive, setNewIsApplicationActive] = useState<boolean>(true);
+  const [isCreatingEvent, setIsCreatingEvent] = useState<boolean>(false);
+
+  const refreshAdminEvents = () => {
     if (!token) return;
     fetch(`${API_URL}/invitations/admin/events`, {
       headers: { Authorization: `Bearer ${token}` }
@@ -71,7 +88,150 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
         }
       })
       .catch(err => console.error('Error fetching admin events:', err));
+  };
+
+  // Fetch all events on mount
+  useEffect(() => {
+    refreshAdminEvents();
   }, [token]);
+
+  const handleCreateEventSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    if (!newTitleAr.trim() || !newDate) {
+      alert(isAr ? 'يرجى إدخال اسم الفعالية وتاريخها.' : 'Title and date required.');
+      return;
+    }
+
+    setIsCreatingEvent(true);
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          titleAr: newTitleAr.trim(),
+          titleEn: newTitleEn.trim() || newTitleAr.trim(),
+          descriptionAr: newDescAr.trim(),
+          date: newDate,
+          startTime: newStartTime.trim() || undefined,
+          endTime: newEndTime.trim() || undefined,
+          isPublicVisible: newIsPublicVisible,
+          isApplicationActive: newIsApplicationActive,
+          locations: newLocationsList.filter(l => l.nameAr.trim().length > 0),
+          rules: {
+            requireVerifiedMember: newRequireMember,
+            minAge: newMinAge ? Number(newMinAge) : undefined
+          }
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setActionMsg(isAr ? '✓ تم إنشاء الفعالية وضبط الأماكن والقواعد بنجاح!' : '✓ Event created successfully!');
+        setShowCreateEventModal(false);
+        setNewTitleAr('');
+        setNewTitleEn('');
+        setNewDescAr('');
+        setNewDate('');
+        refreshAdminEvents();
+      } else {
+        alert(data.error || 'Failed to create event');
+      }
+    } catch (err) {
+      alert('Error creating event');
+    } finally {
+      setIsCreatingEvent(false);
+    }
+  };
+
+  const handleToggleEventVisibility = async (evId: string, current: boolean) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/events/${evId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ isPublicVisible: !current })
+      });
+      if (res.ok) {
+        refreshAdminEvents();
+        setActionMsg(isAr ? (!current ? '✓ تم إظهار صفحة الفعالية للجمهور.' : '✓ تم إخفاء صفحة الفعالية عن الجمهور.') : 'Visibility updated.');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleToggleApplicationActive = async (evId: string, current: boolean) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/events/${evId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ isApplicationActive: !current })
+      });
+      if (res.ok) {
+        refreshAdminEvents();
+        setActionMsg(isAr ? (!current ? '✓ تم فتح وتفعيل زر التقديم للجمهور.' : '✓ تم قفل زر التقديم (رمادي).') : 'Application button status updated.');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteEvent = async (evId: string, title: string) => {
+    if (!token) return;
+    if (!confirm(isAr ? `هل أنت متأكد من حذف هذه الفعالية بكافة أماكنها ودعواتها؟\n"${title}"` : `Delete event "${title}"?`)) return;
+
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/events/${evId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        refreshAdminEvents();
+        setActionMsg(isAr ? '✓ تم حذف الفعالية بنجاح.' : '✓ Event deleted.');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleAddLocationPrompt = async (evId: string) => {
+    if (!token) return;
+    const name = prompt(isAr ? 'أدخل اسم المقر / القاعة الجديدة (نص):' : 'Enter location/hall name:');
+    if (!name || !name.trim()) return;
+    const capStr = prompt(isAr ? 'أدخل السعة الاستيعابية القصوى لهذا المكان:' : 'Enter max capacity number:', '100');
+    const cap = parseInt(capStr || '100', 10);
+    if (isNaN(cap) || cap <= 0) return;
+
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/events/${evId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          newLocation: { nameAr: name.trim(), maxCapacity: cap }
+        })
+      });
+      if (res.ok) {
+        refreshAdminEvents();
+        setActionMsg(isAr ? '✓ تمت إضافة المكان بنجاح!' : '✓ Location added successfully!');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Load locations when selected event changes
   useEffect(() => {
@@ -683,93 +843,232 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
         </div>
       )}
 
-      {/* TAB 2: LOCATIONS & CAPACITY */}
+      {/* TAB 2: EVENTS & CAPACITY MANAGEMENT */}
       {activeTab === 'EVENTS' && (
         <div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '1rem', color: '#ffffff' }}>
-            {isAr ? 'أماكن الفعالية والسعات المستقلة والتحكم بالإتاحة' : 'Locations & Capacity Management'}
-          </h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                {isAr ? 'إدارة الفعاليات والأماكن والسعات وقواعد التقديم' : 'Events, Locations & Eligibility Rules'}
+              </h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0 0' }}>
+                {isAr 
+                  ? 'أنشئ فعاليات مستقلة، حدد أماكن وسعات كل كنيسة أو قاعة، وتحكم بإظهار صفحة الفعالية وتفعيل زر التقديم.'
+                  : 'Create custom events, configure capacity per venue, and toggle public visibility and application windows.'}
+              </p>
+            </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-            {locations.map(loc => {
-              const isFull = loc.confirmedCount >= loc.capacity;
+            <button
+              onClick={() => setShowCreateEventModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                background: 'var(--accent-gold)',
+                border: 'none',
+                color: '#000000',
+                fontWeight: 800,
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                boxShadow: '0 4px 12px rgba(226, 183, 20, 0.3)'
+              }}
+            >
+              <PlusCircle size={17} />
+              <span>{isAr ? 'إنشاء فعالية جديدة' : 'Create New Event'}</span>
+            </button>
+          </div>
+
+          {/* Active Event Controls Card */}
+          {(() => {
+            const currentEvent = events.find(e => e.id === selectedEventId) || events[0];
+            if (!currentEvent) {
               return (
-                <div
-                  key={loc.id}
-                  style={{
-                    background: 'var(--card-bg, rgba(255, 255, 255, 0.04))',
-                    border: `1px solid ${isFull ? '#e74c3c' : 'var(--border-color)'}`,
-                    borderRadius: '12px',
-                    padding: '1.25rem',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between'
-                  }}
-                >
+                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                  <p>{isAr ? 'لا توجد فعاليات مسجلة. اضغط على زر "إنشاء فعالية جديدة" لإضافة فعالية.' : 'No events found. Click "Create New Event" to get started.'}</p>
+                </div>
+              );
+            }
+
+            let rules: any = {};
+            try { rules = JSON.parse(currentEvent.eligibilityRulesJson || '{}'); } catch {}
+
+            return (
+              <div style={{
+                background: 'var(--card-bg, rgba(255, 255, 255, 0.04))',
+                border: '1px solid var(--border-color)',
+                borderRadius: '16px',
+                padding: '1.5rem',
+                marginBottom: '2rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '1rem', marginBottom: '1.2rem' }}>
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <h4 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
-                        {isAr ? loc.nameAr : loc.nameEn}
-                      </h4>
-                      <span style={{
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '6px',
-                        background: isFull ? 'rgba(231, 76, 60, 0.2)' : 'rgba(46, 204, 113, 0.2)',
-                        color: isFull ? '#e74c3c' : '#2ecc71'
-                      }}>
-                        {isFull ? (isAr ? 'مكتمل العدد (FULL)' : 'FULL') : (isAr ? 'متاح للتسجيل' : 'OPEN')}
-                      </span>
-                    </div>
-
-                    <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0 0 1rem 0' }}>
-                      {loc.address || (isAr ? 'المقر الرئيسي للكنيسة' : 'Church Main Building')}
-                    </p>
-
-                    {/* Capacity Progress Bar */}
-                    <div style={{ marginBottom: '1rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>{isAr ? 'المقاعد المؤكدة:' : 'Confirmed Allocation:'}</span>
-                        <strong style={{ color: 'var(--accent-gold)' }}>{loc.confirmedCount} / {loc.capacity}</strong>
-                      </div>
-                      <div style={{ height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%',
-                          width: `${Math.min(100, (loc.confirmedCount / (loc.capacity || 1)) * 100)}%`,
-                          background: isFull ? '#e74c3c' : 'var(--accent-gold)',
-                          transition: 'width 0.3s ease'
-                        }} />
-                      </div>
-                    </div>
+                    <h4 style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0, color: 'var(--accent-gold)' }}>
+                      {currentEvent.titleAr}
+                    </h4>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      📅 {new Date(currentEvent.date).toLocaleDateString(isAr ? 'ar-EG' : 'en-US')} {currentEvent.startTime ? `• ${currentEvent.startTime}` : ''}
+                    </span>
                   </div>
 
-                  {/* Reopen Action if Full */}
-                  {isFull && (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {/* Toggle Public Visibility */}
                     <button
-                      onClick={() => {
-                        setReopenLocation(loc);
-                        setNewCapacity(loc.confirmedCount + 10);
-                        setReopenReason('');
-                      }}
+                      onClick={() => handleToggleEventVisibility(currentEvent.id, currentEvent.isPublicVisible)}
                       style={{
                         padding: '8px 14px',
-                        borderRadius: '6px',
-                        background: 'rgba(226, 183, 20, 0.2)',
-                        border: '1px solid var(--accent-gold)',
-                        color: 'var(--accent-gold)',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: currentEvent.isPublicVisible ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)',
+                        color: currentEvent.isPublicVisible ? '#2ecc71' : '#e74c3c',
                         fontWeight: 700,
-                        fontSize: '0.85rem',
+                        fontSize: '0.82rem',
                         cursor: 'pointer'
                       }}
                     >
-                      {isAr ? 'إعادة فتح المكان بزيادة السعة' : 'Reopen with Increased Capacity'}
+                      {currentEvent.isPublicVisible 
+                        ? (isAr ? 'صفحة الفعالية ظاهرة للجمهور ✓' : 'Public Visible ✓') 
+                        : (isAr ? 'صفحة الفعالية مخفية 🔒' : 'Hidden 🔒')}
                     </button>
-                  )}
+
+                    {/* Toggle Apply Button Active */}
+                    <button
+                      onClick={() => handleToggleApplicationActive(currentEvent.id, currentEvent.isApplicationActive)}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: currentEvent.isApplicationActive ? 'rgba(226, 183, 20, 0.25)' : 'rgba(255, 255, 255, 0.08)',
+                        color: currentEvent.isApplicationActive ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {currentEvent.isApplicationActive 
+                        ? (isAr ? 'زر التقديم مفعل ومتاح ✓' : 'Apply Button Active ✓') 
+                        : (isAr ? 'زر التقديم مقفل برمادي (لم يفتح بعد) 🔒' : 'Apply Button Locked 🔒')}
+                    </button>
+
+                    {/* Add Location */}
+                    <button
+                      onClick={() => handleAddLocationPrompt(currentEvent.id)}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        background: 'transparent',
+                        color: '#ffffff',
+                        fontWeight: 600,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      + {isAr ? 'إضافة قاعة/مقر' : 'Add Venue'}
+                    </button>
+
+                    {/* Delete Event */}
+                    <button
+                      onClick={() => handleDeleteEvent(currentEvent.id, currentEvent.titleAr)}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: 'rgba(231, 76, 60, 0.15)',
+                        color: '#e74c3c',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✕ {isAr ? 'حذف الفعالية' : 'Delete'}
+                    </button>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* Locations Grid for Current Event */}
+                <h5 style={{ fontSize: '1rem', fontWeight: 700, color: '#ffffff', margin: '0 0 1rem 0' }}>
+                  {isAr ? 'الأماكن والقاعات المخصصة لهذه الفعالية والسعات:' : 'Event Venues & Capacities:'}
+                </h5>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                  {currentEvent.locations?.map((loc: any) => {
+                    const isFull = loc.isFull || loc.confirmedCount >= loc.maxCapacity;
+                    return (
+                      <div
+                        key={loc.id}
+                        style={{
+                          background: 'rgba(0, 0, 0, 0.3)',
+                          border: `1px solid ${isFull ? '#e74c3c' : 'rgba(255,255,255,0.1)'}`,
+                          borderRadius: '12px',
+                          padding: '1.25rem',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between'
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <h4 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                              {loc.nameAr}
+                            </h4>
+                            <span style={{
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              background: isFull ? 'rgba(231, 76, 60, 0.2)' : 'rgba(46, 204, 113, 0.2)',
+                              color: isFull ? '#e74c3c' : '#2ecc71'
+                            }}>
+                              {isFull ? (isAr ? 'مكتمل العدد (FULL)' : 'FULL') : (isAr ? 'متاح للتسجيل' : 'OPEN')}
+                            </span>
+                          </div>
+
+                          {/* Capacity Progress Bar */}
+                          <div style={{ marginBottom: '1rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
+                              <span style={{ color: 'var(--text-secondary)' }}>{isAr ? 'المقاعد المؤكدة:' : 'Confirmed Allocation:'}</span>
+                              <strong style={{ color: 'var(--accent-gold)' }}>{loc.confirmedCount} / {loc.maxCapacity}</strong>
+                            </div>
+                            <div style={{ height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                              <div style={{
+                                height: '100%',
+                                width: `${Math.min(100, (loc.confirmedCount / (loc.maxCapacity || 1)) * 100)}%`,
+                                background: isFull ? '#e74c3c' : 'var(--accent-gold)',
+                                transition: 'width 0.3s ease'
+                              }} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Reopen / Expand Capacity Action */}
+                        <button
+                          onClick={() => {
+                            setReopenLocation({ ...loc, confirmedCount: loc.confirmedCount });
+                            setNewCapacity(loc.maxCapacity + 20);
+                            setReopenReason('');
+                          }}
+                          style={{
+                            padding: '8px 14px',
+                            borderRadius: '6px',
+                            background: isFull ? 'rgba(226, 183, 20, 0.25)' : 'rgba(255,255,255,0.06)',
+                            border: '1px solid var(--accent-gold)',
+                            color: 'var(--accent-gold)',
+                            fontWeight: 700,
+                            fontSize: '0.82rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {isFull 
+                            ? (isAr ? 'إعادة فتح المكان وتوسيع السعة' : 'Reopen Full Venue') 
+                            : (isAr ? 'تعديل السعة المقررة' : 'Adjust Capacity')}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1273,7 +1572,260 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
             >
               ✕
             </button>
-            <VipInvitationCard invitation={previewInvitation} language={language} />
+            <VipInvitationCard invitation={previewInvitation} isAr={isAr} />
+          </div>
+        </div>
+      )}
+
+      {/* Create New Event Modal */}
+      {showCreateEventModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: '#16161d',
+            border: '1px solid var(--accent-gold)',
+            borderRadius: '16px',
+            padding: '2rem',
+            maxWidth: '600px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            direction: isAr ? 'rtl' : 'ltr'
+          }}>
+            <h3 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 1.2rem 0', color: '#ffffff' }}>
+              {isAr ? 'إنشاء فعالية كنسية جديدة ومستقلة' : 'Create Custom Church Event'}
+            </h3>
+
+            <form onSubmit={handleCreateEventSubmit}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  {isAr ? 'اسم الفعالية (بالعربية) *' : 'Event Name (Arabic) *'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder={isAr ? 'مثال: نهضة الشهيد أبي سيفين السنوية' : 'Event Title'}
+                  value={newTitleAr}
+                  onChange={(e) => setNewTitleAr(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#ffffff',
+                    fontSize: '0.92rem'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    {isAr ? 'تاريخ الفعالية *' : 'Event Date *'}
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      color: '#ffffff',
+                      fontSize: '0.92rem'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    {isAr ? 'التوقيت' : 'Time'}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="18:00 - 21:00"
+                    value={newStartTime}
+                    onChange={(e) => setNewStartTime(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      color: '#ffffff',
+                      fontSize: '0.92rem'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  {isAr ? 'الوصف والتفاصيل' : 'Description'}
+                </label>
+                <textarea
+                  rows={3}
+                  value={newDescAr}
+                  onChange={(e) => setNewDescAr(e.target.value)}
+                  placeholder={isAr ? 'اكتب شروط وتعليمات الحضور...' : 'Event description...'}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#ffffff',
+                    fontSize: '0.92rem'
+                  }}
+                />
+              </div>
+
+              {/* Multi-Locations & Capacities */}
+              <div style={{ marginBottom: '1.2rem', background: 'rgba(0,0,0,0.25)', padding: '12px', borderRadius: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-gold)' }}>
+                    {isAr ? 'الأماكن والقاعات والسعات المخصصة:' : 'Venues & Capacities:'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setNewLocationsList([...newLocationsList, { nameAr: 'قاعة إضافية', maxCapacity: 100 }])}
+                    style={{ background: 'transparent', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '6px', padding: '2px 8px', fontSize: '0.78rem', cursor: 'pointer' }}
+                  >
+                    + {isAr ? 'إضافة مكان آخر' : 'Add Venue'}
+                  </button>
+                </div>
+
+                {newLocationsList.map((loc, idx) => (
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '8px', marginBottom: '6px' }}>
+                    <input
+                      type="text"
+                      placeholder={isAr ? 'اسم القاعة / الكنيسة' : 'Venue Name'}
+                      value={loc.nameAr}
+                      onChange={(e) => {
+                        const updated = [...newLocationsList];
+                        updated[idx].nameAr = e.target.value;
+                        setNewLocationsList(updated);
+                      }}
+                      style={{ padding: '8px', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.85rem' }}
+                    />
+                    <input
+                      type="number"
+                      placeholder={isAr ? 'السعة' : 'Capacity'}
+                      value={loc.maxCapacity}
+                      onChange={(e) => {
+                        const updated = [...newLocationsList];
+                        updated[idx].maxCapacity = parseInt(e.target.value) || 0;
+                        setNewLocationsList(updated);
+                      }}
+                      style={{ padding: '8px', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.85rem' }}
+                    />
+                    {newLocationsList.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setNewLocationsList(newLocationsList.filter((_, i) => i !== idx))}
+                        style={{ background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', padding: '0 6px' }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Toggles */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '1.2rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: '#ffffff' }}>
+                  <input
+                    type="checkbox"
+                    checked={newIsPublicVisible}
+                    onChange={(e) => setNewIsPublicVisible(e.target.checked)}
+                    style={{ accentColor: 'var(--accent-gold)' }}
+                  />
+                  <span>{isAr ? 'إظهار الفعالية للجمهور' : 'Public Visible'}</span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: '#ffffff' }}>
+                  <input
+                    type="checkbox"
+                    checked={newIsApplicationActive}
+                    onChange={(e) => setNewIsApplicationActive(e.target.checked)}
+                    style={{ accentColor: 'var(--accent-gold)' }}
+                  />
+                  <span>{isAr ? 'تفعيل زر التقديم فوراً' : 'Activate Apply Button'}</span>
+                </label>
+              </div>
+
+              {/* Eligibility Rules */}
+              <div style={{ marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '10px 12px', borderRadius: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: '#ffffff', marginBottom: '8px' }}>
+                  <input
+                    type="checkbox"
+                    checked={newRequireMember}
+                    onChange={(e) => setNewRequireMember(e.target.checked)}
+                    style={{ accentColor: 'var(--accent-gold)' }}
+                  />
+                  <span>{isAr ? 'قصر التقديم على أعضاء الكنيسة المسجلين فقط' : 'Require Verified Church Member'}</span>
+                </label>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{isAr ? 'الحد الأدنى للسن (اختياري):' : 'Min Age:'}</span>
+                  <input
+                    type="number"
+                    placeholder="18"
+                    value={newMinAge}
+                    onChange={(e) => setNewMinAge(e.target.value ? parseInt(e.target.value) : '')}
+                    style={{ width: '80px', padding: '6px', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.85rem' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateEventModal(false)}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingEvent}
+                  style={{
+                    padding: '10px 22px',
+                    borderRadius: '8px',
+                    background: 'var(--accent-gold)',
+                    border: 'none',
+                    color: '#000000',
+                    fontWeight: 800,
+                    cursor: isCreatingEvent ? 'wait' : 'pointer'
+                  }}
+                >
+                  {isCreatingEvent ? (isAr ? 'جاري الإنشاء...' : 'Creating...') : (isAr ? 'إنشاء الفعالية واعتمادها' : 'Create Event')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

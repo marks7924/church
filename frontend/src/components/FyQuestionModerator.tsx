@@ -75,8 +75,12 @@ export default function FyQuestionModerator({ token }: FyQuestionModeratorProps)
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
+          titleAr: selectedSub.questionTitle || selectedSub.title,
           answerAr: answerAr.trim(),
+          answerTextAr: answerAr.trim(),
           answerEn: answerEn.trim() || undefined,
+          answerTextEn: answerEn.trim() || undefined,
+          videoUrl: videoUrl.trim() || undefined,
           mediaUrls: videoUrl.trim() ? [videoUrl.trim()] : [],
           referenceLinks: referenceCitation.trim() ? [referenceCitation.trim()] : []
         })
@@ -270,7 +274,7 @@ export default function FyQuestionModerator({ token }: FyQuestionModeratorProps)
                 </div>
 
                 <h4 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0 0 8px 0', color: '#ffffff' }}>
-                  {sub.title}
+                  {sub.questionTitle || sub.title}
                 </h4>
 
                 <p style={{
@@ -279,7 +283,7 @@ export default function FyQuestionModerator({ token }: FyQuestionModeratorProps)
                   lineHeight: 1.6,
                   margin: '0 0 1rem 0'
                 }}>
-                  {sub.content}
+                  {sub.questionDetails || sub.content}
                 </p>
 
                 {/* Submitter info for clergy only */}
@@ -393,9 +397,11 @@ export default function FyQuestionModerator({ token }: FyQuestionModeratorProps)
               marginBottom: '1.2rem'
             }}>
               <strong style={{ color: 'var(--accent-gold)', fontSize: '0.95rem', display: 'block', marginBottom: '4px' }}>
-                {selectedSub.title}
+                {selectedSub.questionTitle || selectedSub.title}
               </strong>
-              <p style={{ margin: 0, fontSize: '0.88rem', color: '#e4e4e7' }}>{selectedSub.content}</p>
+              <p style={{ margin: 0, fontSize: '0.88rem', color: '#e4e4e7', whiteSpace: 'pre-wrap' }}>
+                {selectedSub.questionDetails || selectedSub.content}
+              </p>
               
               {selectedSub.isAnonymous && (
                 <div style={{ marginTop: '8px', fontSize: '0.78rem', color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '4px' }}>

@@ -806,4 +806,187 @@ router.post(
   }
 );
 
+/**
+ * 9. POST /api/invitations/admin/events
+ * Admin: Create a new custom Event with custom name, capacity per location, and rules
+ */
+router.post(
+  '/admin/events',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const {
+        titleAr,
+        titleEn,
+        descriptionAr,
+        descriptionEn,
+        date,
+        startTime,
+        endTime,
+        isPublicVisible = false,
+        isApplicationActive = false,
+        locations = [],
+        rules = {}
+      } = req.body;
+
+      if (!titleAr || !date) {
+        return res.status(400).json({
+          error: 'Title and date are required.',
+          errorAr: 'يرجى إدخال اسم الفعالية وتاريخها.'
+        });
+      }
+
+      const event = await prisma.event.create({
+        data: {
+          titleAr: String(titleAr).trim(),
+          titleEn: titleEn ? String(titleEn).trim() : String(titleAr).trim(),
+          descriptionAr: descriptionAr ? String(descriptionAr).trim() : '',
+          descriptionEn: descriptionEn ? String(descriptionEn).trim() : '',
+          type: 'SPECIAL',
+          date: new Date(date),
+          startTime: startTime ? String(startTime).trim() : null,
+          endTime: endTime ? String(endTime).trim() : null,
+          isPublicVisible: Boolean(isPublicVisible),
+          isApplicationActive: Boolean(isApplicationActive),
+          status: isApplicationActive ? 'OPEN' : 'DRAFT',
+          eligibilityRulesJson: JSON.stringify(rules),
+          locations: {
+            create: Array.isArray(locations) && locations.length > 0
+              ? locations.map((loc: any) => ({
+                  nameAr: String(loc.nameAr || loc.name || 'المقر الرئيسي').trim(),
+                  nameEn: String(loc.nameEn || loc.name || 'Main Hall').trim(),
+                  addressAr: loc.addressAr ? String(loc.addressAr).trim() : null,
+                  maxCapacity: Math.max(1, parseInt(String(loc.maxCapacity || loc.capacity || '100'), 10)),
+                  confirmedCount: 0,
+                  isFull: false
+                }))
+              : [{
+                  nameAr: 'المقر الرئيسي للكنيسة',
+                  nameEn: 'Main Church Building',
+                  maxCapacity: 100,
+                  confirmedCount: 0,
+                  isFull: false
+                }]
+          }
+        },
+        include: { locations: true }
+      });
+
+      logAction(
+        req.user!.userId,
+        req.user!.email,
+        req.user!.fullName || 'Admin',
+        'ADMIN_CREATE_SPECIAL_EVENT',
+        `Created event "${event.titleAr}" with ${event.locations.length} locations.`
+      );
+
+      return res.status(201).json({
+        success: true,
+        messageAr: 'تم إنشاء الفعالية وضبط الأماكن والسعات بنجاح!',
+        messageEn: 'Event and locations created successfully!',
+        event
+      });
+    } catch (error: any) {
+      console.error('Error creating admin event:', error);
+      return res.status(500).json({ error: 'Failed to create event.' });
+    }
+  }
+);
+
+/**
+ * 10. PATCH /api/invitations/admin/events/:id
+ * Admin: Update event settings, toggle public visibility, toggle apply button, add location, rules
+ */
+router.patch(
+  '/admin/events/:id',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const {
+        titleAr,
+        titleEn,
+        descriptionAr,
+        descriptionEn,
+        date,
+        startTime,
+        endTime,
+        isPublicVisible,
+        isApplicationActive,
+        rules,
+        newLocation
+      } = req.body;
+
+      const event = await prisma.event.findUnique({ where: { id } });
+      if (!event) return res.status(404).json({ error: 'Event not found.' });
+
+      if (newLocation && (newLocation.nameAr || newLocation.name)) {
+        await prisma.eventLocation.create({
+          data: {
+            eventId: id,
+            nameAr: String(newLocation.nameAr || newLocation.name).trim(),
+            nameEn: String(newLocation.nameEn || newLocation.name || newLocation.nameAr).trim(),
+            maxCapacity: Math.max(1, parseInt(String(newLocation.maxCapacity || newLocation.capacity || '100'), 10)),
+            confirmedCount: 0,
+            isFull: false
+          }
+        });
+      }
+
+      const updated = await prisma.event.update({
+        where: { id },
+        data: {
+          titleAr: titleAr ? String(titleAr).trim() : undefined,
+          titleEn: titleEn ? String(titleEn).trim() : undefined,
+          descriptionAr: descriptionAr !== undefined ? String(descriptionAr).trim() : undefined,
+          descriptionEn: descriptionEn !== undefined ? String(descriptionEn).trim() : undefined,
+          date: date ? new Date(date) : undefined,
+          startTime: startTime !== undefined ? (startTime ? String(startTime).trim() : null) : undefined,
+          endTime: endTime !== undefined ? (endTime ? String(endTime).trim() : null) : undefined,
+          isPublicVisible: isPublicVisible !== undefined ? Boolean(isPublicVisible) : undefined,
+          isApplicationActive: isApplicationActive !== undefined ? Boolean(isApplicationActive) : undefined,
+          status: isApplicationActive !== undefined ? (isApplicationActive ? 'OPEN' : 'DRAFT') : undefined,
+          eligibilityRulesJson: rules ? JSON.stringify(rules) : undefined
+        },
+        include: { locations: true }
+      });
+
+      return res.status(200).json({
+        success: true,
+        messageAr: 'تم تحديث إعدادات الفعالية بنجاح!',
+        messageEn: 'Event settings updated successfully!',
+        event: updated
+      });
+    } catch (error: any) {
+      console.error('Error updating event:', error);
+      return res.status(500).json({ error: 'Failed to update event.' });
+    }
+  }
+);
+
+/**
+ * 11. DELETE /api/invitations/admin/events/:id
+ * Admin: Delete event
+ */
+router.delete(
+  '/admin/events/:id',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      await prisma.event.delete({ where: { id } });
+      return res.status(200).json({
+        success: true,
+        messageAr: 'تم حذف الفعالية بنجاح.',
+        messageEn: 'Event deleted successfully.'
+      });
+    } catch (error: any) {
+      return res.status(500).json({ error: 'Failed to delete event.' });
+    }
+  }
+);
+
 export default router;

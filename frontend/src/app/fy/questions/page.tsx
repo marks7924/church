@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useTheme } from '../../../components/ThemeContext';
 import { 
   HelpCircle, Lock, Search, PlusCircle, UserCheck, ShieldCheck, 
-  ArrowLeft, ArrowRight, Video, Link2, Sparkles, AlertCircle, CheckCircle, Tag, EyeOff, ShieldAlert
+  ArrowLeft, ArrowRight, Video, Link2, Sparkles, AlertCircle, CheckCircle, Tag, EyeOff, ShieldAlert,
+  Edit3, Trash2
 } from 'lucide-react';
 import { API_URL } from '../../../config';
 
@@ -36,6 +37,16 @@ export default function QuestionsLibraryPage() {
   const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Admin Edit Question states
+  const [editingQuestion, setEditingQuestion] = useState<any | null>(null);
+  const [editTitleAr, setEditTitleAr] = useState<string>('');
+  const [editTitleEn, setEditTitleEn] = useState<string>('');
+  const [editAnswerTextAr, setEditAnswerTextAr] = useState<string>('');
+  const [editAnswerTextEn, setEditAnswerTextEn] = useState<string>('');
+  const [editVideoUrl, setEditVideoUrl] = useState<string>('');
+  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
+  const [adminActionMsg, setAdminActionMsg] = useState<string | null>(null);
+
   // Check auth and member status on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -59,19 +70,8 @@ export default function QuestionsLibraryPage() {
     }
   }, []);
 
-  // Fetch categories and questions if verified member
-  useEffect(() => {
+  const fetchQuestionsList = () => {
     if (!token || !isVerifiedMember) return;
-
-    // Fetch categories
-    fetch(`${API_URL}/fy/questions/categories`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setCategories(data);
-      })
-      .catch(err => console.error('Error fetching categories:', err));
-
-    // Fetch questions
     setLoadingQuestions(true);
     let url = `${API_URL}/fy/questions?search=${encodeURIComponent(searchQuery)}`;
     if (selectedCategory && selectedCategory !== 'ALL') {
@@ -97,7 +97,98 @@ export default function QuestionsLibraryPage() {
       })
       .catch(err => console.error('Error fetching questions:', err))
       .finally(() => setLoadingQuestions(false));
+  };
+
+  // Fetch categories and questions if verified member
+  useEffect(() => {
+    if (!token || !isVerifiedMember) return;
+
+    // Fetch categories
+    fetch(`${API_URL}/fy/questions/categories`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setCategories(data);
+      })
+      .catch(err => console.error('Error fetching categories:', err));
+
+    fetchQuestionsList();
   }, [token, isVerifiedMember, selectedCategory, searchQuery]);
+
+  const isAdmin = user && ['SUPER_ADMIN', 'CHURCH_ADMIN', 'DEVELOPER', 'PRIEST', 'BISHOP'].includes(user.role);
+
+  const handleOpenEdit = (q: any) => {
+    setEditingQuestion(q);
+    setEditTitleAr(q.titleAr || '');
+    setEditTitleEn(q.titleEn || '');
+    setEditAnswerTextAr(q.answerTextAr || q.answerAr || '');
+    setEditAnswerTextEn(q.answerTextEn || q.answerEn || '');
+    setEditVideoUrl(q.videoUrl || '');
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !editingQuestion) return;
+
+    setIsSavingEdit(true);
+    try {
+      const res = await fetch(`${API_URL}/fy/admin/questions/${editingQuestion.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          titleAr: editTitleAr.trim(),
+          titleEn: editTitleEn.trim() || undefined,
+          answerTextAr: editAnswerTextAr.trim(),
+          answerTextEn: editAnswerTextEn.trim() || undefined,
+          videoUrl: editVideoUrl.trim() || undefined
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setAdminActionMsg(isAr ? '✓ تم تحديث السؤال والإجابة بنجاح!' : '✓ Question updated successfully!');
+        setEditingQuestion(null);
+        fetchQuestionsList();
+        setTimeout(() => setAdminActionMsg(null), 4000);
+      } else {
+        alert(data.error || 'Failed to update question');
+      }
+    } catch (err) {
+      alert('Error updating question');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleDeleteQuestion = async (id: string, title: string) => {
+    if (!token) return;
+    const confirmDelete = window.confirm(
+      isAr 
+        ? `هل أنت متأكد من حذف هذا السؤال نهائيًا؟\n"${title}"` 
+        : `Are you sure you want to permanently delete this question?\n"${title}"`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetch(`${API_URL}/fy/admin/questions/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        setAdminActionMsg(isAr ? '✓ تم حذف السؤال من المكتبة بنجاح.' : '✓ Question deleted successfully.');
+        fetchQuestionsList();
+        setTimeout(() => setAdminActionMsg(null), 4000);
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to delete question');
+      }
+    } catch (err) {
+      alert('Error deleting question');
+    }
+  };
 
   const handleSubmitQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -529,6 +620,59 @@ export default function QuestionsLibraryPage() {
                 <span>{isAr ? 'قراءة الإجابة الكاملة والشواهد' : 'Read Full Pastoral Answer'}</span>
                 <ArrowIcon size={16} />
               </Link>
+
+              {/* Admin Quick Action Controls */}
+              {isAdmin && (
+                <div style={{
+                  display: 'flex',
+                  gap: '8px',
+                  marginTop: '10px',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                  paddingTop: '10px'
+                }}>
+                  <button
+                    onClick={() => handleOpenEdit(q)}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '7px 12px',
+                      borderRadius: '6px',
+                      background: 'rgba(226, 183, 20, 0.12)',
+                      border: '1px solid var(--accent-gold)',
+                      color: 'var(--accent-gold)',
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Edit3 size={14} />
+                    <span>{isAr ? 'تعديل السؤال' : 'Edit'}</span>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteQuestion(q.id, q.titleAr)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '7px 12px',
+                      borderRadius: '6px',
+                      background: 'rgba(231, 76, 60, 0.15)',
+                      border: '1px solid rgb(231, 76, 60)',
+                      color: 'rgb(231, 76, 60)',
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Trash2 size={14} />
+                    <span>{isAr ? 'حذف' : 'Delete'}</span>
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -762,6 +906,160 @@ export default function QuestionsLibraryPage() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Question (Admin) */}
+      {editingQuestion && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: '#16161d',
+            border: '1px solid var(--accent-gold)',
+            borderRadius: '16px',
+            padding: '2rem',
+            maxWidth: '650px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            direction: isAr ? 'rtl' : 'ltr'
+          }}>
+            <h3 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 1.2rem 0', color: '#ffffff' }}>
+              {isAr ? 'تعديل السؤال والإجابة الرعوية' : 'Edit Question & Pastoral Answer'}
+            </h3>
+
+            <form onSubmit={handleSaveEdit}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  {isAr ? 'عنوان السؤال (بالعربية) *' : 'Question Title (Arabic) *'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTitleAr}
+                  onChange={(e) => setEditTitleAr(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#ffffff',
+                    fontSize: '0.95rem'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  {isAr ? 'عنوان السؤال (بالإنجليزية - اختياري)' : 'Question Title (English - Optional)'}
+                </label>
+                <input
+                  type="text"
+                  value={editTitleEn}
+                  onChange={(e) => setEditTitleEn(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#ffffff',
+                    fontSize: '0.95rem'
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  {isAr ? 'نص الإجابة الرعوية والشواهد *' : 'Pastoral Answer & Scriptures *'}
+                </label>
+                <textarea
+                  rows={6}
+                  required
+                  value={editAnswerTextAr}
+                  onChange={(e) => setEditAnswerTextAr(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#ffffff',
+                    fontSize: '0.95rem',
+                    lineHeight: 1.6
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  {isAr ? 'رابط فيديو توضيحي (اختياري)' : 'Video Link (Optional)'}
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  value={editVideoUrl}
+                  onChange={(e) => setEditVideoUrl(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#ffffff',
+                    fontSize: '0.95rem'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingQuestion(null)}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingEdit}
+                  style={{
+                    padding: '10px 22px',
+                    borderRadius: '8px',
+                    background: 'var(--accent-gold)',
+                    border: 'none',
+                    color: '#000000',
+                    fontWeight: 700,
+                    cursor: isSavingEdit ? 'wait' : 'pointer'
+                  }}
+                >
+                  {isSavingEdit 
+                    ? (isAr ? 'جاري الحفظ...' : 'Saving...') 
+                    : (isAr ? 'حفظ التعديلات' : 'Save Changes')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

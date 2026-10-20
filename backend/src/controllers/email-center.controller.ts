@@ -128,11 +128,11 @@ router.get(
 );
 
 /**
- * 2. GET /api/email-center/conversations/:id
+ * 2. GET /api/email-center/conversations/:id & /api/email-center/conversations/:id/messages
  * Fetch complete message thread for a conversation
  */
 router.get(
-  '/conversations/:id',
+  ['/conversations/:id', '/conversations/:id/messages'],
   requireAuth,
   requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY, Role.PRIEST]),
   async (req: AuthRequest, res: Response) => {
@@ -156,6 +156,11 @@ router.get(
         return res.status(404).json({ error: 'Conversation not found.' });
       }
 
+      // If called with /messages suffix, return array of messages directly
+      if (req.path.endsWith('/messages')) {
+        return res.status(200).json(conversation.messages);
+      }
+
       return res.status(200).json(conversation);
     } catch (error: any) {
       return res.status(500).json({ error: 'Failed to fetch conversation thread.' });
@@ -164,16 +169,16 @@ router.get(
 );
 
 /**
- * 3. GET /api/email-center/recipients/search
+ * 3. GET /api/email-center/recipients & /api/email-center/recipients/search
  * Smart search registered users by name, email, phone, role
  */
 router.get(
-  '/recipients/search',
+  ['/recipients', '/recipients/search', '/users/search'],
   requireAuth,
   requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY, Role.PRIEST]),
   async (req: AuthRequest, res: Response) => {
     try {
-      const { q } = req.query;
+      const q = req.query.search || req.query.q;
       if (!q || typeof q !== 'string' || q.trim().length === 0) {
         return res.status(200).json([]);
       }
@@ -196,13 +201,15 @@ router.get(
           role: true,
           isVerified: true
         },
-        take: 15
+        take: 20
       });
 
       return res.status(200).json(
         users.map(u => ({
+          id: u.id,
           userId: u.id,
           name: u.fullName,
+          fullName: u.fullName,
           email: u.email,
           phone: u.phone,
           role: u.role,
@@ -211,6 +218,7 @@ router.get(
         }))
       );
     } catch (error: any) {
+      console.error('Error searching recipients:', error);
       return res.status(500).json({ error: 'Failed to search recipients.' });
     }
   }
@@ -354,9 +362,10 @@ router.post(
           }
         });
 
-        return res.status(502).json({
-          error: 'Failed to deliver email through mail provider.',
-          errorAr: 'تعذر تسليم الإيميل لمزود البريد. يرجى التحقق من صحة العنوان والمحاولة لاحقاً.',
+        return res.status(400).json({
+          success: false,
+          error: 'Failed to deliver email through mail provider: ' + (sendErr.message || 'SMTP delivery error'),
+          errorAr: 'تعذر تسليم الإيميل لمزود البريد. يرجى التحقق من صحة العنوان وإعدادات خادم SMTP في Vercel.',
           details: sendErr.message,
           messageId: messageRecord.id
         });

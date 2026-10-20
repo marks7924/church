@@ -147,7 +147,7 @@ export default function AdminEmailCenter({ token }: AdminEmailCenterProps) {
         setRecipientSearchQuery('');
         fetchConversations();
       } else {
-        setActionMsg(data.error || (isAr ? 'فشل إرسال البريد.' : 'Failed to send email.'));
+        setActionMsg((isAr ? (data.errorAr || data.error) : data.error) || (isAr ? 'فشل إرسال البريد.' : 'Failed to send email.'));
       }
     } catch (err) {
       setActionMsg(isAr ? 'خطأ في الاتصال بالخادم.' : 'Connection error.');

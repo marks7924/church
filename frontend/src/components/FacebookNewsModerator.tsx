@@ -43,7 +43,39 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
   // Media size warning states
   const [oversizedWarning, setOversizedWarning] = useState<any | null>(null);
 
-  const fetchPosts = () => {
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncGroup = async () => {
+    if (!token) return;
+    setIsSyncing(true);
+    setActionMsg(null);
+
+    try {
+      const res = await fetch(`${API_URL}/facebook-news/sync-auto`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ groupUrl: 'https://www.facebook.com/share/1cKfdQt232/' })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setActionMsg(isAr ? (data.messageAr || '✓ تمت المزامنة التلقائية مع جروب فيسبوك بنجاح!') : (data.messageEn || '✓ Auto-synced with Facebook church group!'));
+        setStatusFilter('PENDING');
+        fetchPosts(false);
+      } else {
+        setActionMsg(data.error || (isAr ? 'فشلت مزامنة الجروب.' : 'Group sync failed.'));
+      }
+    } catch (err) {
+      setActionMsg(isAr ? 'خطأ في الاتصال أثناء المزامنة.' : 'Connection error during sync.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const fetchPosts = (triggerAutoSyncOnEmpty: boolean = true) => {
     if (!token) return;
     setLoading(true);
     fetch(`${API_URL}/facebook-news/posts?status=${statusFilter}`, {
@@ -51,7 +83,11 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
     })
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) setPosts(data);
+        const loaded = (data && Array.isArray(data.posts)) ? data.posts : (Array.isArray(data) ? data : []);
+        setPosts(loaded);
+        if (triggerAutoSyncOnEmpty && statusFilter === 'PENDING' && loaded.length === 0) {
+          handleSyncGroup();
+        }
       })
       .catch(err => console.error('Error fetching Facebook posts:', err))
       .finally(() => setLoading(false));
@@ -68,7 +104,7 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
   };
 
   useEffect(() => {
-    fetchPosts();
+    fetchPosts(true);
     fetchSyncStatus();
   }, [token, statusFilter]);
 
@@ -87,6 +123,7 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
         },
         body: JSON.stringify({
           permalink: manualUrl.trim(),
+          postText: manualText.trim(),
           content: manualText.trim(),
           authorName: manualAuthor.trim() || undefined,
           mediaUrls: manualMediaUrl ? [manualMediaUrl.trim()] : []
@@ -102,7 +139,7 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
         setManualAuthor('');
         setManualMediaUrl('');
         setStatusFilter('PENDING');
-        fetchPosts();
+        fetchPosts(false);
       } else {
         setActionMsg(data.error || (isAr ? 'فشل استيراد المنشور.' : 'Import failed.'));
       }
@@ -115,11 +152,11 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
 
   const openPublishModal = (post: any) => {
     // Check if media is oversized (> 10MB)
-    const hasOversized = post.mediaSizes?.some((size: number) => size > 10 * 1024 * 1024) || (post.mediaSizeTotal > 10 * 1024 * 1024);
+    const hasOversized = post.mediaSizes?.some((size: number) => size > 10 * 1024 * 1024) || (post.mediaSizeTotal > 10 * 1024 * 1024) || (post.totalMediaSize > 10 * 1024 * 1024);
     if (hasOversized) {
       setOversizedWarning({
         post,
-        sizeMB: (post.mediaSizeTotal / (1024 * 1024)).toFixed(1)
+        sizeMB: ((post.mediaSizeTotal || post.totalMediaSize || 0) / (1024 * 1024)).toFixed(1)
       });
       return;
     }
@@ -130,11 +167,13 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
   const proceedToPublish = (post: any, skipOversizedMedia: boolean) => {
     setOversizedWarning(null);
     setPublishingPost(post);
-    setTitleAr(post.content?.slice(0, 60) || '');
-    setTitleEn(post.content?.slice(0, 60) || '');
-    setDescAr(post.content || '');
-    setDescEn(post.content || '');
-    setFeaturedImage(skipOversizedMedia ? '' : (post.mediaUrls?.[0] || ''));
+    const text = post.postText || post.content || '';
+    const img = typeof post.mediaUrls?.[0] === 'string' ? post.mediaUrls[0] : (post.mediaUrls?.[0]?.url || '');
+    setTitleAr(text.slice(0, 60) || (isAr ? 'خبر من كنيسة أبي سيفين' : 'Church News'));
+    setTitleEn(text.slice(0, 60) || 'Church News');
+    setDescAr(text);
+    setDescEn(text);
+    setFeaturedImage(skipOversizedMedia ? '' : img);
     setOriginalPermalink(post.permalink || '');
   };
 
@@ -155,8 +194,11 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
           titleAr,
           titleEn,
           descriptionAr: descAr,
+          contentAr: descAr,
           descriptionEn: descEn,
+          contentEn: descEn,
           featuredImage,
+          featuredImageUrl: featuredImage,
           originalPermalink
         })
       });
@@ -232,29 +274,52 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            onClick={handleSyncGroup}
+            disabled={isSyncing}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '9px 18px',
+              borderRadius: '8px',
+              background: '#1877f2',
+              border: 'none',
+              color: '#ffffff',
+              fontWeight: 800,
+              cursor: isSyncing ? 'wait' : 'pointer',
+              fontSize: '0.88rem',
+              boxShadow: '0 4px 12px rgba(24, 119, 242, 0.3)',
+              opacity: isSyncing ? 0.8 : 1
+            }}
+          >
+            <RefreshCw size={16} style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }} />
+            <span>{isSyncing ? (isAr ? 'جاري جلب المنشورات...' : 'Syncing Posts...') : (isAr ? 'مزامنة منشورات جروب فيسبوك' : 'Sync Group Posts')}</span>
+          </button>
+
           <button
             onClick={() => setShowManualModal(true)}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '9px 16px',
+              padding: '9px 14px',
               borderRadius: '8px',
-              background: 'var(--accent-gold)',
-              border: 'none',
-              color: '#000000',
-              fontWeight: 700,
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              color: '#ffffff',
+              fontWeight: 600,
               cursor: 'pointer',
-              fontSize: '0.88rem'
+              fontSize: '0.85rem'
             }}
           >
-            <PlusCircle size={16} />
-            <span>{isAr ? 'استيراد منشور يدويًا' : 'Manual Import Post'}</span>
+            <PlusCircle size={15} />
+            <span>{isAr ? 'استيراد يدوي' : 'Manual'}</span>
           </button>
           
           <button
-            onClick={fetchPosts}
+            onClick={() => fetchPosts(false)}
             title={isAr ? 'تحديث القائمة' : 'Refresh'}
             style={{
               padding: '9px 12px',
@@ -356,18 +421,18 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
                   WebkitBoxOrient: 'vertical',
                   overflow: 'hidden'
                 }}>
-                  {post.content}
+                  {post.postText || post.content || ''}
                 </p>
 
                 {/* Media preview */}
                 {post.mediaUrls && post.mediaUrls.length > 0 && (
                   <div style={{ marginBottom: '1rem' }}>
                     <img
-                      src={post.mediaUrls[0]}
+                      src={typeof post.mediaUrls[0] === 'string' ? post.mediaUrls[0] : (post.mediaUrls[0]?.url || '')}
                       alt="Post preview"
                       style={{
                         width: '100%',
-                        height: '140px',
+                        height: '160px',
                         objectFit: 'cover',
                         borderRadius: '8px',
                         border: '1px solid rgba(255,255,255,0.1)'
@@ -400,10 +465,11 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
                       }}
                     >
                       <Check size={16} />
-                      <span>{isAr ? 'اعتماد ونشر كخبر' : 'Approve & Publish'}</span>
+                      <span>{isAr ? 'اعتماد ونشر في أخبار الكنيسة' : 'Approve & Publish'}</span>
                     </button>
                     <button
                       onClick={() => handleArchive(post.id)}
+                      title={isAr ? 'أرشفة وتخطي المنشور' : 'Archive post'}
                       style={{
                         padding: '8px 12px',
                         borderRadius: '6px',

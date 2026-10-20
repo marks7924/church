@@ -5,46 +5,52 @@ import { Crown, Sparkles, MapPin, Calendar, Clock, CheckCircle2, UserCheck, Shie
 
 interface VipInvitationCardProps {
   invitation: {
-    id: string;
-    token: string;
-    isVip: boolean;
-    status: string;
+    id?: string;
+    token?: string;
+    qrToken?: string;
+    isVip?: boolean;
+    type?: string;
+    status?: string;
     recipientName?: string;
     recipientEmail?: string;
     event?: {
-      titleAr: string;
-      titleEn: string;
+      titleAr?: string;
+      titleEn?: string;
       date?: string;
     };
     location?: {
-      nameAr: string;
-      nameEn: string;
+      nameAr?: string;
+      nameEn?: string;
       address?: string;
     };
     claimedAt?: string;
+    [key: string]: any;
   };
   language?: 'ar' | 'en';
+  isAr?: boolean;
 }
 
-export default function VipInvitationCard({ invitation, language = 'ar' }: VipInvitationCardProps) {
-  const isAr = language === 'ar';
+export default function VipInvitationCard({ invitation, language = 'ar', isAr: isArProp }: VipInvitationCardProps) {
+  const isAr = isArProp !== undefined ? isArProp : language === 'ar';
+  const qrToken = invitation.qrToken || invitation.token || '';
+  const isVip = invitation.type === 'VIP' || invitation.isVip || false;
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
   useEffect(() => {
-    if (!invitation?.token) return;
+    if (!qrToken) return;
 
     let isMounted = true;
     import('qrcode')
       .then((mod) => {
         const qrFn = (mod as any).toDataURL || (mod as any).default?.toDataURL || (typeof mod === 'function' ? mod : null);
         if (typeof qrFn === 'function') {
-          return qrFn(invitation.token, {
+          return qrFn(qrToken, {
             width: 180,
             margin: 1,
             color: { dark: '#000000', light: '#ffffff' }
           });
         }
-        return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(invitation.token)}`;
+        return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrToken)}`;
       })
       .then((url) => {
         if (isMounted && url) setQrDataUrl(url);
@@ -52,16 +58,14 @@ export default function VipInvitationCard({ invitation, language = 'ar' }: VipIn
       .catch((err) => {
         console.error('Error generating QR code:', err);
         if (isMounted) {
-          setQrDataUrl(`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(invitation.token)}`);
+          setQrDataUrl(`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrToken)}`);
         }
       });
 
     return () => {
       isMounted = false;
     };
-  }, [invitation?.token]);
-
-  const isVip = invitation.isVip;
+  }, [qrToken]);
 
   return (
     <div style={{
