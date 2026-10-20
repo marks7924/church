@@ -1025,19 +1025,21 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
   const currentEvent = events.find(e => e.id === selectedEventId) || events[0];
 
   return (
-    <div style={{ direction: isAr ? 'rtl' : 'ltr' }}>
+    <div style={{ direction: isAr ? 'rtl' : 'ltr', width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflowX: 'hidden' }}>
       {/* Top Controls & Event Selection */}
       <div style={{
         background: 'rgba(255, 255, 255, 0.03)',
         border: '1px solid var(--border-color)',
         borderRadius: '14px',
-        padding: '1.25rem',
+        padding: 'clamp(0.85rem, 2.5vw, 1.25rem)',
         marginBottom: '1.8rem',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: '12px'
+        gap: '12px',
+        width: '100%',
+        boxSizing: 'border-box'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
@@ -1514,27 +1516,46 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
 
         return (
           <div>
-            {/* Filter Pills and New Event CTA */}
+            {/* Filter Pills and New Event CTA - Responsive Swipeable Track */}
             <div style={{
               display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
+              flexDirection: 'column',
               gap: '12px',
-              marginBottom: '1.5rem'
+              marginBottom: '1.5rem',
+              width: '100%',
+              boxSizing: 'border-box'
             }}>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {/* Row 1: Filter Pills Track - Swipeable on Phone */}
+              <div style={{
+                display: 'flex',
+                gap: '8px',
+                overflowX: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                scrollbarWidth: 'none',
+                width: '100%',
+                maxWidth: '100%',
+                paddingBottom: '6px',
+                paddingTop: '2px',
+                boxSizing: 'border-box',
+                touchAction: 'pan-x'
+              }}>
                 <button
                   onClick={() => setAllEventsFilter('ALL')}
                   style={{
                     padding: '8px 14px',
                     borderRadius: '8px',
-                    border: 'none',
+                    border: allEventsFilter === 'ALL' ? '1px solid var(--accent-gold)' : '1px solid rgba(255,255,255,0.08)',
                     background: allEventsFilter === 'ALL' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
                     color: allEventsFilter === 'ALL' ? '#000' : 'var(--text-secondary)',
                     fontWeight: 700,
                     cursor: 'pointer',
-                    fontSize: '0.85rem'
+                    fontSize: '0.82rem',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    minHeight: '38px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
                 >
                   {isAr ? `الكل (${nonCancelledEvents.length})` : `All (${nonCancelledEvents.length})`}
@@ -1544,12 +1565,18 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                   style={{
                     padding: '8px 14px',
                     borderRadius: '8px',
-                    border: 'none',
+                    border: allEventsFilter === 'ACTIVE' ? '1px solid #2ecc71' : '1px solid rgba(255,255,255,0.08)',
                     background: allEventsFilter === 'ACTIVE' ? 'rgba(46, 204, 113, 0.25)' : 'rgba(255,255,255,0.05)',
                     color: allEventsFilter === 'ACTIVE' ? '#2ecc71' : 'var(--text-secondary)',
                     fontWeight: 700,
                     cursor: 'pointer',
-                    fontSize: '0.85rem'
+                    fontSize: '0.82rem',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    minHeight: '38px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
                 >
                   {isAr ? `منشورة ومتاحة (${activeEvents.length})` : `Live & Posted (${activeEvents.length})`}
@@ -1559,12 +1586,18 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                   style={{
                     padding: '8px 14px',
                     borderRadius: '8px',
-                    border: 'none',
+                    border: allEventsFilter === 'DRAFT' ? '1px solid #3498db' : '1px solid rgba(255,255,255,0.08)',
                     background: allEventsFilter === 'DRAFT' ? 'rgba(52, 152, 219, 0.25)' : 'rgba(255,255,255,0.05)',
                     color: allEventsFilter === 'DRAFT' ? '#3498db' : 'var(--text-secondary)',
                     fontWeight: 700,
                     cursor: 'pointer',
-                    fontSize: '0.85rem'
+                    fontSize: '0.82rem',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    minHeight: '38px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
                 >
                   {isAr ? `جديدة لم تُنشر (${draftEvents.length})` : `Draft / Not Public (${draftEvents.length})`}
@@ -1574,12 +1607,18 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                   style={{
                     padding: '8px 14px',
                     borderRadius: '8px',
-                    border: 'none',
+                    border: allEventsFilter === 'EXPIRED' ? '1px solid #e74c3c' : '1px solid rgba(255,255,255,0.08)',
                     background: allEventsFilter === 'EXPIRED' ? 'rgba(231, 76, 60, 0.25)' : 'rgba(255,255,255,0.05)',
                     color: allEventsFilter === 'EXPIRED' ? '#e74c3c' : 'var(--text-secondary)',
                     fontWeight: 700,
                     cursor: 'pointer',
-                    fontSize: '0.85rem'
+                    fontSize: '0.82rem',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    minHeight: '38px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
                 >
                   {isAr ? `منتهية الصلاحية (${expiredEvents.length})` : `Expired (${expiredEvents.length})`}
@@ -1589,37 +1628,50 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                   style={{
                     padding: '8px 14px',
                     borderRadius: '8px',
-                    border: 'none',
+                    border: allEventsFilter === 'CANCELLED' ? '1px solid #ff6b6b' : '1px solid rgba(255,255,255,0.08)',
                     background: allEventsFilter === 'CANCELLED' ? 'rgba(231, 76, 60, 0.25)' : 'rgba(255,255,255,0.05)',
                     color: allEventsFilter === 'CANCELLED' ? '#ff6b6b' : 'var(--text-secondary)',
                     fontWeight: 700,
                     cursor: 'pointer',
-                    fontSize: '0.85rem'
+                    fontSize: '0.82rem',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    minHeight: '38px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
                 >
                   {isAr ? `ملغاة (Canceled) (${cancelledEvents.length})` : `Canceled (${cancelledEvents.length})`}
                 </button>
               </div>
 
-              <button
-                onClick={() => setShowCreateEventModal(true)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '9px 18px',
-                  borderRadius: '8px',
-                  background: 'var(--accent-gold)',
-                  border: 'none',
-                  color: '#000000',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  fontSize: '0.88rem'
-                }}
-              >
-                <PlusCircle size={16} />
-                <span>{isAr ? 'إنشاء فعالية مخصصة جديدة' : 'Create Custom Event'}</span>
-              </button>
+              {/* Row 2: Create Custom Event CTA */}
+              <div style={{ display: 'flex', width: '100%' }}>
+                <button
+                  onClick={() => setShowCreateEventModal(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    padding: '10px 18px',
+                    borderRadius: '8px',
+                    background: 'var(--accent-gold)',
+                    border: 'none',
+                    color: '#000000',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.88rem',
+                    minHeight: '42px',
+                    width: '100%',
+                    maxWidth: '380px'
+                  }}
+                >
+                  <PlusCircle size={16} />
+                  <span>{isAr ? 'إنشاء فعالية مخصصة جديدة' : 'Create Custom Event'}</span>
+                </button>
+              </div>
             </div>
 
             {/* Event Cards Grid */}
@@ -1628,7 +1680,13 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                 <p>{isAr ? 'لا توجد فعاليات في هذا القسم حاليًا.' : 'No events in this section.'}</p>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+                gap: '16px',
+                width: '100%',
+                boxSizing: 'border-box'
+              }}>
                 {displayedEvents.map(ev => {
                   const expired = isEventExpired(ev);
                   const totalCapacity = (ev.locations || []).reduce((acc: number, l: any) => acc + (l.maxCapacity || 0), 0);
@@ -1642,17 +1700,28 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                         background: 'var(--card-bg, rgba(255, 255, 255, 0.03))',
                         border: '1px solid var(--border-color)',
                         borderRadius: '14px',
-                        padding: '1.5rem',
+                        padding: 'clamp(1rem, 2.5vw, 1.4rem)',
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: 'space-between',
                         boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-                        position: 'relative'
+                        position: 'relative',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        overflow: 'hidden'
                       }}
                     >
                       <div>
-                        {/* Header Badges */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        {/* Header Badges - Fully Responsive Wrap */}
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '8px',
+                          marginBottom: '12px',
+                          width: '100%'
+                        }}>
                           <span style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -1669,7 +1738,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                             {ev.startTime && <span>• {ev.startTime}</span>}
                           </span>
 
-                          <div style={{ display: 'flex', gap: '6px' }}>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
                             {expired ? (
                               <span style={{
                                 fontSize: '0.75rem',
@@ -1732,11 +1801,11 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                         </div>
 
                         {/* Title & Description */}
-                        <h4 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0 0 8px 0', color: '#ffffff' }}>
+                        <h4 style={{ fontSize: 'clamp(1rem, 2.5vw, 1.15rem)', fontWeight: 800, margin: '0 0 8px 0', color: '#ffffff', wordBreak: 'break-word' }}>
                           {isAr ? ev.titleAr : ev.titleEn}
                         </h4>
                         {ev.descriptionAr && (
-                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.5, margin: '0 0 1rem 0' }}>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.5, margin: '0 0 1rem 0', wordBreak: 'break-word' }}>
                             {ev.descriptionAr}
                           </p>
                         )}
@@ -1749,11 +1818,11 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                           marginBottom: '1rem',
                           border: '1px solid rgba(255,255,255,0.06)'
                         }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '6px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px', fontSize: '0.82rem', marginBottom: '6px' }}>
                             <span style={{ color: 'var(--text-secondary)' }}>
                               {isAr ? 'المشاركون المسجلون (تحديث فوري):' : 'Submitted Attendees (Live):'}
                             </span>
-                            <span style={{ fontWeight: 800, color: 'var(--accent-gold)' }}>
+                            <span style={{ fontWeight: 800, color: 'var(--accent-gold)', direction: 'ltr' }}>
                               {totalConfirmed} / {totalCapacity} ({registeredPercent}%)
                             </span>
                           </div>
@@ -1782,16 +1851,17 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
+                                    gap: '8px',
                                     fontSize: '0.82rem',
-                                    padding: '5px 8px',
+                                    padding: '6px 10px',
                                     borderRadius: '6px',
                                     background: isFull ? 'rgba(231, 76, 60, 0.08)' : 'rgba(255,255,255,0.02)'
                                   }}
                                 >
-                                  <span style={{ color: '#ffffff', fontWeight: 600 }}>
+                                  <span style={{ color: '#ffffff', fontWeight: 600, wordBreak: 'break-word' }}>
                                     {isAr ? loc.nameAr : loc.nameEn}
                                   </span>
-                                  <span style={{ color: isFull ? '#e74c3c' : '#2ecc71', fontWeight: 700 }}>
+                                  <span style={{ color: isFull ? '#e74c3c' : '#2ecc71', fontWeight: 700, direction: 'ltr', flexShrink: 0, whiteSpace: 'nowrap' }}>
                                     {loc.confirmedCount} / {loc.maxCapacity} {isFull ? (isAr ? '(مكتمل)' : '(Full)') : ''}
                                   </span>
                                 </div>
@@ -1803,8 +1873,8 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
 
                       {/* Action Controls */}
                       <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {/* Row 1: Select Event and Apply Toggle (Grid 1fr 1fr) */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        {/* Row 1: Select Event and Apply Toggle */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', width: '100%' }}>
                           <button
                             onClick={() => setSelectedEventId(ev.id)}
                             style={{
@@ -1816,7 +1886,8 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                               fontWeight: 700,
                               cursor: 'pointer',
                               fontSize: '0.8rem',
-                              textAlign: 'center'
+                              textAlign: 'center',
+                              minHeight: '38px'
                             }}
                           >
                             {selectedEventId === ev.id 
@@ -1836,7 +1907,8 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                               fontWeight: 700,
                               cursor: ev.status === 'CANCELLED' ? 'not-allowed' : 'pointer',
                               fontSize: '0.8rem',
-                              textAlign: 'center'
+                              textAlign: 'center',
+                              minHeight: '38px'
                             }}
                           >
                             {ev.status === 'CANCELLED'
@@ -1847,8 +1919,8 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                           </button>
                         </div>
 
-                        {/* Row 2: Edit, Cancel, and Secret Passcode (Flex Wrap, fully responsive) */}
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {/* Row 2: Edit, Cancel, and Secret Passcode */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 100px), 1fr))', gap: '8px', width: '100%' }}>
                           <button
                             onClick={() => handleOpenEditModal(ev)}
                             style={{

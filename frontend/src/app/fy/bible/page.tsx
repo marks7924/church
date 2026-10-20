@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { 
   BookOpen, Sparkles, Compass, BookMarked, Calendar, 
@@ -32,6 +32,8 @@ interface ChapterData {
 }
 
 export default function BiblePage() {
+  const chaptersSectionRef = useRef<HTMLDivElement>(null);
+  
   // Sub-views
   const [activeTab, setActiveTab] = useState<'reader' | 'votd' | 'explorer' | 'journal' | 'plans' | 'topics'>('reader');
   
@@ -1714,12 +1716,17 @@ export default function BiblePage() {
             </div>
 
             {/* Modal Body */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem clamp(0.75rem, 2.5vw, 2rem)', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
               <div>
-                <span style={{ fontSize: '0.88rem', fontWeight: 800, color: themeTokens.gold, display: 'block', marginBottom: '12px' }}>
-                  قائمة الأسفار:
-                </span>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 800, color: themeTokens.gold }}>
+                    قائمة الأسفار:
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: themeTokens.muted }}>
+                    (اختر السفر للانتقال المباشر لإصحاحاته)
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 140px), 1fr))', gap: '8px' }}>
                   {filteredBooks.map(b => {
                     const isSelected = b.slug.toLowerCase() === bookSlug.toLowerCase();
                     return (
@@ -1729,10 +1736,13 @@ export default function BiblePage() {
                         onClick={() => {
                           setBookSlug(b.slug);
                           setChapterNumber(1);
+                          setTimeout(() => {
+                            chaptersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }, 50);
                         }}
                         style={{
-                          padding: '12px 14px',
-                          fontSize: '0.88rem',
+                          padding: '10px 12px',
+                          fontSize: '0.85rem',
                           fontWeight: 800,
                           borderRadius: '6px',
                           border: `1px solid ${isSelected ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
@@ -1752,7 +1762,15 @@ export default function BiblePage() {
                 </div>
               </div>
 
-              <div style={{ borderTop: '1px solid var(--border-color, #2a2c3a)', paddingTop: '1.5rem' }}>
+              <div 
+                ref={chaptersSectionRef}
+                id="modal-chapters-section"
+                style={{ 
+                  borderTop: '1px solid var(--border-color, #2a2c3a)', 
+                  paddingTop: '1.5rem',
+                  scrollMarginTop: '1rem'
+                }}
+              >
                 <span style={{ fontSize: '0.88rem', fontWeight: 800, color: themeTokens.gold, display: 'block', marginBottom: '12px' }}>
                   إصحاحات {currentBookInfo.nameAr} ({totalChaptersInCurrentBook} إصحاح):
                 </span>

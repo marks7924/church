@@ -453,23 +453,27 @@ export default function QuestionsLibraryPage() {
         </p>
       </div>
 
-      {/* Search and Category Filters */}
+      {/* Search and Category Filters - Mobile Touch Responsive */}
       <div style={{
         background: 'var(--card-bg, rgba(255, 255, 255, 0.04))',
         border: '1px solid var(--border-color, rgba(255, 255, 255, 0.1))',
         borderRadius: '16px',
-        padding: '1.25rem',
+        padding: 'clamp(0.85rem, 3vw, 1.25rem)',
         marginBottom: '2rem',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+        boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        overflow: 'hidden'
       }}>
         {/* Search Bar */}
-        <div style={{ position: 'relative', marginBottom: '1.2rem' }}>
+        <div style={{ position: 'relative', marginBottom: '1rem', width: '100%', boxSizing: 'border-box' }}>
           <Search size={18} style={{
             position: 'absolute',
             top: '50%',
             transform: 'translateY(-50%)',
             [isAr ? 'right' : 'left']: '14px',
-            color: 'var(--text-secondary)'
+            color: 'var(--text-secondary)',
+            pointerEvents: 'none'
           }} />
           <input
             type="text"
@@ -484,26 +488,43 @@ export default function QuestionsLibraryPage() {
               background: 'rgba(0,0,0,0.3)',
               border: '1px solid rgba(255,255,255,0.15)',
               color: '#ffffff',
-              fontSize: '0.95rem',
-              boxSizing: 'border-box'
+              fontSize: 'clamp(0.85rem, 2.8vw, 0.95rem)',
+              boxSizing: 'border-box',
+              minHeight: '44px'
             }}
           />
         </div>
 
-        {/* Categories Pills */}
-        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
+        {/* Categories Pills - Smooth Swipeable Reel */}
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          overflowX: 'auto',
+          paddingBottom: '6px',
+          paddingTop: '2px',
+          scrollbarWidth: 'none',
+          WebkitOverflowScrolling: 'touch',
+          maxWidth: '100%',
+          boxSizing: 'border-box'
+        }}>
           <button
             onClick={() => setSelectedCategory('ALL')}
             style={{
-              padding: '7px 16px',
+              padding: '8px 16px',
               borderRadius: '20px',
               border: 'none',
               background: selectedCategory === 'ALL' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.06)',
               color: selectedCategory === 'ALL' ? '#000000' : 'var(--text-secondary)',
               fontWeight: 700,
               cursor: 'pointer',
-              fontSize: '0.85rem',
-              whiteSpace: 'nowrap'
+              fontSize: '0.82rem',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              minHeight: '38px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease'
             }}
           >
             {isAr ? 'الكل' : 'All Topics'}
@@ -513,15 +534,21 @@ export default function QuestionsLibraryPage() {
               key={c.slug}
               onClick={() => setSelectedCategory(c.slug)}
               style={{
-                padding: '7px 16px',
+                padding: '8px 16px',
                 borderRadius: '20px',
                 border: 'none',
                 background: selectedCategory === c.slug ? 'var(--accent-gold)' : 'rgba(255,255,255,0.06)',
                 color: selectedCategory === c.slug ? '#000000' : 'var(--text-secondary)',
                 fontWeight: 700,
                 cursor: 'pointer',
-                fontSize: '0.85rem',
-                whiteSpace: 'nowrap'
+                fontSize: '0.82rem',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                minHeight: '38px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.15s ease'
               }}
             >
               {isAr ? c.nameAr : c.nameEn}

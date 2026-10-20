@@ -235,21 +235,23 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
   };
 
   return (
-    <div style={{ direction: isAr ? 'rtl' : 'ltr' }}>
+    <div style={{ direction: isAr ? 'rtl' : 'ltr', width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflowX: 'hidden' }}>
       {/* Top Bar with Sync Status */}
       <div style={{
         background: 'rgba(255, 255, 255, 0.03)',
         border: '1px solid var(--border-color)',
         borderRadius: '14px',
-        padding: '1.25rem',
+        padding: 'clamp(0.85rem, 2.5vw, 1.25rem)',
         marginBottom: '1.8rem',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: '12px'
+        gap: '12px',
+        width: '100%',
+        boxSizing: 'border-box'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{
             width: '44px',
             height: '44px',
@@ -258,12 +260,13 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
             color: '#1877f2',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            flexShrink: 0
           }}>
             <Facebook size={24} />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+            <h2 style={{ fontSize: 'clamp(1rem, 2.5vw, 1.15rem)', fontWeight: 800, margin: 0, color: '#ffffff' }}>
               {isAr ? 'مزامنة وإشراف منشورات فيسبوك الرسمية' : 'Facebook Posts & News Moderation'}
             </h2>
             <p style={{ margin: '3px 0 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
@@ -351,17 +354,22 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
       )}
 
       {/* Moderation Status Tabs - Fully Phone Responsive */}
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        marginBottom: '1.5rem',
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
-        paddingBottom: '10px',
-        overflowX: 'auto',
-        WebkitOverflowScrolling: 'touch',
-        scrollbarWidth: 'none',
-        maxWidth: '100%'
-      }}>
+      <div 
+        className="facebook-moderator-tabs"
+        style={{
+          display: 'flex',
+          gap: '8px',
+          marginBottom: '1.5rem',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          paddingBottom: '10px',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none',
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box'
+        }}
+      >
         {(['PENDING', 'PUBLISHED', 'ARCHIVED', 'FAILED'] as const).map(tab => (
           <button
             key={tab}
@@ -369,14 +377,19 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
             style={{
               padding: '8px 16px',
               borderRadius: '8px',
-              border: 'none',
+              border: statusFilter === tab ? '1px solid var(--accent-gold)' : '1px solid rgba(255,255,255,0.08)',
               background: statusFilter === tab ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
               color: statusFilter === tab ? '#000000' : 'var(--text-secondary)',
               fontWeight: 700,
               cursor: 'pointer',
-              fontSize: '0.85rem',
+              fontSize: 'clamp(0.78rem, 2.5vw, 0.85rem)',
               whiteSpace: 'nowrap',
-              flexShrink: 0
+              flexShrink: 0,
+              minHeight: '38px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease'
             }}
           >
             {tab === 'PENDING' && (isAr ? 'بانتظار المراجعة (Pending)' : 'Pending Review')}
@@ -403,7 +416,7 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
           <p>{isAr ? 'جاري تحميل المنشورات...' : 'Loading posts...'}</p>
         </div>
       ) : posts.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '18px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: '18px', width: '100%', boxSizing: 'border-box' }}>
           {posts.map(post => (
             <div
               key={post.id}

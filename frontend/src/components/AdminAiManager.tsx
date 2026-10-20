@@ -820,26 +820,39 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
           white-space: nowrap;
           scrollbar-width: none;
           -webkit-overflow-scrolling: touch;
-          padding-bottom: 8px;
-          margin-bottom: 12px;
+          padding-bottom: 10px;
+          padding-top: 2px;
+          margin-bottom: 16px;
           border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          width: 100%;
           max-width: 100%;
+          box-sizing: border-box;
+          touch-action: pan-x;
+        }
+        .admin-ai-subtabs::-webkit-scrollbar {
+          display: none;
         }
         .admin-ai-subtab-btn {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          padding: 8px 16px;
+          padding: 8px 14px;
           border-radius: 8px;
           border: 1px solid rgba(255, 255, 255, 0.08);
           background: rgba(255, 255, 255, 0.03);
           color: var(--text-secondary);
-          font-size: 0.85rem;
+          font-size: 0.82rem;
           font-weight: 600;
           cursor: pointer;
           white-space: nowrap;
           flex-shrink: 0;
+          min-height: 40px;
           transition: all 0.2s ease;
+          user-select: none;
+        }
+        .admin-ai-subtab-btn:hover {
+          background: rgba(255, 255, 255, 0.07);
+          color: #ffffff;
         }
         .admin-ai-subtab-btn-active {
           background: var(--accent-gold) !important;
@@ -849,6 +862,15 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
           box-shadow: 0 4px 14px rgba(226, 183, 20, 0.25);
         }
         @media (max-width: 768px) {
+          .admin-ai-subtabs {
+            gap: 6px;
+            padding-bottom: 10px;
+          }
+          .admin-ai-subtab-btn {
+            padding: 8px 12px;
+            font-size: 0.78rem;
+            min-height: 38px;
+          }
           .admin-chat-grid-container {
             grid-template-columns: 1fr !important;
           }
