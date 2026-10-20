@@ -25,6 +25,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
   const [locations, setLocations] = useState<any[]>([]);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [isGlobalEventsPublic, setIsGlobalEventsPublic] = useState<boolean>(true);
 
   // Scanner States
   const [isScanning, setIsScanning] = useState<boolean>(false);
@@ -200,23 +201,58 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
       .then(data => {
         if (Array.isArray(data)) {
           setEvents(data);
-          if (data.length > 0 && !selectedEventId) {
-            setSelectedEventId(data[0].id);
-          }
+          setSelectedEventId(prev => {
+            if (prev === 'ALL') return 'ALL';
+            if (prev && data.some((d: any) => d.id === prev)) return prev;
+            return data.length > 0 ? data[0].id : '';
+          });
         }
       })
       .catch(err => console.error('Error fetching admin events:', err));
   };
 
+  const checkGlobalPublicStatus = () => {
+    fetch(`${API_URL}/invitations/public-status`)
+      .then(r => r.json())
+      .then(d => { if (typeof d.isPublic === 'boolean') setIsGlobalEventsPublic(d.isPublic); })
+      .catch(() => {});
+  };
+
   // Fetch all events on mount + silent live auto-refresh every 3.5s
   useEffect(() => {
     refreshAdminEvents(false);
+    checkGlobalPublicStatus();
     const interval = setInterval(() => {
       refreshAdminEvents(true);
+      checkGlobalPublicStatus();
     }, 3500); // 3.5s silent background auto-refresh with no delays
 
     return () => clearInterval(interval);
   }, [token]);
+
+  const handleToggleGlobalEventsPublicStatus = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/toggle-public-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ isPublic: !isGlobalEventsPublic })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsGlobalEventsPublic(data.isPublic);
+        setActionMsg(data.messageAr || (isAr ? 'تم تحديث حالة الظهور بنجاح.' : 'Visibility updated.'));
+        window.dispatchEvent(new Event('event-visibility-change'));
+      } else {
+        alert(data.error || 'Failed to toggle status.');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleCreateEventSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -733,58 +769,32 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
         </div>
 
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Toggle Show / Hide Current Event in Navbar & Site - ONLY HERE */}
-          {currentEvent && (
-            <button
-              onClick={() => handleToggleEventVisibility(currentEvent.id, currentEvent.isPublicVisible)}
-              title={isAr ? 'التحكم في ظهور أو إخفاء الفعالية وتبويبها في شريط التنقل بالموقع' : 'Toggle public visibility of this event and navbar tab'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '9px 14px',
-                borderRadius: '8px',
-                border: `1px solid ${currentEvent.isPublicVisible ? 'rgba(46, 204, 113, 0.4)' : 'rgba(231, 76, 60, 0.4)'}`,
-                background: currentEvent.isPublicVisible ? 'rgba(46, 204, 113, 0.15)' : 'rgba(231, 76, 60, 0.15)',
-                color: currentEvent.isPublicVisible ? '#2ecc71' : '#ff6b6b',
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontSize: '0.85rem'
-              }}
-            >
-              {currentEvent.isPublicVisible ? <Eye size={16} /> : <EyeOff size={16} />}
-              <span>
-                {currentEvent.isPublicVisible
-                  ? (isAr ? 'الفعالية ظاهرة للجمهور ✓ (انقر للإخفاء)' : 'Public Visible ✓ (Click to Hide)')
-                  : (isAr ? 'الفعالية مخفية ✕ (انقر للإظهار)' : 'Hidden ✕ (Click to Show)')
-                }
-              </span>
-            </button>
-          )}
-
-          {/* Delete Current Event */}
-          {currentEvent && (
-            <button
-              onClick={() => handleDeleteEvent(currentEvent.id, isAr ? currentEvent.titleAr : currentEvent.titleEn)}
-              title={isAr ? 'حذف هذه الفعالية نهائياً' : 'Delete event permanently'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '9px 14px',
-                borderRadius: '8px',
-                border: '1px solid rgba(231, 76, 60, 0.3)',
-                background: 'rgba(231, 76, 60, 0.12)',
-                color: '#e74c3c',
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontSize: '0.85rem'
-              }}
-            >
-              <Trash2 size={16} />
-              <span>{isAr ? 'حذف الفعالية' : 'Delete Event'}</span>
-            </button>
-          )}
+          {/* Master Navbar Visibility Button: Independent of individual events */}
+          <button
+            onClick={handleToggleGlobalEventsPublicStatus}
+            title={isAr ? 'التحكم في ظهور أو إخفاء صفحة الفعاليات وتبويبها في شريط الموقع' : 'Toggle public visibility of events in navbar'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '9px 16px',
+              borderRadius: '8px',
+              border: `1px solid ${isGlobalEventsPublic ? 'rgba(46, 204, 113, 0.5)' : 'rgba(230, 126, 34, 0.5)'}`,
+              background: isGlobalEventsPublic ? 'rgba(46, 204, 113, 0.15)' : 'rgba(230, 126, 34, 0.15)',
+              color: isGlobalEventsPublic ? '#2ecc71' : '#f39c12',
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}
+          >
+            {isGlobalEventsPublic ? <Eye size={16} /> : <Lock size={16} />}
+            <span>
+              {isGlobalEventsPublic
+                ? (isAr ? 'صفحة الفعاليات: عامة للجميع ✓ (انقر للتحويل لقناة خاصة)' : 'Events: Public to All ✓ (Click to make Private)')
+                : (isAr ? 'صفحة الفعاليات: قناة خاصة للمشرفين فقط 🔒 (انقر لإتاحتها للعامة)' : 'Events: Private Channel (Admins Only) 🔒 (Click to make Public)')
+              }
+            </span>
+          </button>
 
           <button
             onClick={() => setShowIssueModal(true)}
@@ -1253,6 +1263,27 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                               ? (isAr ? 'زر التقديم مفعل ومتاح ✓' : 'Apply Active ✓') 
                               : (isAr ? 'قفل / تعطيل زر التقديم' : 'Lock Apply')}
                           </button>
+
+                          <button
+                            onClick={() => handleDeleteEvent(ev.id, isAr ? ev.titleAr : ev.titleEn)}
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: '6px',
+                              border: '1px solid rgba(231, 76, 60, 0.4)',
+                              background: 'rgba(231, 76, 60, 0.12)',
+                              color: '#e74c3c',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              fontSize: '0.8rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            title={isAr ? 'حذف هذه الفعالية نهائياً' : 'Delete event permanently'}
+                          >
+                            <Trash2 size={13} />
+                            <span>{isAr ? 'حذف' : 'Delete'}</span>
+                          </button>
                         </div>
 
                         {/* Expired Event Renewal CTA */}
@@ -1635,6 +1666,28 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                       {currentEvent.isApplicationActive 
                         ? (isAr ? 'زر التقديم مفعل ومتاح ✓' : 'Apply Button Active ✓') 
                         : (isAr ? 'زر التقديم مقفل برمادي (لم يفتح بعد) 🔒' : 'Apply Button Locked 🔒')}
+                    </button>
+
+                    {/* Delete Event Button */}
+                    <button
+                      onClick={() => handleDeleteEvent(currentEvent.id, isAr ? currentEvent.titleAr : currentEvent.titleEn)}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(231, 76, 60, 0.4)',
+                        background: 'rgba(231, 76, 60, 0.15)',
+                        color: '#e74c3c',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                      title={isAr ? 'حذف هذه الفعالية نهائياً' : 'Delete event permanently'}
+                    >
+                      <Trash2 size={15} />
+                      <span>{isAr ? 'حذف الفعالية' : 'Delete Event'}</span>
                     </button>
 
                     {/* Add Location */}

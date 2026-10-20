@@ -19,6 +19,7 @@ export default function EventsPublicPage() {
   const [token, setToken] = useState<string | null>(null);
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPublicChannel, setIsPublicChannel] = useState(true);
 
   // Application modal state
   const [applyingEvent, setApplyingEvent] = useState<any | null>(null);
@@ -47,8 +48,20 @@ export default function EventsPublicPage() {
     }
   }, []);
 
+  const checkPublicStatus = () => {
+    fetch(`${API_URL}/invitations/public-status`)
+      .then(res => res.json())
+      .then(data => {
+        if (typeof data.isPublic === 'boolean') {
+          setIsPublicChannel(data.isPublic);
+        }
+      })
+      .catch(() => {});
+  };
+
   const fetchEvents = (silent: boolean = false) => {
     if (!silent) setLoading(true);
+    checkPublicStatus();
     fetch(`${API_URL}/invitations/events`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     })
@@ -70,7 +83,13 @@ export default function EventsPublicPage() {
       fetchEvents(true);
     }, 3500); // Live update every 3.5 seconds with no delays
 
-    return () => clearInterval(interval);
+    const handleEventVisibilityChange = () => fetchEvents(true);
+    window.addEventListener('event-visibility-change', handleEventVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('event-visibility-change', handleEventVisibilityChange);
+    };
   }, [token]);
 
   const handleOpenApply = (event: any, locationId?: string) => {
@@ -145,6 +164,47 @@ export default function EventsPublicPage() {
     }
   };
 
+  const isAdmin = user && ['SUPER_ADMIN', 'CHURCH_ADMIN', 'DEVELOPER', 'SECRETARY', 'PRIEST', 'BISHOP'].includes(user.role);
+
+  if (!isPublicChannel && !isAdmin && !loading) {
+    return (
+      <div style={{
+        maxWidth: '600px',
+        margin: '5rem auto',
+        textAlign: 'center',
+        padding: '2.5rem',
+        background: 'var(--card-bg, rgba(255,255,255,0.03))',
+        borderRadius: '16px',
+        border: '1px solid var(--border-color)',
+        direction: isAr ? 'rtl' : 'ltr'
+      }}>
+        <Lock size={48} style={{ color: 'var(--accent-gold)', margin: '0 auto 1.2rem auto' }} />
+        <h2 style={{ color: '#ffffff', marginBottom: '1rem', fontSize: '1.4rem', fontWeight: 800 }}>
+          {isAr ? 'صفحة الفعاليات غير متاحة حالياً' : 'Events Page is Currently Private'}
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: '2rem', fontSize: '0.95rem' }}>
+          {isAr 
+            ? 'هذه الصفحة في وضع قناة خاصة حالياً ومتاحة فقط لمسؤولي ومشرفي الكنيسة.' 
+            : 'This page is currently set to private mode and only accessible to church administrators.'}
+        </p>
+        <Link
+          href="/"
+          style={{
+            padding: '10px 24px',
+            borderRadius: '8px',
+            background: 'var(--accent-gold)',
+            color: '#000000',
+            fontWeight: 800,
+            textDecoration: 'none',
+            fontSize: '0.9rem'
+          }}
+        >
+          {isAr ? 'العودة للرئيسية' : 'Return Home'}
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       minHeight: '85vh',
@@ -153,6 +213,29 @@ export default function EventsPublicPage() {
       margin: '0 auto',
       direction: isAr ? 'rtl' : 'ltr'
     }}>
+      {/* Private Channel Banner for Admins */}
+      {!isPublicChannel && (
+        <div style={{
+          background: 'rgba(230, 126, 34, 0.15)',
+          border: '1px solid #e67e22',
+          borderRadius: '12px',
+          padding: '12px 20px',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '10px',
+          color: '#f39c12',
+          fontWeight: 800,
+          fontSize: '0.95rem'
+        }}>
+          <Lock size={18} />
+          <span>
+            {isAr ? '🔒 قناة خاصة مرئية لك فقط كمشرف (Private channel only visible to you)' : '🔒 Private channel only visible to you'}
+          </span>
+        </div>
+      )}
+
       {/* Top Breadcrumb */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '12px' }}>
         <Link
@@ -173,7 +256,7 @@ export default function EventsPublicPage() {
 
         {user && (
           <Link
-            href="/dashboard"
+            href="/dashboard?tab=my-invitations"
             style={{
               display: 'inline-flex',
               alignItems: 'center',

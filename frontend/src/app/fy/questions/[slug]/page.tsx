@@ -156,7 +156,7 @@ export default function QuestionDetailPage() {
         </h1>
 
         {/* Question Details / Context */}
-        {(question.contentAr || question.contentEn) && (
+        {(question.questionDetails || question.contentAr || question.contentEn) && (
           <div style={{
             background: 'rgba(0,0,0,0.25)',
             border: '1px solid rgba(255,255,255,0.08)',
@@ -172,7 +172,7 @@ export default function QuestionDetailPage() {
               {isAr ? 'نص السؤال والاستفسار المطروح:' : 'Submitted Question Inquiry:'}
             </strong>
             <p style={{ margin: 0 }}>
-              {isAr ? question.contentAr : (question.contentEn || question.contentAr)}
+              {question.questionDetails || (isAr ? question.contentAr : (question.contentEn || question.contentAr))}
             </p>
           </div>
         )}
@@ -191,7 +191,10 @@ export default function QuestionDetailPage() {
             whiteSpace: 'pre-line',
             textAlign: 'justify'
           }}>
-            {isAr ? question.answerAr : (question.answerEn || question.answerAr)}
+            {isAr 
+              ? (question.answerTextAr || question.answerAr || question.answerTextEn || question.answerEn || (isAr ? 'لا توجد إجابة مسجلة بعد.' : 'No answer available.')) 
+              : (question.answerTextEn || question.answerEn || question.answerTextAr || question.answerAr || 'No answer available.')
+            }
           </div>
         </div>
 

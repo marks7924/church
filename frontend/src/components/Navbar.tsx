@@ -89,27 +89,25 @@ export default function Navbar() {
     return () => clearInterval(interval);
   }, []);
 
-  // Poll API for Public Events status (live update with no delays)
-  const [hasPublicEvents, setHasPublicEvents] = useState(false);
+  // Poll API for Events Public vs Private channel status (live update with no delays)
+  const [isEventsChannelPublic, setIsEventsChannelPublic] = useState(true);
   useEffect(() => {
-    const checkPublicEvents = async () => {
+    const checkPublicStatus = async () => {
       try {
-        const res = await fetch(`${API_URL}/invitations/events`);
+        const res = await fetch(`${API_URL}/invitations/public-status`);
         if (res.ok) {
           const data = await res.json();
-          const list = Array.isArray(data) ? data : (data.events || []);
-          const active = list.some((e: any) => e.isPublicVisible);
-          setHasPublicEvents(active);
+          setIsEventsChannelPublic(data.isPublic !== false);
         }
       } catch (err) {
         // ignore
       }
     };
 
-    checkPublicEvents();
-    const interval = setInterval(checkPublicEvents, 4000); // 4s live check
+    checkPublicStatus();
+    const interval = setInterval(checkPublicStatus, 4000); // 4s live check
 
-    const handleEventVisibilityChange = () => checkPublicEvents();
+    const handleEventVisibilityChange = () => checkPublicStatus();
     window.addEventListener('event-visibility-change', handleEventVisibilityChange);
 
     return () => {
@@ -127,10 +125,13 @@ export default function Navbar() {
     router.push('/');
   };
 
+  const isAdmin = user && ['SUPER_ADMIN', 'CHURCH_ADMIN', 'DEVELOPER', 'SECRETARY', 'PRIEST', 'BISHOP'].includes(user.role);
+  const showEventsNav = isEventsChannelPublic || isAdmin;
+
   const navItems = [
     { name: t('nav_home'), path: '/' },
     { name: t('nav_fy'), path: '/fy' },
-    ...(hasPublicEvents ? [{ name: language === 'ar' ? 'مناسبات' : 'Events', path: '/events' }] : []),
+    ...(showEventsNav ? [{ name: language === 'ar' ? 'مناسبات' : 'Events', path: '/events' }] : []),
     { name: t('nav_schedule'), path: '/schedule' },
     { name: t('nav_sermons'), path: '/sermons' },
     { name: t('nav_ministries'), path: '/ministries' },

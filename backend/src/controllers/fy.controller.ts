@@ -461,6 +461,8 @@ router.get('/questions/:slug', async (req: Request, res: Response) => {
 
     const fullDetail = {
       ...question,
+      answerAr: question.answerTextAr,
+      answerEn: question.answerTextEn,
       externalLinks: links,
       tagsList: tags,
       relatedQuestions: related

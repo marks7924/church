@@ -24,6 +24,73 @@ function getOptionalUser(req: Request): any | null {
 }
 
 /**
+ * 0. GET /api/invitations/public-status
+ * Check if the Events page is currently in public mode or private (admins-only) channel
+ */
+router.get('/public-status', async (req: Request, res: Response) => {
+  try {
+    const config = await prisma.systemConfig.findUnique({
+      where: { key: 'events_navbar_public_enabled' }
+    });
+    const isPublic = config ? config.value === 'true' : true;
+    return res.status(200).json({ isPublic });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch public status' });
+  }
+});
+
+/**
+ * 0.1 POST /api/invitations/admin/toggle-public-status
+ * Master Toggle: Show/Hide the Events feature in Navbar independently of individual events
+ */
+router.post(
+  '/admin/toggle-public-status',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { isPublic } = req.body;
+      let newVal: boolean;
+      if (typeof isPublic === 'boolean') {
+        newVal = isPublic;
+      } else {
+        const current = await prisma.systemConfig.findUnique({
+          where: { key: 'events_navbar_public_enabled' }
+        });
+        newVal = current ? current.value !== 'true' : false;
+      }
+
+      await prisma.systemConfig.upsert({
+        where: { key: 'events_navbar_public_enabled' },
+        create: { key: 'events_navbar_public_enabled', value: newVal ? 'true' : 'false' },
+        update: { value: newVal ? 'true' : 'false' }
+      });
+
+      logAction(
+        req.user!.userId,
+        req.user!.email,
+        req.user!.fullName || 'Admin',
+        'EVENTS_NAVBAR_VISIBILITY_TOGGLED',
+        `Events navbar visibility set to ${newVal ? 'PUBLIC' : 'PRIVATE_ADMINS_ONLY'}`
+      );
+
+      return res.status(200).json({
+        success: true,
+        isPublic: newVal,
+        messageAr: newVal
+          ? 'تم إظهار صفحة الفعاليات وتبويبها للعامة بنجاح ✓'
+          : 'تم تحويل صفحة الفعاليات إلى قناة خاصة مرئية للمشرفين فقط 🔒',
+        messageEn: newVal
+          ? 'Events page is now visible to everyone ✓'
+          : 'Events page is now in private mode (visible to admins only) 🔒'
+      });
+    } catch (error: any) {
+      return res.status(500).json({ error: 'Failed to toggle public status.' });
+    }
+  }
+);
+
+/**
  * 1. GET /api/invitations/events
  * Public or Member view of visible published events
  * Hidden / Draft events are strictly excluded from public viewers
@@ -32,6 +99,16 @@ router.get(['/events', '/admin/events'], async (req: Request, res: Response) => 
   try {
     const optionalUser = getOptionalUser(req);
     const isStaff = optionalUser && [Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY].includes(optionalUser.role);
+
+    const config = await prisma.systemConfig.findUnique({
+      where: { key: 'events_navbar_public_enabled' }
+    });
+    const isPublicChannel = config ? config.value === 'true' : true;
+
+    // If private channel and visitor is not staff, return empty []
+    if (!isPublicChannel && !isStaff) {
+      return res.status(200).json([]);
+    }
 
     // If staff, can see all; if public visitor, only isPublicVisible === true
     const where: any = isStaff ? {} : { isPublicVisible: true };
