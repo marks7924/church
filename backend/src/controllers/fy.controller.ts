@@ -29,6 +29,10 @@ function getOptionalUser(req: Request): any | null {
  * 1. GET /api/fy/verse-of-day
  * Consistent Daily Verse for Church Timezone (Public)
  */
+/**
+ * 1. GET /api/fy/verse-of-day
+ * Consistent Daily Verse with Devotional Reflections (Public)
+ */
 router.get('/verse-of-day', async (req: Request, res: Response) => {
   try {
     const { lang = 'ar', translationCode = 'van-dyck' } = req.query;
@@ -39,33 +43,56 @@ router.get('/verse-of-day', async (req: Request, res: Response) => {
     });
 
     if (!verse) {
-      // Deterministic fallback verse from verified database chapters
+      // Deterministic fallback verse from verified database records
       verse = await prisma.bibleVerseOfDay.findFirst({
         orderBy: { createdAt: 'desc' }
       });
     }
 
+    const defaultDevotionalAr = 'الله معنا في كل خطوة، وقوته تتجلى في ضعفنا لنعيش منتصرين بنعمته كل يوم.';
+    const defaultDevotionalEn = 'God is with us at every step, and His strength is made perfect in our weakness.';
+    const defaultQuestionAr = 'كيف يمكنك الاعتماد على قوة المسيح في تحدي اليوم بدلاً من قدرتك الذاتية؟';
+    const defaultQuestionEn = 'How can you rely on Christ\'s strength today instead of your own efforts?';
+
     const versePayload = verse ? {
+      id: verse.id,
       date: verse.date,
       reference: lang === 'en' ? verse.referenceEn : verse.referenceAr,
+      referenceAr: verse.referenceAr,
+      referenceEn: verse.referenceEn,
       text: lang === 'en' ? verse.verseTextEn : verse.verseTextAr,
+      verseTextAr: verse.verseTextAr,
+      verseTextEn: verse.verseTextEn,
       translationId: verse.translationId || String(translationCode),
       translationCode: verse.translationId || String(translationCode),
       bookId: verse.bookId,
       chapterNumber: verse.chapterNumber,
-      verseNumber: verse.verseNumber
+      verseNumber: verse.verseNumber,
+      devotionalTextAr: verse.devotionalTextAr || defaultDevotionalAr,
+      devotionalTextEn: verse.devotionalTextEn || defaultDevotionalEn,
+      reflectionQuestionAr: verse.reflectionQuestionAr || defaultQuestionAr,
+      reflectionQuestionEn: verse.reflectionQuestionEn || defaultQuestionEn
     } : {
+      id: 'default-votd',
       date: todayStr,
       reference: lang === 'en' ? 'Philippians 4:13' : 'رسالة فيلبي 4: 13',
+      referenceAr: 'رسالة فيلبي 4: 13',
+      referenceEn: 'Philippians 4:13',
       text:
         lang === 'en'
           ? 'I can do all things through Christ who strengthens me.'
           : 'أَسْتَطِيعُ كُلَّ شَيْءٍ فِي الْمَسِيحِ الَّذِي يُقَوِّينِي.',
+      verseTextAr: 'أَسْتَطِيعُ كُلَّ شَيْءٍ فِي الْمَسِيحِ الَّذِي يُقَوِّينِي.',
+      verseTextEn: 'I can do all things through Christ who strengthens me.',
       translationId: String(translationCode) || 'van-dyck',
       translationCode: String(translationCode) || 'van-dyck',
       bookId: 'PHP',
       chapterNumber: 4,
-      verseNumber: 13
+      verseNumber: 13,
+      devotionalTextAr: defaultDevotionalAr,
+      devotionalTextEn: defaultDevotionalEn,
+      reflectionQuestionAr: defaultQuestionAr,
+      reflectionQuestionEn: defaultQuestionEn
     };
 
     return res.status(200).json({
@@ -76,6 +103,22 @@ router.get('/verse-of-day', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error fetching Verse of the Day:', error);
     return res.status(500).json({ error: 'Failed to fetch Verse of the Day.' });
+  }
+});
+
+/**
+ * 1.1 GET /api/fy/verse-of-day/archive
+ * Archive of previous daily verses
+ */
+router.get('/verse-of-day/archive', async (req: Request, res: Response) => {
+  try {
+    const verses = await prisma.bibleVerseOfDay.findMany({
+      orderBy: { date: 'desc' },
+      take: 60
+    });
+    return res.status(200).json(verses);
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to fetch Verse of the Day archive.' });
   }
 });
 
@@ -92,7 +135,15 @@ router.get('/bible/translations', async (req: Request, res: Response) => {
   }
 });
 
-import { getOrLoadBibleChapter, getAllBooksEnriched, findBookMeta } from '../services/bible.service';
+import {
+  getOrLoadBibleChapter,
+  getAllBooksEnriched,
+  findBookMeta,
+  searchBible,
+  getBibleStudyContext,
+  removeArabicTashkeel,
+  parseBibleReference
+} from '../services/bible.service';
 
 function resolveBookId(input: string): string {
   const meta = findBookMeta(input);
@@ -281,6 +332,772 @@ router.get(['/bible/my-progress', '/reading-progress'], async (req: Request, res
     return res.status(500).json({ error: 'Failed to fetch user progress.' });
   }
 });
+
+// ==========================================
+// UPGRADED BIBLE SYSTEMS & ENDPOINTS
+// ==========================================
+
+/**
+ * 6.1 GET /api/fy/bible/search
+ * Fast keyword search or direct reference navigation
+ */
+router.get('/bible/search', async (req: Request, res: Response) => {
+  try {
+    const q = String(req.query.q || req.query.query || '').trim();
+    const translationCode = String(req.query.translationCode || 'van-dyck');
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '40'), 10)));
+
+    if (!q) {
+      return res.status(200).json({ isDirectReference: false, totalMatches: 0, results: [] });
+    }
+
+    const searchResult = await searchBible(q, translationCode, limit);
+    return res.status(200).json(searchResult);
+  } catch (error: any) {
+    console.error('Error in bible search:', error);
+    return res.status(500).json({ error: 'Failed to search Bible.' });
+  }
+});
+
+/**
+ * 6.2 GET /api/fy/bible/study/:bookSlug/:chapterNumber/:verseNumber
+ * 5-Section Contextual Bible Study Mode
+ */
+router.get('/bible/study/:bookSlug/:chapterNumber/:verseNumber', async (req: Request, res: Response) => {
+  try {
+    const { bookSlug, chapterNumber, verseNumber } = req.params;
+    const chapNum = parseInt(chapterNumber, 10);
+    const vNum = parseInt(verseNumber, 10);
+
+    if (isNaN(chapNum) || isNaN(vNum)) {
+      return res.status(400).json({ error: 'Invalid chapter or verse number.' });
+    }
+
+    const studyData = await getBibleStudyContext(bookSlug, chapNum, vNum);
+    if (!studyData) {
+      return res.status(404).json({ error: 'Study context not found for this passage.' });
+    }
+
+    return res.status(200).json({ success: true, studyData });
+  } catch (error: any) {
+    console.error('Error in bible study context:', error);
+    return res.status(500).json({ error: 'Failed to fetch study context.' });
+  }
+});
+
+/**
+ * 6.3 FAVORITES & BOOKMARKS
+ * GET /api/fy/bible/favorites
+ * POST /api/fy/bible/favorites
+ * DELETE /api/fy/bible/favorites/:id
+ */
+router.get('/bible/favorites', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required for favorites.' });
+    }
+    const userId = user.userId || user.id;
+
+    const favorites = await prisma.bibleFavorite.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return res.status(200).json(favorites);
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to fetch favorites.' });
+  }
+});
+
+router.post('/bible/favorites', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+    const userId = user.userId || user.id;
+
+    const { bookSlug, chapterNumber, verseNumber, text, translationId, note } = req.body;
+    if (!bookSlug || !chapterNumber || !verseNumber) {
+      return res.status(400).json({ error: 'Missing passage identifiers.' });
+    }
+
+    const cleanBookId = resolveBookId(bookSlug);
+
+    // Toggle logic: if already favorited, return existing or remove if explicitly requested
+    const existing = await prisma.bibleFavorite.findFirst({
+      where: {
+        userId,
+        bookSlug: cleanBookId,
+        chapterNumber: parseInt(chapterNumber, 10),
+        verseNumber: parseInt(verseNumber, 10)
+      }
+    });
+
+    if (existing && req.body.toggle) {
+      await prisma.bibleFavorite.delete({ where: { id: existing.id } });
+      return res.status(200).json({ success: true, isFavorite: false, removedId: existing.id });
+    }
+
+    if (existing) {
+      const updated = await prisma.bibleFavorite.update({
+        where: { id: existing.id },
+        data: {
+          note: note !== undefined ? note : existing.note,
+          verseText: text || existing.verseText
+        }
+      });
+      return res.status(200).json({ success: true, isFavorite: true, favorite: updated });
+    }
+
+    const newFav = await prisma.bibleFavorite.create({
+      data: {
+        userId,
+        bookSlug: cleanBookId,
+        chapterNumber: parseInt(chapterNumber, 10),
+        verseNumber: parseInt(verseNumber, 10),
+        verseText: String(text || ''),
+        reference: `${cleanBookId} ${chapterNumber}:${verseNumber}`,
+        translationId: String(translationId || 'van-dyck'),
+        note: note ? String(note) : null
+      }
+    });
+
+    return res.status(201).json({ success: true, isFavorite: true, favorite: newFav });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to save favorite.' });
+  }
+});
+
+router.delete('/bible/favorites/:id', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    if (!user) return res.status(401).json({ error: 'Authentication required.' });
+    const userId = user.userId || user.id;
+
+    const favorite = await prisma.bibleFavorite.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!favorite || favorite.userId !== userId) {
+      return res.status(404).json({ error: 'Favorite not found or unauthorized.' });
+    }
+
+    await prisma.bibleFavorite.delete({ where: { id: req.params.id } });
+    return res.status(200).json({ success: true, message: 'Removed from favorites.' });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to delete favorite.' });
+  }
+});
+
+/**
+ * 6.4 PRIVATE SPIRITUAL JOURNAL
+ * Strict Member Isolation: SuperAdmin cannot see or access other members' private journal entries!
+ */
+router.get('/bible/journal', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required for private journal.' });
+    }
+    const userId = user.userId || user.id;
+
+    const entries = await prisma.bibleJournalEntry.findMany({
+      where: { userId },
+      orderBy: { reflectionDate: 'desc' }
+    });
+
+    const parsedEntries = entries.map(e => ({
+      ...e,
+      passages: e.passagesJson ? JSON.parse(e.passagesJson) : [],
+      tags: e.tagsJson ? JSON.parse(e.tagsJson) : []
+    }));
+
+    return res.status(200).json(parsedEntries);
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to load journal entries.' });
+  }
+});
+
+router.post('/bible/journal', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    if (!user) return res.status(401).json({ error: 'Authentication required.' });
+    const userId = user.userId || user.id;
+
+    const { title, content, reflectionDate, passages, tags, promptQuestion } = req.body;
+    if (!content || !String(content).trim()) {
+      return res.status(400).json({ error: 'Content is required for journal entry.' });
+    }
+
+    const entry = await prisma.bibleJournalEntry.create({
+      data: {
+        userId,
+        title: title ? String(title).trim() : 'تأمل روحي',
+        content: String(content).trim(),
+        reflectionDate: reflectionDate ? new Date(reflectionDate) : new Date(),
+        passagesJson: passages ? JSON.stringify(passages) : '[]',
+        tagsJson: tags ? JSON.stringify(tags) : '[]',
+        promptQuestion: promptQuestion ? String(promptQuestion).trim() : null
+      }
+    });
+
+    return res.status(201).json({
+      success: true,
+      entry: {
+        ...entry,
+        passages: entry.passagesJson ? JSON.parse(entry.passagesJson) : [],
+        tags: entry.tagsJson ? JSON.parse(entry.tagsJson) : []
+      }
+    });
+  } catch (error: any) {
+    console.error('Error creating journal entry:', error);
+    return res.status(500).json({ error: 'Failed to create journal entry.' });
+  }
+});
+
+router.patch('/bible/journal/:id', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    if (!user) return res.status(401).json({ error: 'Authentication required.' });
+    const userId = user.userId || user.id;
+
+    const existing = await prisma.bibleJournalEntry.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!existing || existing.userId !== userId) {
+      return res.status(404).json({ error: 'Journal entry not found or unauthorized.' });
+    }
+
+    const { title, content, reflectionDate, passages, tags, promptQuestion } = req.body;
+
+    const updated = await prisma.bibleJournalEntry.update({
+      where: { id: req.params.id },
+      data: {
+        title: title !== undefined ? String(title).trim() : undefined,
+        content: content !== undefined ? String(content).trim() : undefined,
+        reflectionDate: reflectionDate ? new Date(reflectionDate) : undefined,
+        passagesJson: passages !== undefined ? JSON.stringify(passages) : undefined,
+        tagsJson: tags !== undefined ? JSON.stringify(tags) : undefined,
+        promptQuestion: promptQuestion !== undefined ? promptQuestion : undefined
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      entry: {
+        ...updated,
+        passages: updated.passagesJson ? JSON.parse(updated.passagesJson) : [],
+        tags: updated.tagsJson ? JSON.parse(updated.tagsJson) : []
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to update journal entry.' });
+  }
+});
+
+router.delete('/bible/journal/:id', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    if (!user) return res.status(401).json({ error: 'Authentication required.' });
+    const userId = user.userId || user.id;
+
+    const existing = await prisma.bibleJournalEntry.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!existing || existing.userId !== userId) {
+      return res.status(404).json({ error: 'Journal entry not found or unauthorized.' });
+    }
+
+    await prisma.bibleJournalEntry.delete({ where: { id: req.params.id } });
+    return res.status(200).json({ success: true, message: 'Journal entry deleted.' });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to delete journal entry.' });
+  }
+});
+
+/**
+ * 6.5 GUIDED BIBLE READING PLANS & PROGRESS
+ */
+router.get('/bible/plans', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    const userId = user ? (user.userId || user.id) : null;
+
+    const plans = await prisma.bibleReadingPlan.findMany({
+      where: { isPublished: true },
+      include: {
+        sessions: {
+          orderBy: { dayNumber: 'asc' },
+          select: { id: true, dayNumber: true, titleAr: true, titleEn: true, referencesJson: true }
+        }
+      },
+      orderBy: { orderIndex: 'asc' }
+    });
+
+    let userProgressMap = new Map<string, any>();
+    if (userId) {
+      const progresses = await prisma.bibleUserPlanProgress.findMany({
+        where: { userId }
+      });
+      for (const p of progresses) {
+        userProgressMap.set(p.planId, {
+          ...p,
+          completedDays: p.completedDaysJson ? JSON.parse(p.completedDaysJson) : []
+        });
+      }
+    }
+
+    const payload = plans.map(plan => {
+      const progress = userProgressMap.get(plan.id) || null;
+      return {
+        id: plan.id,
+        slug: plan.slug,
+        titleAr: plan.titleAr,
+        titleEn: plan.titleEn,
+        descriptionAr: plan.descriptionAr,
+        descriptionEn: plan.descriptionEn,
+        estimatedDays: plan.estimatedDays,
+        totalSessions: plan.sessions.length,
+        userProgress: progress
+      };
+    });
+
+    return res.status(200).json(payload);
+  } catch (error: any) {
+    console.error('Error fetching plans:', error);
+    return res.status(500).json({ error: 'Failed to fetch reading plans.' });
+  }
+});
+
+router.get('/bible/plans/:slug', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    const userId = user ? (user.userId || user.id) : null;
+
+    const plan = await prisma.bibleReadingPlan.findFirst({
+      where: {
+        OR: [{ slug: req.params.slug }, { id: req.params.slug }]
+      },
+      include: {
+        sessions: {
+          orderBy: { dayNumber: 'asc' }
+        }
+      }
+    });
+
+    if (!plan) return res.status(404).json({ error: 'Reading plan not found.' });
+
+    let userProgress = null;
+    if (userId) {
+      const p = await prisma.bibleUserPlanProgress.findUnique({
+        where: {
+          userId_planId: { userId, planId: plan.id }
+        }
+      });
+      if (p) {
+        userProgress = {
+          ...p,
+          completedDays: p.completedDaysJson ? JSON.parse(p.completedDaysJson) : []
+        };
+      }
+    }
+
+    const parsedSessions = plan.sessions.map(s => ({
+      ...s,
+      references: s.referencesJson ? JSON.parse(s.referencesJson) : []
+    }));
+
+    return res.status(200).json({
+      ...plan,
+      sessions: parsedSessions,
+      userProgress
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to fetch reading plan details.' });
+  }
+});
+
+router.post('/bible/plans/:slug/join', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    if (!user) return res.status(401).json({ error: 'Authentication required to start reading plan.' });
+    const userId = user.userId || user.id;
+
+    const plan = await prisma.bibleReadingPlan.findFirst({
+      where: { OR: [{ slug: req.params.slug }, { id: req.params.slug }] }
+    });
+    if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+
+    const progress = await prisma.bibleUserPlanProgress.upsert({
+      where: {
+        userId_planId: { userId, planId: plan.id }
+      },
+      update: {
+        status: 'ACTIVE'
+      },
+      create: {
+        userId,
+        planId: plan.id,
+        completedDaysJson: '[]',
+        status: 'ACTIVE'
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      progress: {
+        ...progress,
+        completedDays: progress.completedDaysJson ? JSON.parse(progress.completedDaysJson) : []
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to start reading plan.' });
+  }
+});
+
+router.post('/bible/plans/:slug/complete-session', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    if (!user) return res.status(401).json({ error: 'Authentication required.' });
+    const userId = user.userId || user.id;
+
+    const plan = await prisma.bibleReadingPlan.findFirst({
+      where: { OR: [{ slug: req.params.slug }, { id: req.params.slug }] },
+      include: { sessions: true }
+    });
+    if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+
+    const dayNumber = parseInt(String(req.body.dayNumber || '1'), 10);
+
+    let progress = await prisma.bibleUserPlanProgress.findUnique({
+      where: { userId_planId: { userId, planId: plan.id } }
+    });
+
+    let completedDays: number[] = progress?.completedDaysJson
+      ? JSON.parse(progress.completedDaysJson)
+      : [];
+
+    if (!completedDays.includes(dayNumber)) {
+      completedDays.push(dayNumber);
+      completedDays.sort((a, b) => a - b);
+    }
+
+    const isAllCompleted = completedDays.length >= plan.estimatedDays;
+
+    const updated = await prisma.bibleUserPlanProgress.upsert({
+      where: { userId_planId: { userId, planId: plan.id } },
+      update: {
+        completedDaysJson: JSON.stringify(completedDays),
+        status: isAllCompleted ? 'COMPLETED' : 'ACTIVE',
+        completedAt: isAllCompleted ? new Date() : null,
+        lastReadAt: new Date()
+      },
+      create: {
+        userId,
+        planId: plan.id,
+        completedDaysJson: JSON.stringify(completedDays),
+        status: isAllCompleted ? 'COMPLETED' : 'ACTIVE',
+        completedAt: isAllCompleted ? new Date() : null,
+        lastReadAt: new Date()
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      progress: {
+        ...updated,
+        completedDays
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to complete session.' });
+  }
+});
+
+router.post('/bible/plans/:slug/restart', async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    if (!user) return res.status(401).json({ error: 'Authentication required.' });
+    const userId = user.userId || user.id;
+
+    const plan = await prisma.bibleReadingPlan.findFirst({
+      where: { OR: [{ slug: req.params.slug }, { id: req.params.slug }] }
+    });
+    if (!plan) return res.status(404).json({ error: 'Plan not found.' });
+
+    const updated = await prisma.bibleUserPlanProgress.upsert({
+      where: { userId_planId: { userId, planId: plan.id } },
+      update: {
+        completedDaysJson: '[]',
+        status: 'ACTIVE',
+        completedAt: null
+      },
+      create: {
+        userId,
+        planId: plan.id,
+        completedDaysJson: '[]',
+        status: 'ACTIVE'
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      progress: {
+        ...updated,
+        completedDays: []
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to restart plan.' });
+  }
+});
+
+/**
+ * 6.6 SCRIPTURE TOPIC DISCOVERY
+ */
+router.get('/bible/topics', async (req: Request, res: Response) => {
+  try {
+    const topics = await prisma.bibleTopic.findMany({
+      orderBy: { orderIndex: 'asc' }
+    });
+
+    const parsed = topics.map(t => ({
+      ...t,
+      passages: t.passagesJson ? JSON.parse(t.passagesJson) : [],
+      relatedSlugs: t.relatedSlugsJson ? JSON.parse(t.relatedSlugsJson) : []
+    }));
+
+    return res.status(200).json(parsed);
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to fetch topics.' });
+  }
+});
+
+router.get('/bible/topics/:slug', async (req: Request, res: Response) => {
+  try {
+    const topic = await prisma.bibleTopic.findFirst({
+      where: { OR: [{ slug: req.params.slug }, { id: req.params.slug }] }
+    });
+
+    if (!topic) return res.status(404).json({ error: 'Topic not found.' });
+
+    const relatedTopics = await prisma.bibleTopic.findMany({
+      where: {
+        slug: { not: topic.slug }
+      },
+      take: 4
+    });
+
+    return res.status(200).json({
+      ...topic,
+      passages: topic.passagesJson ? JSON.parse(topic.passagesJson) : [],
+      relatedTopics: relatedTopics.map(rt => ({
+        slug: rt.slug,
+        nameAr: rt.nameAr,
+        nameEn: rt.nameEn,
+        category: rt.category
+      }))
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to fetch topic details.' });
+  }
+});
+
+/**
+ * 6.7 INTERACTIVE BIBLE EXPLORER (Timeline, People, Places)
+ */
+router.get('/bible/timeline', async (req: Request, res: Response) => {
+  try {
+    const events = await prisma.bibleTimelineEvent.findMany({
+      orderBy: { orderIndex: 'asc' }
+    });
+
+    const parsed = events.map(e => ({
+      ...e,
+      references: e.referencesJson ? JSON.parse(e.referencesJson) : [],
+      people: e.peopleJson ? JSON.parse(e.peopleJson) : [],
+      places: e.placesJson ? JSON.parse(e.placesJson) : []
+    }));
+
+    return res.status(200).json(parsed);
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to fetch timeline.' });
+  }
+});
+
+router.get('/bible/people', async (req: Request, res: Response) => {
+  try {
+    const people = await prisma.biblePerson.findMany({
+      orderBy: { nameAr: 'asc' }
+    });
+
+    const parsed = people.map(p => ({
+      ...p,
+      references: p.referencesJson ? JSON.parse(p.referencesJson) : [],
+      relations: p.relationsJson ? JSON.parse(p.relationsJson) : [],
+      events: p.eventsJson ? JSON.parse(p.eventsJson) : []
+    }));
+
+    return res.status(200).json(parsed);
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to fetch biblical people.' });
+  }
+});
+
+router.get('/bible/places', async (req: Request, res: Response) => {
+  try {
+    const places = await prisma.biblePlace.findMany({
+      orderBy: { nameAr: 'asc' }
+    });
+
+    const parsed = places.map(p => ({
+      ...p,
+      references: p.referencesJson ? JSON.parse(p.referencesJson) : []
+    }));
+
+    return res.status(200).json(parsed);
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to fetch biblical places.' });
+  }
+});
+
+/**
+ * 6.8 TWO-BACKGROUND SCRIPTURE GENERATOR CONFIGURATION
+ * Public endpoint to get verified paths, safe margins, and defaults
+ */
+router.get('/bible/backgrounds/config', async (req: Request, res: Response) => {
+  try {
+    let config = await prisma.bibleBackgroundConfig.findFirst({
+      where: { id: 'default' }
+    });
+
+    if (!config) {
+      config = await prisma.bibleBackgroundConfig.create({
+        data: {
+          id: 'default',
+          darkAssetPath: '/images/bible/bible-bg-dark.png',
+          lightAssetPath: '/images/bible/bible-bg-light.png',
+          darkTextColor: '#ffffff',
+          lightTextColor: '#18191c',
+          horizontalMarginPercent: 9.0,
+          verticalMarginPercent: 11.0,
+          darkOverlayOpacity: 0.15,
+          lightOverlayOpacity: 0.05,
+          defaultFontFamily: 'Amiri'
+        }
+      });
+    }
+
+    return res.status(200).json(config);
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to fetch background configuration.' });
+  }
+});
+
+/**
+ * Admin update for background generator configuration
+ */
+router.patch(
+  '/bible/backgrounds/config',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const config = await prisma.bibleBackgroundConfig.findFirst({
+        where: { id: 'default' }
+      });
+
+      if (!config) return res.status(404).json({ error: 'Config not found.' });
+
+      const updated = await prisma.bibleBackgroundConfig.update({
+        where: { id: config.id },
+        data: {
+          darkTextColor: req.body.darkTextColor,
+          lightTextColor: req.body.lightTextColor,
+          horizontalMarginPercent: req.body.horizontalMarginPercent !== undefined ? Number(req.body.horizontalMarginPercent) : undefined,
+          verticalMarginPercent: req.body.verticalMarginPercent !== undefined ? Number(req.body.verticalMarginPercent) : undefined,
+          darkOverlayOpacity: req.body.darkOverlayOpacity !== undefined ? Number(req.body.darkOverlayOpacity) : undefined,
+          lightOverlayOpacity: req.body.lightOverlayOpacity !== undefined ? Number(req.body.lightOverlayOpacity) : undefined,
+          defaultFontFamily: req.body.defaultFontFamily
+        }
+      });
+
+      return res.status(200).json({ success: true, config: updated });
+    } catch (error: any) {
+      return res.status(500).json({ error: 'Failed to update background config.' });
+    }
+  }
+);
+
+/**
+ * 6.9 ADMIN VERSE OF THE DAY SCHEDULER
+ */
+router.post(
+  '/verse-of-day/admin/schedule',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.PRIEST]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const {
+        date,
+        bookId,
+        chapterNumber,
+        verseNumber,
+        verseTextAr,
+        verseTextEn,
+        referenceAr,
+        referenceEn,
+        devotionalTextAr,
+        devotionalTextEn,
+        reflectionQuestionAr,
+        reflectionQuestionEn
+      } = req.body;
+
+      if (!date || !verseTextAr || !referenceAr) {
+        return res.status(400).json({ error: 'Date, verseTextAr, and referenceAr are required.' });
+      }
+
+      const scheduled = await prisma.bibleVerseOfDay.upsert({
+        where: { date },
+        update: {
+          bookId: bookId || 'PHP',
+          chapterNumber: parseInt(String(chapterNumber || 1), 10),
+          verseNumber: parseInt(String(verseNumber || 1), 10),
+          verseTextAr,
+          verseTextEn: verseTextEn || verseTextAr,
+          referenceAr,
+          referenceEn: referenceEn || referenceAr,
+          devotionalTextAr: devotionalTextAr || null,
+          devotionalTextEn: devotionalTextEn || null,
+          reflectionQuestionAr: reflectionQuestionAr || null,
+          reflectionQuestionEn: reflectionQuestionEn || null
+        },
+        create: {
+          date,
+          bookId: bookId || 'PHP',
+          chapterNumber: parseInt(String(chapterNumber || 1), 10),
+          verseNumber: parseInt(String(verseNumber || 1), 10),
+          verseTextAr,
+          verseTextEn: verseTextEn || verseTextAr,
+          referenceAr,
+          referenceEn: referenceEn || referenceAr,
+          devotionalTextAr: devotionalTextAr || null,
+          devotionalTextEn: devotionalTextEn || null,
+          reflectionQuestionAr: reflectionQuestionAr || null,
+          reflectionQuestionEn: reflectionQuestionEn || null
+        }
+      });
+
+      return res.status(200).json({ success: true, verse: scheduled });
+    } catch (error: any) {
+      return res.status(500).json({ error: 'Failed to schedule Verse of the Day.' });
+    }
+  }
+);
 
 // ==========================================
 // MEMBER-ONLY QUESTIONS ABOUT GOD LIBRARY

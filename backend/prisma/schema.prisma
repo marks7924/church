@@ -72,6 +72,9 @@ model User {
   eventApplications    EventApplication[]
   bibleProgress        BibleReadingProgress[]
   biblePosition        BibleLastPosition?
+  bibleFavorites       BibleFavorite[]
+  bibleJournals        BibleJournalEntry[]
+  biblePlanProgress    BibleUserPlanProgress[]
   fySubmissions        FyMemberQuestionSubmission[]
 }
 
@@ -614,20 +617,188 @@ model BibleLastPosition {
 }
 
 model BibleVerseOfDay {
-  id            String   @id @default(uuid())
-  date          String   @unique // YYYY-MM-DD
-  translationId String   @default("van-dyck")
-  bookId        String
-  chapterNumber Int
-  verseNumber   Int
-  verseTextAr   String
-  verseTextEn   String
-  referenceAr   String
-  referenceEn   String
-  isManual      Boolean  @default(false)
-  createdAt     DateTime @default(now())
+  id                    String   @id @default(uuid())
+  date                  String   @unique // YYYY-MM-DD
+  translationId         String   @default("van-dyck")
+  bookId                String
+  chapterNumber         Int
+  verseNumber           Int
+  verseTextAr           String
+  verseTextEn           String
+  referenceAr           String
+  referenceEn           String
+  devotionalTextAr      String?
+  devotionalTextEn      String?
+  reflectionQuestionAr  String?
+  reflectionQuestionEn  String?
+  isPublished           Boolean  @default(true)
+  isManual              Boolean  @default(false)
+  createdAt             DateTime @default(now())
 
   @@index([date])
+}
+
+model BibleFavorite {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  translationId String   @default("van-dyck")
+  bookSlug      String
+  chapterNumber Int
+  verseNumber   Int
+  verseText     String
+  reference     String
+  note          String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([bookSlug, chapterNumber])
+}
+
+model BibleJournalEntry {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  content         String
+  reflectionDate  DateTime @default(now())
+  passagesJson    String   @default("[]")
+  tagsJson        String   @default("[]")
+  promptQuestion  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([reflectionDate])
+}
+
+model BibleReadingPlan {
+  id            String                    @id @default(uuid())
+  slug          String                    @unique
+  titleAr       String
+  titleEn       String
+  descriptionAr String
+  descriptionEn String
+  estimatedDays Int                       @default(30)
+  isPublished   Boolean                   @default(true)
+  orderIndex    Int                       @default(0)
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  sessions      BibleReadingPlanSession[]
+  userProgress  BibleUserPlanProgress[]
+}
+
+model BibleReadingPlanSession {
+  id                    String           @id @default(uuid())
+  planId                String
+  plan                  BibleReadingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  dayNumber             Int
+  titleAr               String
+  titleEn               String
+  referencesJson        String           @default("[]")
+  reflectionQuestionAr  String?
+  reflectionQuestionEn  String?
+
+  @@unique([planId, dayNumber])
+  @@index([planId])
+}
+
+model BibleUserPlanProgress {
+  id                String           @id @default(uuid())
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId            String
+  plan              BibleReadingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  status            String           @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED
+  completedDaysJson String           @default("[]")
+  startedAt         DateTime         @default(now())
+  lastReadAt        DateTime         @default(now())
+  completedAt       DateTime?
+
+  @@unique([userId, planId])
+  @@index([userId])
+}
+
+model BibleTopic {
+  id               String   @id @default(uuid())
+  slug             String   @unique
+  nameAr           String
+  nameEn           String
+  descriptionAr    String
+  descriptionEn    String
+  category         String   @default("life")
+  passagesJson     String   @default("[]")
+  relatedSlugsJson String   @default("[]")
+  orderIndex       Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model BibleTimelineEvent {
+  id             String   @id @default(uuid())
+  slug           String   @unique
+  period         String
+  periodNameAr   String
+  periodNameEn   String
+  titleAr        String
+  titleEn        String
+  descriptionAr  String
+  descriptionEn  String
+  orderIndex     Int      @default(0)
+  referencesJson String   @default("[]")
+  peopleJson     String   @default("[]")
+  placesJson     String   @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([period])
+}
+
+model BiblePerson {
+  id             String   @id @default(uuid())
+  slug           String   @unique
+  nameAr         String
+  nameEn         String
+  aliasesAr      String?
+  aliasesEn      String?
+  roleAr         String
+  roleEn         String
+  bioAr          String
+  bioEn          String
+  referencesJson String   @default("[]")
+  relationsJson  String   @default("[]")
+  eventsJson     String   @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model BiblePlace {
+  id             String   @id @default(uuid())
+  slug           String   @unique
+  nameAr         String
+  nameEn         String
+  descriptionAr  String
+  descriptionEn  String
+  regionAr       String?
+  regionEn       String?
+  referencesJson String   @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model BibleBackgroundConfig {
+  id                      String   @id @default("default")
+  darkAssetPath           String   @default("/images/bible/bible-bg-dark.png")
+  lightAssetPath          String   @default("/images/bible/bible-bg-light.png")
+  darkTextColor           String   @default("#ffffff")
+  lightTextColor          String   @default("#18191c")
+  darkOverlayOpacity      Float    @default(0.15)
+  lightOverlayOpacity     Float    @default(0.05)
+  horizontalMarginPercent Float    @default(9.0)
+  verticalMarginPercent   Float    @default(11.0)
+  defaultFontFamily       String   @default("Amiri")
+  updatedAt               DateTime @updatedAt
 }
 
 model FyQuestionCategory {

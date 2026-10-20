@@ -9,7 +9,7 @@ import { formatTimeSlot, formatDateTime } from '../../utils/format';
 import { 
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
   Calendar, CheckCircle, HelpCircle, ArrowRight, ArrowLeft, Send, Plus, Video, FileText, ChevronDown, Scissors, Clock, Sparkles, MessageSquare,
-  Facebook, Mail, QrCode, Search, UserPlus, Edit3, Trash2, ChevronUp, AlertTriangle
+  Facebook, Mail, QrCode, Search, UserPlus, Edit3, Trash2, ChevronUp, AlertTriangle, BookOpen
 } from 'lucide-react';
 import PriestScheduleManager from '../../components/PriestScheduleManager';
 import ImageCropModal from '../../components/ImageCropModal';
@@ -19,6 +19,7 @@ import AdminEmailCenter from '../../components/AdminEmailCenter';
 import EventsInvitationsManager from '../../components/EventsInvitationsManager';
 import FyQuestionModerator from '../../components/FyQuestionModerator';
 import VipInvitationCard from '../../components/VipInvitationCard';
+import BibleAdminManager from '../../components/BibleAdminManager';
 
 interface Booking {
   id: string;
@@ -521,6 +522,13 @@ const initialAddMemberFormState = {
 
     // Settings and messages visible to SuperAdmin, Developer, Admin, Secretary, Priest, Bishop
     if (['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY', 'PRIEST', 'BISHOP'].includes(role)) {
+      tabs.push({
+        id: 'manage-bible',
+        labelAr: language === 'ar' ? 'إدارة الكتاب المقدس والخلفيات' : 'Bible & Backgrounds Admin',
+        labelEn: language === 'ar' ? 'إدارة الكتاب المقدس والخلفيات' : 'Bible & Backgrounds Admin',
+        icon: <BookOpen size={16} />,
+        category: 'admin'
+      });
       tabs.push({
         id: 'manage-site-info',
         labelAr: language === 'ar' ? 'محتوى وإعدادات الموقع' : 'Manage Site & Services',
@@ -7583,6 +7591,13 @@ const initialAddMemberFormState = {
       {activeTab === 'fy-moderation' && (
         <div className="dashboard-panel">
           <FyQuestionModerator token={token} />
+        </div>
+      )}
+
+      {/* Tab: Bible & Backgrounds Administration */}
+      {activeTab === 'manage-bible' && (
+        <div className="dashboard-panel">
+          <BibleAdminManager token={token} />
         </div>
       )}
 
