@@ -2461,41 +2461,37 @@ const initialAddMemberFormState = {
 
             {myInvitations.length > 0 ? (
               <div>
-                {/* 👑 VIP Passes Category */}
-                <div style={{ marginBottom: '2rem' }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '10px 16px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(90deg, rgba(226, 183, 20, 0.15) 0%, rgba(226, 183, 20, 0.02) 100%)',
-                    border: '1px solid rgba(226, 183, 20, 0.35)',
-                    marginBottom: '1.2rem'
-                  }}>
-                    <span style={{ fontSize: '1.2rem' }}>👑</span>
-                    <div>
-                      <h4 style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '1.05rem', fontWeight: 800 }}>
-                        {language === 'ar' ? 'دعوات كبار الزوار الرسمية (VIP Passes)' : 'Official VIP Passes'}
-                      </h4>
-                      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        {language === 'ar' ? 'دعوات رسمية صادرة من إدارة الكنيسة بإطار ذهبي ومعاملة VIP' : 'Official passes issued by Church admin with gold frame distinction'}
-                      </p>
+                {/* 👑 VIP Passes Category (only shown if user has at least 1 VIP pass) */}
+                {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).length > 0 && (
+                  <div style={{ marginBottom: '2rem' }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '10px 16px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(90deg, rgba(226, 183, 20, 0.15) 0%, rgba(226, 183, 20, 0.02) 100%)',
+                      border: '1px solid rgba(226, 183, 20, 0.35)',
+                      marginBottom: '1.2rem'
+                    }}>
+                      <span style={{ fontSize: '1.2rem' }}>👑</span>
+                      <div>
+                        <h4 style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '1.05rem', fontWeight: 800 }}>
+                          {language === 'ar' ? 'دعوات كبار الزوار الرسمية (VIP Passes)' : 'Official VIP Passes'}
+                        </h4>
+                        <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          {language === 'ar' ? 'دعوات رسمية صادرة من إدارة الكنيسة بإطار ذهبي ومعاملة VIP' : 'Official passes issued by Church admin with gold frame distinction'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).length > 0 ? (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
                       {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).map(inv => (
                         <VipInvitationCard key={inv.id} invitation={inv} language={language} onCancel={handleOpenCancelModal} />
                       ))}
                     </div>
-                  ) : (
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.5rem 0' }}>
-                      {language === 'ar' ? 'لا توجد دعوات كبار زوار (VIP) صادرة لحسابك حاليًا.' : 'No VIP passes issued.'}
-                    </p>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* 🎟️ Standard Passes Category */}
                 <div>
@@ -2553,41 +2549,37 @@ const initialAddMemberFormState = {
 
             {myInvitations.length > 0 ? (
               <div>
-                {/* 👑 VIP Passes Category */}
-                <div style={{ marginBottom: '2.5rem' }}>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '10px 16px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(90deg, rgba(226, 183, 20, 0.15) 0%, rgba(226, 183, 20, 0.02) 100%)',
-                    border: '1px solid rgba(226, 183, 20, 0.35)',
-                    marginBottom: '1.2rem'
-                  }}>
-                    <span style={{ fontSize: '1.2rem' }}>👑</span>
-                    <div>
-                      <h4 style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '1.05rem', fontWeight: 800 }}>
-                        {language === 'ar' ? 'دعوات كبار الزوار الرسمية (VIP Passes)' : 'Official VIP Passes'}
-                      </h4>
-                      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        {language === 'ar' ? 'دعوات رسمية خاصة صادرة من إدارة الكنيسة بإطار ذهبي ومعاملة VIP' : 'Official passes issued by Church admin with gold frame distinction'}
-                      </p>
+                {/* 👑 VIP Passes Category (only shown if user has at least 1 VIP pass) */}
+                {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).length > 0 && (
+                  <div style={{ marginBottom: '2.5rem' }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '10px 16px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(90deg, rgba(226, 183, 20, 0.15) 0%, rgba(226, 183, 20, 0.02) 100%)',
+                      border: '1px solid rgba(226, 183, 20, 0.35)',
+                      marginBottom: '1.2rem'
+                    }}>
+                      <span style={{ fontSize: '1.2rem' }}>👑</span>
+                      <div>
+                        <h4 style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '1.05rem', fontWeight: 800 }}>
+                          {language === 'ar' ? 'دعوات كبار الزوار الرسمية (VIP Passes)' : 'Official VIP Passes'}
+                        </h4>
+                        <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          {language === 'ar' ? 'دعوات رسمية خاصة صادرة من إدارة الكنيسة بإطار ذهبي ومعاملة VIP' : 'Official passes issued by Church admin with gold frame distinction'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).length > 0 ? (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
                       {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).map(inv => (
                         <VipInvitationCard key={inv.id} invitation={inv} language={language} onCancel={handleOpenCancelModal} />
                       ))}
                     </div>
-                  ) : (
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.5rem 0' }}>
-                      {language === 'ar' ? 'لا توجد دعوات كبار زوار (VIP) صادرة لحسابك حتى الآن.' : 'No VIP passes issued.'}
-                    </p>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* 🎟️ Standard Passes Category */}
                 <div>

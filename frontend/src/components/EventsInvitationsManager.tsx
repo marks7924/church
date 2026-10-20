@@ -469,11 +469,12 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setEvents(data);
+          const filtered = data.filter((d: any) => d.type !== 'TRIP' && d.type !== 'CONFERENCE');
+          setEvents(filtered);
           setSelectedEventId(prev => {
             if (prev === 'ALL') return 'ALL';
-            if (prev && data.some((d: any) => d.id === prev)) return prev;
-            return data.length > 0 ? data[0].id : '';
+            if (prev && filtered.some((d: any) => d.id === prev)) return prev;
+            return filtered.length > 0 ? filtered[0].id : '';
           });
         }
       })
@@ -927,12 +928,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
       if (res.ok) {
         setActionMsg(isAr ? '✓ تم فتح المكان بنجاح وتحديث السعة وتسجيل العملية!' : '✓ Location successfully reopened and capacity audited!');
         setReopenLocation(null);
-        // Refresh events
-        fetch(`${API_URL}/invitations/admin/events`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-          .then(r => r.json())
-          .then(d => { if (Array.isArray(d)) setEvents(d); });
+        refreshAdminEvents(true);
       } else {
         setActionMsg(data.error || (isAr ? 'فشل فتح المكان.' : 'Failed to reopen location.'));
       }

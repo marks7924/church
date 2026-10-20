@@ -111,10 +111,14 @@ router.get(['/events', '/admin/events'], async (req: Request, res: Response) => 
       return res.status(200).json([]);
     }
 
-    // If staff, can see all; if public visitor, events that are visible or application-active
+    // Strict isolation: Trips and Conferences belong exclusively to the Trips system, not Church Continuous Events/Invitations
+    const typeFilter = { notIn: ['TRIP', 'CONFERENCE'] };
+
+    // If staff, can see all church events; if public visitor, church events that are visible or application-active
     const where: any = isStaff
-      ? {}
+      ? { type: typeFilter }
       : {
+          type: typeFilter,
           status: { not: 'CANCELLED' },
           OR: [
             { isPublicVisible: true },
@@ -182,7 +186,7 @@ router.get('/events/:id', async (req: Request, res: Response) => {
       }
     });
 
-    if (!event) {
+    if (!event || event.type === 'TRIP' || event.type === 'CONFERENCE') {
       return res.status(404).json({ error: 'Event not found.' });
     }
 
@@ -219,7 +223,7 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
       include: { locations: true }
     });
 
-    if (!event) {
+    if (!event || event.type === 'TRIP' || event.type === 'CONFERENCE') {
       return res.status(404).json({ error: 'Event not found.' });
     }
 

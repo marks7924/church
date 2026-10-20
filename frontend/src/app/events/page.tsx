@@ -95,7 +95,7 @@ export default function EventsPublicPage() {
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setEvents(data);
+          setEvents(data.filter((e: any) => e.type !== 'TRIP' && e.type !== 'CONFERENCE'));
         }
       })
       .catch(err => console.error('Error fetching public events:', err))
