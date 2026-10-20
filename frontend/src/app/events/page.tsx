@@ -47,8 +47,8 @@ export default function EventsPublicPage() {
     }
   }, []);
 
-  const fetchEvents = () => {
-    setLoading(true);
+  const fetchEvents = (silent: boolean = false) => {
+    if (!silent) setLoading(true);
     fetch(`${API_URL}/invitations/events`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     })
@@ -59,11 +59,18 @@ export default function EventsPublicPage() {
         }
       })
       .catch(err => console.error('Error fetching public events:', err))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   };
 
   useEffect(() => {
-    fetchEvents();
+    fetchEvents(false);
+    const interval = setInterval(() => {
+      fetchEvents(true);
+    }, 3500); // Live update every 3.5 seconds with no delays
+
+    return () => clearInterval(interval);
   }, [token]);
 
   const handleOpenApply = (event: any, locationId?: string) => {

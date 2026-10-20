@@ -50,6 +50,12 @@ router.get(['/events', '/admin/events'], async (req: Request, res: Response) => 
             confirmedCount: true,
             isFull: true
           }
+        },
+        _count: {
+          select: {
+            invitations: true,
+            applications: true
+          }
         }
       }
     });
@@ -933,6 +939,22 @@ router.patch(
             isFull: false
           }
         });
+      }
+
+      if (Array.isArray(req.body.locationCapacities)) {
+        for (const locCap of req.body.locationCapacities) {
+          if (locCap.id && locCap.maxCapacity) {
+            const capNum = Math.max(1, parseInt(String(locCap.maxCapacity), 10));
+            const existingLoc = await prisma.eventLocation.findUnique({ where: { id: locCap.id } });
+            await prisma.eventLocation.update({
+              where: { id: locCap.id },
+              data: {
+                maxCapacity: capNum,
+                isFull: existingLoc ? existingLoc.confirmedCount >= capNum : false
+              }
+            });
+          }
+        }
       }
 
       const updated = await prisma.event.update({

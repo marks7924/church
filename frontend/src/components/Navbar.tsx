@@ -89,6 +89,35 @@ export default function Navbar() {
     return () => clearInterval(interval);
   }, []);
 
+  // Poll API for Public Events status (live update with no delays)
+  const [hasPublicEvents, setHasPublicEvents] = useState(false);
+  useEffect(() => {
+    const checkPublicEvents = async () => {
+      try {
+        const res = await fetch(`${API_URL}/invitations/events`);
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : (data.events || []);
+          const active = list.some((e: any) => e.isPublicVisible);
+          setHasPublicEvents(active);
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    checkPublicEvents();
+    const interval = setInterval(checkPublicEvents, 4000); // 4s live check
+
+    const handleEventVisibilityChange = () => checkPublicEvents();
+    window.addEventListener('event-visibility-change', handleEventVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('event-visibility-change', handleEventVisibilityChange);
+    };
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem('church-token');
     localStorage.removeItem('church-refresh-token');
@@ -101,6 +130,7 @@ export default function Navbar() {
   const navItems = [
     { name: t('nav_home'), path: '/' },
     { name: t('nav_fy'), path: '/fy' },
+    ...(hasPublicEvents ? [{ name: language === 'ar' ? 'مناسبات' : 'Events', path: '/events' }] : []),
     { name: t('nav_schedule'), path: '/schedule' },
     { name: t('nav_sermons'), path: '/sermons' },
     { name: t('nav_ministries'), path: '/ministries' },

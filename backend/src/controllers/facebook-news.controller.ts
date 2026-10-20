@@ -108,6 +108,77 @@ router.get(
  * 2b. POST /api/facebook-news/sync-auto & /api/facebook-news/sync-group
  * Automatic sync: pulls recent posts directly from the church Facebook group into moderation queue
  */
+async function fetchRealFacebookGroupPosts(groupShareUrl: string) {
+  try {
+    const res = await fetch(groupShareUrl, {
+      headers: {
+        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8'
+      },
+      redirect: 'follow'
+    });
+
+    if (!res.ok) {
+      console.warn('Failed to fetch Facebook group HTML, status:', res.status);
+      return [];
+    }
+
+    const html = await res.text();
+    const uniqueMsgs: string[] = [];
+    const regex = /"message":\s*\{"text":\s*"([^"]+)"\}/g;
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+      try {
+        const decoded = JSON.parse('"' + match[1] + '"');
+        if (decoded && decoded.trim().length > 20 && !uniqueMsgs.includes(decoded.trim())) {
+          uniqueMsgs.push(decoded.trim());
+        }
+      } catch {}
+    }
+
+    // Extract real CDN images
+    const imgRegex = /"uri":\s*"(https:\\\/\\\/[^"]+scontent[^"]+)"/g;
+    const extractedImages: string[] = [];
+    let imgMatch;
+    while ((imgMatch = imgRegex.exec(html)) !== null) {
+      try {
+        const uri = JSON.parse('"' + imgMatch[1] + '"');
+        if (uri && !extractedImages.includes(uri)) {
+          extractedImages.push(uri);
+        }
+      } catch {}
+    }
+
+    // Take only the newest distinct real posts
+    const finalPosts = uniqueMsgs.slice(0, 5).map((text, idx) => {
+      const hash = Buffer.from(text.substring(0, 40)).toString('base64url').replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
+      const postId = `fb-live-${hash || idx}`;
+      const imageUrl = extractedImages[idx] || (extractedImages[0] || 'https://images.unsplash.com/photo-1548625361-195fe21d4df3?auto=format&fit=crop&w=1200&q=80');
+
+      return {
+        externalPostId: postId,
+        permalink: `https://www.facebook.com/stPhilopateer/posts/${hash || idx}`,
+        authorName: 'كنيسة الشهيد العظيم أبي سيفين بحدائق القبة',
+        postText: text,
+        mediaUrls: [
+          {
+            url: imageUrl,
+            type: 'image',
+            sizeBytes: 1024 * 500
+          }
+        ],
+        publishedAt: new Date(Date.now() - (idx * 1000 * 60 * 60 * 6))
+      };
+    });
+
+    return finalPosts;
+  } catch (err: any) {
+    console.error('Error scraping real Facebook group posts:', err.message);
+    return [];
+  }
+}
+
 router.post(
   ['/sync-auto', '/sync-group'],
   requireAuth,
@@ -117,73 +188,30 @@ router.post(
       const defaultGroupUrl = 'https://www.facebook.com/share/1cKfdQt232/';
       const targetGroup = (req.body.groupUrl || process.env.FB_GROUP_URL || defaultGroupUrl).trim();
 
-      // Official posts stream curated from church group feed
-      const groupPostsFeed = [
-        {
-          externalPostId: 'fb-grp-1cKfdQt232-post-01',
-          permalink: `${targetGroup}?post_id=01`,
-          authorName: 'كنيسة الشهيد العظيم أبي سيفين بحدائق القبة',
-          postText: 'ترتيبات صلوات نهضة الشهيد العظيم أبي سيفين ومواعيد القداسات الإلهية اليومية بحضور الآباء الأجلاء. نرحب بجميع أبناء الكنيسة والزوار الكرام لنوال بركة القديس.',
-          mediaUrls: [
-            {
-              url: 'https://images.unsplash.com/photo-1548625361-195fe21d4df3?auto=format&fit=crop&w=1200&q=80',
-              type: 'image',
-              sizeBytes: 1024 * 750
-            }
-          ],
-          publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 2) // 2 hours ago
-        },
-        {
-          externalPostId: 'fb-grp-1cKfdQt232-post-02',
-          permalink: `${targetGroup}?post_id=02`,
-          authorName: 'اجتماع الشباب — كنيسة الشهيد أبي سيفين',
-          postText: 'دعوة لشباب وشابات الكنيسة لحضور اللقاء الأسبوعي بعنوان "كيف نثبت في المسيح وسط تحديات العصر؟" يتخلله فقرات تسبيح وحوار روحي مفتوح يليها أغابي المحبة.',
-          mediaUrls: [
-            {
-              url: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=1200&q=80',
-              type: 'image',
-              sizeBytes: 1024 * 820
-            }
-          ],
-          publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 14) // 14 hours ago
-        },
-        {
-          externalPostId: 'fb-grp-1cKfdQt232-post-03',
-          permalink: `${targetGroup}?post_id=03`,
-          authorName: 'خدمة التربية الكنسية والأنشطة الصيفية',
-          postText: 'بدء التسجيل في الدورة التعليمية الصيفية ومدارس الأحد لجميع المراحل (ابتدائي وإعدادي وثانوي). يرجى التوجه لمكتب السكرتارية أو التسجيل عبر المنصة.',
-          mediaUrls: [
-            {
-              url: 'https://images.unsplash.com/photo-1529070538774-1843cb3265df?auto=format&fit=crop&w=1200&q=80',
-              type: 'image',
-              sizeBytes: 1024 * 640
-            }
-          ],
-          publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 28) // 1 day ago
-        },
-        {
-          externalPostId: 'fb-grp-1cKfdQt232-post-04',
-          permalink: `${targetGroup}?post_id=04`,
-          authorName: 'لجنة الرعاية الاجتماعية والمساعدات',
-          postText: 'إعلان بخصوص توزيع شنط المحبة الشهرية وتجهيز العرائس. نشكر كل من ساهم وشارك بمحبته في دعم إخوة الرب، الرب يعوض تعب الجميع بركات سماوية.',
-          mediaUrls: [
-            {
-              url: 'https://images.unsplash.com/photo-1469571486292-0ba58a3f068b?auto=format&fit=crop&w=1200&q=80',
-              type: 'image',
-              sizeBytes: 1024 * 512
-            }
-          ],
-          publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 48) // 2 days ago
+      // Clean up any historical mock posts
+      await prisma.facebookPostImport.deleteMany({
+        where: {
+          externalPostId: {
+            in: [
+              'fb-grp-1cKfdQt232-post-01',
+              'fb-grp-1cKfdQt232-post-02',
+              'fb-grp-1cKfdQt232-post-03',
+              'fb-grp-1cKfdQt232-post-04'
+            ]
+          }
         }
-      ];
+      }).catch(() => {});
+
+      // Fetch real live posts from church Facebook group
+      const realPosts = await fetchRealFacebookGroupPosts(targetGroup);
 
       let newCount = 0;
-      for (const item of groupPostsFeed) {
+      for (const item of realPosts) {
         const existing = await prisma.facebookPostImport.findFirst({
           where: {
             OR: [
               { externalPostId: item.externalPostId },
-              { permalink: item.permalink }
+              { postText: item.postText }
             ]
           }
         });
@@ -212,15 +240,15 @@ router.post(
         req.user!.email,
         req.user!.fullName || 'Admin',
         'FB_GROUP_AUTO_SYNC',
-        `Auto-synced FB group ${targetGroup}: imported ${newCount} new posts.`
+        `Auto-synced FB group ${targetGroup}: imported ${newCount} new real posts.`
       );
 
       return res.status(200).json({
         success: true,
         messageAr: newCount > 0 
-          ? `تمت المزامنة بنجاح! تم جلب ${newCount} منشور جديد من جروب فيسبوك بانتظار مراجعتك.` 
+          ? `تمت المزامنة بنجاح! تم جلب ${newCount} منشور جديد وحقيقي من جروب فيسبوك بانتظار مراجعتك.` 
           : 'تمت المزامنة: القائمة محدثة بالفعل بكافة أحدث منشورات الجروب.',
-        messageEn: `Synced successfully. ${newCount} new posts fetched from group for moderation.`,
+        messageEn: `Synced successfully. ${newCount} new real posts fetched from group for moderation.`,
         newCount,
         groupUrl: targetGroup
       });

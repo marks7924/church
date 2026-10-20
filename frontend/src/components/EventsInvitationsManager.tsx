@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from './ThemeContext';
 import { 
   QrCode, Camera, CheckCircle2, AlertTriangle, XCircle, Users, PlusCircle, 
-  RefreshCw, MapPin, Crown, Search, ShieldAlert, ArrowLeft, ArrowRight, Eye, Undo2
+  RefreshCw, MapPin, Crown, Search, ShieldAlert, ArrowLeft, ArrowRight, Eye, Undo2,
+  Calendar, Clock, Check, Lock, Unlock, PlayCircle, Sparkles, Repeat
 } from 'lucide-react';
 import { API_URL } from '../config';
 import VipInvitationCard from './VipInvitationCard';
@@ -18,7 +19,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
   const isAr = language === 'ar';
   const ArrowIcon = isAr ? ArrowLeft : ArrowRight;
 
-  const [activeTab, setActiveTab] = useState<'SCANNER' | 'EVENTS' | 'INVITATIONS' | 'CHECKINS'>('SCANNER');
+  const [activeTab, setActiveTab] = useState<'ALL_EVENTS' | 'SCANNER' | 'EVENTS' | 'INVITATIONS' | 'CHECKINS'>('ALL_EVENTS');
   const [events, setEvents] = useState<any[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
@@ -73,7 +74,124 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
   const [newIsApplicationActive, setNewIsApplicationActive] = useState<boolean>(true);
   const [isCreatingEvent, setIsCreatingEvent] = useState<boolean>(false);
 
-  const refreshAdminEvents = () => {
+  // All Events Tab States (Draft / Posted Live / Expired)
+  const [allEventsFilter, setAllEventsFilter] = useState<'ALL' | 'DRAFT' | 'ACTIVE' | 'EXPIRED'>('ALL');
+  const [renewingEvent, setRenewingEvent] = useState<any | null>(null);
+  const [renewDate, setRenewDate] = useState<string>('');
+  const [renewStartTime, setRenewStartTime] = useState<string>('18:00');
+  const [renewEndTime, setRenewEndTime] = useState<string>('21:00');
+  const [renewLocationCaps, setRenewLocationCaps] = useState<Array<{ id: string; nameAr: string; maxCapacity: number }>>([]);
+  const [isRenewing, setIsRenewing] = useState<boolean>(false);
+
+  const isEventExpired = (ev: any) => {
+    if (!ev || !ev.date) return false;
+    const evDate = new Date(ev.date).getTime();
+    const today = new Date().setHours(0, 0, 0, 0);
+    return evDate < today;
+  };
+
+  const handleTogglePublish = async (ev: any) => {
+    if (!token) return;
+    const newVal = !ev.isPublicVisible;
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/events/${ev.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ isPublicVisible: newVal })
+      });
+      if (res.ok) {
+        setActionMsg(newVal 
+          ? (isAr ? '✓ أصبحت صفحة الفعالية ظاهرة للجمهور الآن!' : '✓ Event page is now visible to the public!')
+          : (isAr ? '✓ تم إخفاء صفحة الفعالية عن الجمهور.' : '✓ Event is now hidden from public.'));
+        refreshAdminEvents(true);
+        window.dispatchEvent(new Event('event-visibility-change'));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleApply = async (ev: any) => {
+    if (!token) return;
+    const newVal = !ev.isApplicationActive;
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/events/${ev.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ isApplicationActive: newVal })
+      });
+      if (res.ok) {
+        setActionMsg(newVal 
+          ? (isAr ? '✓ تم فتح وتفعيل زر التقديم للجمهور بنجاح!' : '✓ Application button activated for the public!')
+          : (isAr ? '✓ تم قفل زر التقديم (سيظهر كغير متاح).' : '✓ Application button is now locked.'));
+        refreshAdminEvents(true);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleOpenRenewModal = (ev: any) => {
+    setRenewingEvent(ev);
+    const today = new Date();
+    today.setDate(today.getDate() + 7);
+    setRenewDate(today.toISOString().split('T')[0]);
+    setRenewStartTime(ev.startTime || '18:00');
+    setRenewEndTime(ev.endTime || '21:00');
+    setRenewLocationCaps(
+      (ev.locations || []).map((l: any) => ({
+        id: l.id,
+        nameAr: l.nameAr,
+        maxCapacity: Math.max(l.maxCapacity, l.confirmedCount + 50)
+      }))
+    );
+  };
+
+  const handleSaveRenewal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !renewingEvent || !renewDate) return;
+    setIsRenewing(true);
+
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/events/${renewingEvent.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          date: renewDate,
+          startTime: renewStartTime,
+          endTime: renewEndTime,
+          isPublicVisible: true,
+          isApplicationActive: true,
+          locationCapacities: renewLocationCaps
+        })
+      });
+
+      if (res.ok) {
+        setActionMsg(isAr ? '✓ تم تجديد الفعالية وتحديث السعات بنجاح وتمت إعادتها للفعاليات النشطة!' : '✓ Event renewed with updated capacities successfully!');
+        setRenewingEvent(null);
+        refreshAdminEvents();
+        window.dispatchEvent(new Event('event-visibility-change'));
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to renew event.');
+      }
+    } catch (err) {
+      console.error('Error renewing event:', err);
+    } finally {
+      setIsRenewing(false);
+    }
+  };
+
+  const refreshAdminEvents = (silent: boolean = false) => {
     if (!token) return;
     fetch(`${API_URL}/invitations/admin/events`, {
       headers: { Authorization: `Bearer ${token}` }
@@ -90,9 +208,14 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
       .catch(err => console.error('Error fetching admin events:', err));
   };
 
-  // Fetch all events on mount
+  // Fetch all events on mount + silent live auto-refresh every 3.5s
   useEffect(() => {
-    refreshAdminEvents();
+    refreshAdminEvents(false);
+    const interval = setInterval(() => {
+      refreshAdminEvents(true);
+    }, 3500); // 3.5s silent background auto-refresh with no delays
+
+    return () => clearInterval(interval);
   }, [token]);
 
   const handleCreateEventSubmit = async (e: React.FormEvent) => {
@@ -597,7 +720,27 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
       )}
 
       {/* Tabs Switcher */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px', flexWrap: 'wrap' }}>
+        <button
+          onClick={() => { setActiveTab('ALL_EVENTS'); stopScanner(); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: 'none',
+            background: activeTab === 'ALL_EVENTS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
+            color: activeTab === 'ALL_EVENTS' ? '#000000' : 'var(--text-secondary)',
+            fontWeight: 700,
+            cursor: 'pointer',
+            fontSize: '0.85rem'
+          }}
+        >
+          <Calendar size={16} />
+          <span>{isAr ? 'متابعة وإدارة الفعاليات (All Events)' : 'Events Overview'}</span>
+        </button>
+
         <button
           onClick={() => { setActiveTab('SCANNER'); stopScanner(); }}
           style={{
@@ -678,6 +821,401 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
           <span>{isAr ? 'سجل الحضور والتحقق' : 'Check-in Logs'}</span>
         </button>
       </div>
+
+      {/* TAB 0: ALL EVENTS (Draft / Live Posted / Expired) */}
+      {activeTab === 'ALL_EVENTS' && (() => {
+        const draftEvents = events.filter(e => !e.isPublicVisible);
+        const activeEvents = events.filter(e => e.isPublicVisible && !isEventExpired(e));
+        const expiredEvents = events.filter(e => isEventExpired(e));
+        const displayedEvents = allEventsFilter === 'DRAFT'
+          ? draftEvents
+          : allEventsFilter === 'ACTIVE'
+          ? activeEvents
+          : allEventsFilter === 'EXPIRED'
+          ? expiredEvents
+          : events;
+
+        return (
+          <div>
+            {/* Filter Pills and New Event CTA */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '12px',
+              marginBottom: '1.5rem'
+            }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setAllEventsFilter('ALL')}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: allEventsFilter === 'ALL' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
+                    color: allEventsFilter === 'ALL' ? '#000' : 'var(--text-secondary)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  {isAr ? `الكل (${events.length})` : `All (${events.length})`}
+                </button>
+                <button
+                  onClick={() => setAllEventsFilter('ACTIVE')}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: allEventsFilter === 'ACTIVE' ? 'rgba(46, 204, 113, 0.25)' : 'rgba(255,255,255,0.05)',
+                    color: allEventsFilter === 'ACTIVE' ? '#2ecc71' : 'var(--text-secondary)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  {isAr ? `منشورة ومتاحة (${activeEvents.length})` : `Live & Posted (${activeEvents.length})`}
+                </button>
+                <button
+                  onClick={() => setAllEventsFilter('DRAFT')}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: allEventsFilter === 'DRAFT' ? 'rgba(52, 152, 219, 0.25)' : 'rgba(255,255,255,0.05)',
+                    color: allEventsFilter === 'DRAFT' ? '#3498db' : 'var(--text-secondary)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  {isAr ? `جديدة لم تُنشر (${draftEvents.length})` : `Draft / Not Public (${draftEvents.length})`}
+                </button>
+                <button
+                  onClick={() => setAllEventsFilter('EXPIRED')}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: allEventsFilter === 'EXPIRED' ? 'rgba(231, 76, 60, 0.25)' : 'rgba(255,255,255,0.05)',
+                    color: allEventsFilter === 'EXPIRED' ? '#e74c3c' : 'var(--text-secondary)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  {isAr ? `منتهية الصلاحية (${expiredEvents.length})` : `Expired (${expiredEvents.length})`}
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowCreateEventModal(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  background: 'var(--accent-gold)',
+                  border: 'none',
+                  color: '#000000',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontSize: '0.88rem'
+                }}
+              >
+                <PlusCircle size={16} />
+                <span>{isAr ? 'إنشاء فعالية مخصصة جديدة' : 'Create Custom Event'}</span>
+              </button>
+            </div>
+
+            {/* Event Cards Grid */}
+            {displayedEvents.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                <p>{isAr ? 'لا توجد فعاليات في هذا القسم حاليًا.' : 'No events in this section.'}</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
+                {displayedEvents.map(ev => {
+                  const expired = isEventExpired(ev);
+                  const totalCapacity = (ev.locations || []).reduce((acc: number, l: any) => acc + (l.maxCapacity || 0), 0);
+                  const totalConfirmed = (ev.locations || []).reduce((acc: number, l: any) => acc + (l.confirmedCount || 0), 0);
+                  const registeredPercent = totalCapacity > 0 ? Math.min(100, Math.round((totalConfirmed / totalCapacity) * 100)) : 0;
+
+                  return (
+                    <div
+                      key={ev.id}
+                      style={{
+                        background: 'var(--card-bg, rgba(255, 255, 255, 0.03))',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '14px',
+                        padding: '1.5rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                        position: 'relative'
+                      }}
+                    >
+                      <div>
+                        {/* Header Badges */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            background: 'rgba(226, 183, 20, 0.12)',
+                            color: 'var(--accent-gold)'
+                          }}>
+                            <Calendar size={13} />
+                            <span>{new Date(ev.date).toLocaleDateString(isAr ? 'ar-EG' : 'en-US')}</span>
+                            {ev.startTime && <span>• {ev.startTime}</span>}
+                          </span>
+
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            {expired ? (
+                              <span style={{
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                background: 'rgba(231, 76, 60, 0.2)',
+                                color: '#e74c3c'
+                              }}>
+                                {isAr ? 'منتهية الصلاحية' : 'Expired'}
+                              </span>
+                            ) : ev.isPublicVisible ? (
+                              <span style={{
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                background: 'rgba(46, 204, 113, 0.2)',
+                                color: '#2ecc71'
+                              }}>
+                                {isAr ? 'ظاهرة للجمهور ✓' : 'Public'}
+                              </span>
+                            ) : (
+                              <span style={{
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                background: 'rgba(255, 255, 255, 0.1)',
+                                color: 'var(--text-secondary)'
+                              }}>
+                                {isAr ? 'مسودة مخفية' : 'Draft'}
+                              </span>
+                            )}
+
+                            {ev.isApplicationActive ? (
+                              <span style={{
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                background: 'rgba(226, 183, 20, 0.2)',
+                                color: 'var(--accent-gold)'
+                              }}>
+                                {isAr ? 'التقديم متاح' : 'Apply Open'}
+                              </span>
+                            ) : (
+                              <span style={{
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                color: 'var(--text-secondary)'
+                              }}>
+                                {isAr ? 'التقديم مقفل 🔒' : 'Apply Locked'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Title & Description */}
+                        <h4 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0 0 8px 0', color: '#ffffff' }}>
+                          {isAr ? ev.titleAr : ev.titleEn}
+                        </h4>
+                        {ev.descriptionAr && (
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.5, margin: '0 0 1rem 0' }}>
+                            {ev.descriptionAr}
+                          </p>
+                        )}
+
+                        {/* Live Registration Progress Counter */}
+                        <div style={{
+                          background: 'rgba(0,0,0,0.25)',
+                          borderRadius: '8px',
+                          padding: '10px 12px',
+                          marginBottom: '1rem',
+                          border: '1px solid rgba(255,255,255,0.06)'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '6px' }}>
+                            <span style={{ color: 'var(--text-secondary)' }}>
+                              {isAr ? 'المشاركون المسجلون (تحديث فوري):' : 'Submitted Attendees (Live):'}
+                            </span>
+                            <span style={{ fontWeight: 800, color: 'var(--accent-gold)' }}>
+                              {totalConfirmed} / {totalCapacity} ({registeredPercent}%)
+                            </span>
+                          </div>
+                          <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{
+                              width: `${registeredPercent}%`,
+                              height: '100%',
+                              background: registeredPercent >= 100 ? '#e74c3c' : 'var(--accent-gold)',
+                              transition: 'width 0.4s ease'
+                            }} />
+                          </div>
+                        </div>
+
+                        {/* Locations breakdown */}
+                        <div style={{ marginBottom: '1.2rem' }}>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+                            {isAr ? 'الأماكن والقاعات المخصصة للفعالية:' : 'Venues & Locations:'}
+                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {(ev.locations || []).map((loc: any) => {
+                              const isFull = loc.isFull || loc.confirmedCount >= loc.maxCapacity;
+                              return (
+                                <div
+                                  key={loc.id}
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    fontSize: '0.82rem',
+                                    padding: '5px 8px',
+                                    borderRadius: '6px',
+                                    background: isFull ? 'rgba(231, 76, 60, 0.08)' : 'rgba(255,255,255,0.02)'
+                                  }}
+                                >
+                                  <span style={{ color: '#ffffff', fontWeight: 600 }}>
+                                    {isAr ? loc.nameAr : loc.nameEn}
+                                  </span>
+                                  <span style={{ color: isFull ? '#e74c3c' : '#2ecc71', fontWeight: 700 }}>
+                                    {loc.confirmedCount} / {loc.maxCapacity} {isFull ? (isAr ? '(مكتمل)' : '(Full)') : ''}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Controls */}
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            onClick={() => handleTogglePublish(ev)}
+                            style={{
+                              flex: 1,
+                              padding: '8px 10px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              background: ev.isPublicVisible ? 'rgba(46, 204, 113, 0.2)' : 'rgba(255,255,255,0.08)',
+                              color: ev.isPublicVisible ? '#2ecc71' : 'var(--text-secondary)',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              fontSize: '0.8rem'
+                            }}
+                          >
+                            {ev.isPublicVisible 
+                              ? (isAr ? 'صفحة الفعالية ظاهرة للجمهور ✓' : 'Public Page Visible ✓') 
+                              : (isAr ? 'إظهار الفعالية للجمهور' : 'Make Public')}
+                          </button>
+
+                          <button
+                            onClick={() => handleToggleApply(ev)}
+                            style={{
+                              flex: 1,
+                              padding: '8px 10px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              background: ev.isApplicationActive ? 'rgba(226, 183, 20, 0.25)' : 'rgba(255,255,255,0.08)',
+                              color: ev.isApplicationActive ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              fontSize: '0.8rem'
+                            }}
+                          >
+                            {ev.isApplicationActive 
+                              ? (isAr ? 'زر التقديم مفعل ومتاح ✓' : 'Apply Active ✓') 
+                              : (isAr ? 'قفل / تعطيل زر التقديم' : 'Lock Apply')}
+                          </button>
+                        </div>
+
+                        {/* Expired Event Renewal CTA */}
+                        {expired && (
+                          <button
+                            onClick={() => handleOpenRenewModal(ev)}
+                            style={{
+                              width: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              padding: '9px',
+                              borderRadius: '6px',
+                              background: 'var(--accent-gold)',
+                              border: 'none',
+                              color: '#000000',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              fontSize: '0.85rem'
+                            }}
+                          >
+                            <Repeat size={15} />
+                            <span>{isAr ? 'تجديد الفعالية وتحديد سعات ومواعيد جديدة ↻' : 'Renew Event with New Capacities ↻'}</span>
+                          </button>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                          <button
+                            onClick={() => { setSelectedEventId(ev.id); setActiveTab('EVENTS'); }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--accent-gold)',
+                              fontSize: '0.78rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                          >
+                            {isAr ? '← إدارة أماكن وسعات هذه الفعالية' : 'Manage venues & caps →'}
+                          </button>
+                          
+                          <button
+                            onClick={() => { setSelectedEventId(ev.id); setActiveTab('SCANNER'); }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#ffffff',
+                              fontSize: '0.78rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                          >
+                            {isAr ? 'مسح تذاكر الفعالية' : 'Scan passes'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* TAB 1: CONTINUOUS QR SCANNER */}
       {activeTab === 'SCANNER' && (
@@ -1823,6 +2361,195 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                   }}
                 >
                   {isCreatingEvent ? (isAr ? 'جاري الإنشاء...' : 'Creating...') : (isAr ? 'إنشاء الفعالية واعتمادها' : 'Create Event')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Renew Expired Event Modal */}
+      {renewingEvent && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: '#16161d',
+            border: '1px solid var(--accent-gold)',
+            borderRadius: '16px',
+            padding: '2rem',
+            maxWidth: '560px',
+            width: '100%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            direction: isAr ? 'rtl' : 'ltr'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Repeat size={20} style={{ color: 'var(--accent-gold)' }} />
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                  {isAr ? 'تجديد الفعالية وإعادة فتح التقديم والسعات' : 'Renew Event & Reset Capacities'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setRenewingEvent(null)}
+                style={{ background: 'transparent', border: 'none', color: '#ffffff', fontSize: '1.2rem', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem', lineHeight: 1.6 }}>
+              {isAr
+                ? `تجديد الفعالية "${renewingEvent.titleAr}" بمواعيد جديدة وسعات مخصصة للأماكن، وسيتم تفعيل زر التقديم وإظهارها للجمهور فورًا.`
+                : `Renew "${renewingEvent.titleEn || renewingEvent.titleAr}" with updated dates and venues capacity.`}
+            </p>
+
+            <form onSubmit={handleSaveRenewal}>
+              {/* New Date */}
+              <div style={{ marginBottom: '1.2rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  {isAr ? 'التاريخ الجديد للفعالية *' : 'New Event Date *'}
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={renewDate}
+                  onChange={(e) => setRenewDate(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#ffffff',
+                    fontSize: '0.9rem',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              {/* Times */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '1.2rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    {isAr ? 'وقت البدء' : 'Start Time'}
+                  </label>
+                  <input
+                    type="time"
+                    value={renewStartTime}
+                    onChange={(e) => setRenewStartTime(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    {isAr ? 'وقت الانتهاء' : 'End Time'}
+                  </label>
+                  <input
+                    type="time"
+                    value={renewEndTime}
+                    onChange={(e) => setRenewEndTime(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              {/* Venues Capacities Input */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 700 }}>
+                  {isAr ? 'تحديد السعة الجديدة لكل مكان / قاعة:' : 'New Max Capacity per Venue:'}
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {renewLocationCaps.map((loc, idx) => (
+                    <div
+                      key={loc.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        background: 'rgba(0,0,0,0.25)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: '8px',
+                        padding: '10px 12px'
+                      }}
+                    >
+                      <span style={{ color: '#ffffff', fontWeight: 600, fontSize: '0.88rem' }}>
+                        {loc.nameAr}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          {isAr ? 'السعة القصوى:' : 'Max:'}
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          required
+                          value={loc.maxCapacity}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            setRenewLocationCaps(prev => prev.map((item, i) => i === idx ? { ...item, maxCapacity: val } : item));
+                          }}
+                          style={{
+                            width: '90px',
+                            padding: '6px 8px',
+                            borderRadius: '6px',
+                            background: 'rgba(255,255,255,0.08)',
+                            border: '1px solid rgba(226, 183, 20, 0.4)',
+                            color: 'var(--accent-gold)',
+                            fontWeight: 700,
+                            fontSize: '0.9rem',
+                            textAlign: 'center'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setRenewingEvent(null)}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isRenewing}
+                  style={{
+                    padding: '10px 22px',
+                    borderRadius: '8px',
+                    background: 'var(--accent-gold)',
+                    border: 'none',
+                    color: '#000000',
+                    fontWeight: 800,
+                    cursor: isRenewing ? 'wait' : 'pointer'
+                  }}
+                >
+                  {isRenewing 
+                    ? (isAr ? 'جاري التجديد...' : 'Renewing...') 
+                    : (isAr ? 'تجديد الفعالية وإطلاقها' : 'Renew Event')}
                 </button>
               </div>
             </form>
