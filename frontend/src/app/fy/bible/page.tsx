@@ -441,7 +441,7 @@ export default function BiblePage() {
           maxWidth: '1440px',
           width: '100%',
           margin: '0 auto',
-          padding: 'clamp(2rem, 4vw, 4rem) clamp(1.25rem, 3vw, 2.5rem)',
+          padding: 'clamp(1rem, 3vw, 3.5rem) clamp(0.75rem, 2.5vw, 2.5rem)',
           boxSizing: 'border-box'
         }}
       >
@@ -451,8 +451,8 @@ export default function BiblePage() {
             backgroundColor: 'rgba(28, 29, 38, 0.85)',
             border: '1px solid var(--border-color, #2a2c3a)',
             borderRadius: '8px',
-            padding: 'clamp(1.5rem, 3vw, 2.75rem)',
-            marginBottom: '3rem',
+            padding: 'clamp(1.2rem, 3vw, 2.5rem) clamp(1rem, 2.5vw, 2rem)',
+            marginBottom: 'clamp(1.5rem, 3vw, 3rem)',
             display: 'flex',
             flexWrap: 'wrap',
             alignItems: 'center',
@@ -714,9 +714,9 @@ export default function BiblePage() {
         <div 
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
-            gap: '1.25rem',
-            marginBottom: '3.5rem'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))',
+            gap: 'clamp(10px, 1.5vw, 1.25rem)',
+            marginBottom: 'clamp(1.5rem, 3vw, 3rem)'
           }}
         >
           {[
@@ -735,13 +735,13 @@ export default function BiblePage() {
                 type="button"
                 onClick={() => setActiveTab(tab.id as any)}
                 style={{
-                  minHeight: '100px',
-                  padding: '1.5rem 1rem',
+                  minHeight: '85px',
+                  padding: '1rem 0.6rem',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '12px',
+                  gap: '8px',
                   border: `1px solid ${isActive ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
                   borderRadius: '8px',
                   backgroundColor: isActive ? 'var(--accent-gold, #e2b714)' : 'rgba(28, 29, 38, 0.85)',
@@ -752,8 +752,8 @@ export default function BiblePage() {
                   wordSpacing: '1px'
                 }}
               >
-                <Icon size={24} />
-                <span style={{ fontSize: '0.95rem', fontWeight: 800, letterSpacing: '0.3px' }}>
+                <Icon size={22} />
+                <span style={{ fontSize: 'clamp(0.82rem, 1.5vw, 0.95rem)', fontWeight: 800, letterSpacing: '0.3px', textAlign: 'center' }}>
                   {tab.label}
                 </span>
               </button>
@@ -763,7 +763,7 @@ export default function BiblePage() {
 
         {/* -------------------- TAB 1: SCRIPTURE READER -------------------- */}
         {activeTab === 'reader' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(1.5rem, 3vw, 2.5rem)' }}>
             {/* Quick Resume Strip */}
             {readingHistory.length > 0 && (
               <div 
@@ -771,11 +771,13 @@ export default function BiblePage() {
                   backgroundColor: 'rgba(28, 29, 38, 0.6)',
                   border: '1px solid var(--border-color, #2a2c3a)',
                   borderRadius: '8px',
-                  padding: '1rem 1.5rem',
+                  padding: '0.85rem 1.25rem',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '12px',
-                  overflowX: 'auto'
+                  overflowX: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                  scrollbarWidth: 'none'
                 }}
               >
                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: themeTokens.muted, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -792,8 +794,8 @@ export default function BiblePage() {
                         setChapterNumber(h.chapter);
                       }}
                       style={{
-                        padding: '8px 16px',
-                        fontSize: '0.85rem',
+                        padding: '7px 14px',
+                        fontSize: '0.82rem',
                         fontWeight: 700,
                         borderRadius: '6px',
                         backgroundColor: (bookSlug === h.bookSlug && chapterNumber === h.chapter) 
@@ -812,18 +814,18 @@ export default function BiblePage() {
               </div>
             )}
 
-            {/* Grand Cathedral Scripture Navigation Hero Deck */}
+            {/* Grand Cathedral Scripture Navigation Hero Deck - Responsive for Phone & Desktop */}
             <div 
               style={{
                 backgroundColor: 'rgba(28, 29, 38, 0.85)',
                 border: '1px solid var(--border-color, #2a2c3a)',
                 borderRadius: '8px',
-                padding: 'clamp(1.75rem, 3.5vw, 3rem)',
+                padding: 'clamp(1.2rem, 3vw, 2.5rem) clamp(0.75rem, 2.5vw, 2rem)',
                 display: 'flex',
                 flexWrap: 'wrap',
                 alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '1.5rem',
+                justifyContent: 'center',
+                gap: 'clamp(10px, 2vw, 1.5rem)',
                 boxShadow: '0 16px 40px rgba(0,0,0,0.5)'
               }}
             >
@@ -832,8 +834,8 @@ export default function BiblePage() {
                 type="button"
                 onClick={handlePrevChapter}
                 style={{
-                  padding: '14px 26px',
-                  fontSize: '0.95rem',
+                  padding: '12px clamp(12px, 2vw, 24px)',
+                  fontSize: 'clamp(0.82rem, 1.5vw, 0.95rem)',
                   fontWeight: 800,
                   borderRadius: '8px',
                   backgroundColor: 'rgba(18, 19, 26, 0.95)',
@@ -842,28 +844,34 @@ export default function BiblePage() {
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px'
+                  gap: '6px',
+                  flex: '1 1 auto',
+                  justifyContent: 'center',
+                  minWidth: '125px',
+                  order: 1
                 }}
               >
-                <ChevronRight size={20} style={{ color: themeTokens.gold }} />
+                <ChevronRight size={18} style={{ color: themeTokens.gold }} />
                 <span>الإصحاح السابق</span>
               </button>
 
               {/* Grand Book & Chapter Center Command Button */}
-              <div style={{ textAlign: 'center' }}>
+              <div style={{ textAlign: 'center', flex: '1 1 100%', order: 0, maxWidth: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <button
                   type="button"
                   onClick={() => setIsBookModalOpen(true)}
                   style={{
-                    padding: '14px 32px',
+                    padding: '12px clamp(16px, 3vw, 32px)',
                     borderRadius: '8px',
                     backgroundColor: 'rgba(18, 19, 26, 0.98)',
                     border: '1px solid var(--accent-gold, #e2b714)',
                     boxShadow: '0 8px 30px rgba(226, 183, 20, 0.2)',
                     cursor: 'pointer',
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '12px'
+                    justifyContent: 'center',
+                    gap: '10px',
+                    maxWidth: '100%'
                   }}
                   title="انقر لتصفح واختيار أي سفر أو إصحاح"
                 >
@@ -871,18 +879,18 @@ export default function BiblePage() {
                     style={{
                       fontFamily: 'Amiri, Georgia, serif',
                       fontWeight: 900,
-                      fontSize: 'clamp(1.6rem, 3vw, 2.2rem)',
+                      fontSize: 'clamp(1.4rem, 3vw, 2.2rem)',
                       color: themeTokens.gold
                     }}
                   >
                     {currentBookInfo.nameAr}
                   </span>
-                  <span style={{ fontSize: 'clamp(1.1rem, 2vw, 1.4rem)', fontWeight: 800, color: '#ffffff' }}>
+                  <span style={{ fontSize: 'clamp(1rem, 2vw, 1.4rem)', fontWeight: 800, color: '#ffffff' }}>
                     الإصحاح {chapterNumber}
                   </span>
-                  <ChevronDown size={22} style={{ color: themeTokens.gold }} />
+                  <ChevronDown size={20} style={{ color: themeTokens.gold }} />
                 </button>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '10px', fontSize: '0.85rem', color: themeTokens.muted }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '8px', fontSize: '0.8rem', color: themeTokens.muted, flexWrap: 'wrap' }}>
                   <span>{currentBookInfo.testament === 'NEW' ? 'العهد الجديد' : 'العهد القديم'}</span>
                   <span>•</span>
                   <span>{translationCode === 'van-dyck' ? 'ترجمة فاندايك' : 'King James Version'}</span>
@@ -896,8 +904,8 @@ export default function BiblePage() {
                 type="button"
                 onClick={handleNextChapter}
                 style={{
-                  padding: '14px 26px',
-                  fontSize: '0.95rem',
+                  padding: '12px clamp(12px, 2vw, 24px)',
+                  fontSize: 'clamp(0.82rem, 1.5vw, 0.95rem)',
                   fontWeight: 800,
                   borderRadius: '8px',
                   backgroundColor: 'rgba(18, 19, 26, 0.95)',
@@ -906,11 +914,15 @@ export default function BiblePage() {
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px'
+                  gap: '6px',
+                  flex: '1 1 auto',
+                  justifyContent: 'center',
+                  minWidth: '125px',
+                  order: 2
                 }}
               >
                 <span>الإصحاح التالي</span>
-                <ChevronLeft size={20} style={{ color: themeTokens.gold }} />
+                <ChevronLeft size={18} style={{ color: themeTokens.gold }} />
               </button>
             </div>
 

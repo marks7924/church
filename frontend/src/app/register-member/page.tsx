@@ -228,6 +228,60 @@ export default function RegisterMemberPage() {
     }
   };
 
+  // When not signed in: Render the lock message right at the top of the page with no scrolling down
+  if (!token) {
+    return (
+      <div className="container" style={{ padding: 'clamp(1.5rem, 4vw, 2.5rem) clamp(0.8rem, 3vw, 1.5rem)', maxWidth: '850px', minHeight: 'calc(100vh - 180px)', display: 'flex', flexDirection: 'column' }}>
+        {/* Return button */}
+        <button onClick={() => router.push('/')} style={{
+          background: 'none',
+          border: 'none',
+          color: 'var(--text-secondary)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          fontSize: '0.9rem',
+          marginBottom: '1rem',
+          width: 'fit-content'
+        }}>
+          <ArrowLeft size={16} />
+          {t('back')}
+        </button>
+
+        {/* Lock Card at the top with no scrolling down */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '1rem' }}>
+          <div style={{ width: '100%', maxWidth: '640px' }}>
+            <AuthLockedSection
+              isLocked={true}
+              titleAr="استمارة العضوية الكنسية متاحة حصرياً للأعضاء المسجلين"
+              titleEn="Church Family Membership is Exclusive for Registered Members"
+              descriptionAr="يرجى تسجيل الدخول بحسابك أولاً لتتمكن من ملء وتحديث استمارة العضوية الكنسية وتوثيق بيانات الأسرة."
+              descriptionEn="Please log in first to submit and maintain your family membership record."
+              redirectUrl="/register-member"
+              minHeight="360px"
+            >
+              <div style={{
+                padding: '2.5rem 1.5rem',
+                backgroundColor: 'rgba(28, 29, 38, 0.85)',
+                borderRadius: '12px',
+                border: '1px solid var(--border-color)',
+                textAlign: 'center'
+              }}>
+                <h2 style={{ fontSize: '1.4rem', color: 'var(--accent-gold)', marginBottom: '0.5rem', fontWeight: 800 }}>
+                  {t('membership_title')}
+                </h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
+                  بيانات رب الأسرة • بيانات الزوجة • سجل الأبناء • البيانات الكنسية المعتمدة
+                </p>
+              </div>
+            </AuthLockedSection>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container" style={{ padding: 'clamp(1.5rem, 4vw, 3rem) clamp(0.8rem, 3vw, 1.5rem)', maxWidth: '850px' }}>
       {/* Return button */}
@@ -245,16 +299,6 @@ export default function RegisterMemberPage() {
         <ArrowLeft size={16} />
         {t('back')}
       </button>
-
-      <AuthLockedSection
-        isLocked={!token}
-        titleAr="استمارة العضوية الكنسية متاحة حصرياً للأعضاء المسجلين"
-        titleEn="Church Family Membership is Exclusive for Registered Members"
-        descriptionAr="يرجى تسجيل الدخول بحسابك أولاً لتتمكن من ملء وتحديث استمارة العضوية الكنسية وتوثيق بيانات الأسرة."
-        descriptionEn="Please log in first to submit and maintain your family membership record."
-        redirectUrl="/register-member"
-        minHeight="600px"
-      >
 
       <h1 style={{ fontSize: 'clamp(1.25rem, 5.5vw, 2rem)', lineHeight: 1.3, color: 'var(--accent-gold)', marginBottom: '1.2rem', fontWeight: 800 }}>
         {t('membership_title')}
@@ -629,7 +673,6 @@ export default function RegisterMemberPage() {
         </div>
 
       </form>
-      </AuthLockedSection>
     </div>
   );
 }

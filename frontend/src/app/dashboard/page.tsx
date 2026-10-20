@@ -2162,18 +2162,29 @@ const initialAddMemberFormState = {
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
           backdropFilter: 'blur(10px)'
         }}>
-          {/* Top Controls: Category Segmented Bar + Quick Search */}
+          {/* Top Controls: Category Segmented Bar + Quick Search (Hidden on Mobile phones) */}
           {getAvailableTabs().length > 3 && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '12px',
-              flexWrap: 'wrap',
-              paddingBottom: '14px',
-              marginBottom: '14px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.06)'
-            }}>
+            <>
+              <style dangerouslySetInnerHTML={{ __html: `
+                @media (max-width: 768px) {
+                  .dashboard-top-filter-bar {
+                    display: none !important;
+                  }
+                }
+              `}} />
+              <div 
+                className="dashboard-top-filter-bar"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                  paddingBottom: '14px',
+                  marginBottom: '14px',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.06)'
+                }}
+              >
               {/* Category Segmented Control Chips */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                 {[
@@ -2260,6 +2271,7 @@ const initialAddMemberFormState = {
                 )}
               </div>
             </div>
+          </>
           )}
 
           {/* Tab Buttons Grid / Flex Wrap */}

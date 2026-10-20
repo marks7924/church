@@ -11,7 +11,9 @@
   justify-content: space-between;
   align-items: center;
   height: 70px;
-  padding: 0 2rem;
+  padding: 0 clamp(0.75rem, 2vw, 2rem);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .logoArea {
@@ -19,6 +21,7 @@
   align-items: center;
   gap: 10px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .logoCross {
@@ -188,20 +191,14 @@
   border-radius: 50%;
 }
 
-/* Mobile responsive breakpoints */
-@media (max-width: 1200px) {
-  .fontScalerContainer {
-    display: none;
-  }
-}
-
-@media (max-width: 1050px) {
+/* Mobile and Tablet responsive breakpoints */
+@media (max-width: 1280px) {
   .mobileMenuBtn {
     display: block;
   }
   
   .linksList {
-    display: none;
+    display: none !important;
   }
   
   .controlsArea {

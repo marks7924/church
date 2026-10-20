@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../components/ThemeContext';
-import { Calendar as CalendarIcon, Trash2, Plus, Filter, Sparkles, BookOpen, Clock, MapPin, ChevronRight, ChevronLeft, Bell } from 'lucide-react';
+import { Calendar as CalendarIcon, Trash2, Plus, Filter, Sparkles, BookOpen, Clock, MapPin, ChevronRight, ChevronLeft, Bell, Loader2 } from 'lucide-react';
 import { API_URL } from '../../config';
 import { getCopticDate, CopticDateInfo } from '../../utils/copticDate';
 
@@ -38,6 +38,7 @@ export default function SchedulePage() {
   // Liturgy Schedule state
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [occasions, setOccasions] = useState<EventItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [token, setToken] = useState<string | null>(null);
 
@@ -99,8 +100,12 @@ export default function SchedulePage() {
   };
 
   useEffect(() => {
-    fetchSchedules();
-    fetchOccasions();
+    const loadAllData = async () => {
+      setLoading(true);
+      await Promise.all([fetchSchedules(), fetchOccasions()]);
+      setLoading(false);
+    };
+    loadAllData();
 
     if (typeof window !== 'undefined') {
       const savedToken = localStorage.getItem('church-token');
@@ -471,7 +476,27 @@ export default function SchedulePage() {
             width: '100%',
             boxSizing: 'border-box'
           }}>
-            {filteredSchedules.length > 0 ? (
+            {loading ? (
+              <div style={{
+                gridColumn: '1 / -1',
+                padding: '3rem 1rem',
+                textAlign: 'center',
+                backgroundColor: 'var(--bg-secondary)',
+                borderRadius: '8px',
+                border: '1px solid var(--border-color)',
+                color: 'var(--accent-gold)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px'
+              }}>
+                <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+                <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>
+                  {language === 'ar' ? 'جاري تحميل مواعيد القداسات...' : 'Loading liturgical schedule...'}
+                </span>
+              </div>
+            ) : filteredSchedules.length > 0 ? (
               filteredSchedules.map(item => (
                 <div
                   key={item.id}
@@ -758,7 +783,26 @@ export default function SchedulePage() {
 
             {/* List of Special Occasions */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-              {occasions.length > 0 ? (
+              {loading ? (
+                <div style={{
+                  padding: '3rem 1rem',
+                  textAlign: 'center',
+                  backgroundColor: 'var(--bg-card)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--accent-gold)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px'
+                }}>
+                  <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+                  <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>
+                    {language === 'ar' ? 'جاري تحميل المناسبات الكنسية والأعياد...' : 'Loading special occasions & feasts...'}
+                  </span>
+                </div>
+              ) : occasions.length > 0 ? (
                 occasions.map(occ => {
                   const badge = getOccasionTypeBadge(occ.type);
                   const formattedDate = new Date(occ.date).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {

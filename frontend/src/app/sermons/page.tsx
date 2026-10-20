@@ -47,7 +47,10 @@ export default function SermonsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
 
+  const [loading, setLoading] = useState(true);
+
   const fetchSermons = async () => {
+    setLoading(true);
     try {
       const res = await fetch(`${API_URL}/sermons`);
       if (res.ok) {
@@ -56,6 +59,8 @@ export default function SermonsPage() {
       }
     } catch (err) {
       console.log('Error fetching sermons:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -274,7 +279,21 @@ export default function SermonsPage() {
 
       {/* Sermons Grid */}
       <div className={styles.netflixGrid}>
-        {filteredSermons.length > 0 ? (
+        {loading ? (
+          <div style={{ textAlign: 'center', gridColumn: 'span 4', padding: '3.5rem 0', color: 'var(--text-secondary)' }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              border: '3px solid rgba(226, 183, 20, 0.2)',
+              borderTopColor: 'var(--accent-gold)',
+              borderRadius: '50%',
+              animation: 'spin 0.8s linear infinite',
+              margin: '0 auto 16px auto'
+            }} />
+            <style dangerouslySetInnerHTML={{ __html: '@keyframes spin { to { transform: rotate(360deg); } }' }} />
+            <p>{language === 'ar' ? 'جاري تحميل العظات الكنسية...' : 'Loading church sermons...'}</p>
+          </div>
+        ) : filteredSermons.length > 0 ? (
           filteredSermons.map(s => (
             <div key={s.id} className={styles.sermonCard} onClick={() => setActiveVideo(s.youtubeUrl)}>
               <div 

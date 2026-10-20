@@ -380,10 +380,20 @@ export default function EventsPublicPage() {
       {/* Events Grid */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary)' }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            border: '3px solid rgba(226, 183, 20, 0.2)',
+            borderTopColor: 'var(--accent-gold)',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+            margin: '0 auto 16px auto'
+          }} />
+          <style dangerouslySetInnerHTML={{ __html: '@keyframes spin { to { transform: rotate(360deg); } }' }} />
           <p>{isAr ? 'جاري تحميل الفعاليات المعلنة...' : 'Loading published events...'}</p>
         </div>
       ) : events.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))', gap: '20px' }}>
           {events.map(ev => {
             let rules: any = {};
             try { rules = JSON.parse(ev.eligibilityRulesJson || '{}'); } catch {}

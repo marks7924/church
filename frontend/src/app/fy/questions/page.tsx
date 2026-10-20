@@ -239,6 +239,16 @@ export default function QuestionsLibraryPage() {
   if (checkingAuth) {
     return (
       <div style={{ textAlign: 'center', padding: '5rem 1rem', color: 'var(--text-secondary)' }}>
+        <div style={{
+          width: '32px',
+          height: '32px',
+          border: '3px solid rgba(226, 183, 20, 0.2)',
+          borderTopColor: 'var(--accent-gold)',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite',
+          margin: '0 auto 16px auto'
+        }} />
+        <style dangerouslySetInnerHTML={{ __html: '@keyframes spin { to { transform: rotate(360deg); } }' }} />
         <p>{isAr ? 'جاري التحقق من صلاحيات العضوية الكنسية...' : 'Checking church membership authorization...'}</p>
       </div>
     );
@@ -523,10 +533,19 @@ export default function QuestionsLibraryPage() {
       {/* Questions Grid */}
       {loadingQuestions ? (
         <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary)' }}>
+          <div style={{
+            width: '28px',
+            height: '28px',
+            border: '3px solid rgba(226, 183, 20, 0.2)',
+            borderTopColor: 'var(--accent-gold)',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+            margin: '0 auto 12px auto'
+          }} />
           <p>{isAr ? 'جاري تحميل الأسئلة المعتمدة...' : 'Loading verified questions...'}</p>
         </div>
       ) : questions.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: 'clamp(14px, 2vw, 20px)' }}>
           {questions.map((q: any) => (
             <div
               key={q.id}

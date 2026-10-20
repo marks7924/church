@@ -1371,8 +1371,19 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
         </div>
       )}
 
-      {/* Tabs Switcher */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px', flexWrap: 'wrap' }}>
+      {/* Tabs Switcher - Phone Responsive */}
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        marginBottom: '1.5rem',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        paddingBottom: '10px',
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'none',
+        maxWidth: '100%',
+        flexWrap: 'nowrap'
+      }}>
         <button
           onClick={() => { setActiveTab('ALL_EVENTS'); stopScanner(); }}
           style={{
@@ -1386,7 +1397,9 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
             color: activeTab === 'ALL_EVENTS' ? '#000000' : 'var(--text-secondary)',
             fontWeight: 700,
             cursor: 'pointer',
-            fontSize: '0.85rem'
+            fontSize: '0.85rem',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
           }}
         >
           <Calendar size={16} />
@@ -1406,7 +1419,9 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
             color: activeTab === 'SCANNER' ? '#000000' : 'var(--text-secondary)',
             fontWeight: 700,
             cursor: 'pointer',
-            fontSize: '0.85rem'
+            fontSize: '0.85rem',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
           }}
         >
           <Camera size={16} />
@@ -1426,7 +1441,9 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
             color: activeTab === 'EVENTS' ? '#000000' : 'var(--text-secondary)',
             fontWeight: 700,
             cursor: 'pointer',
-            fontSize: '0.85rem'
+            fontSize: '0.85rem',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
           }}
         >
           <MapPin size={16} />
@@ -1446,7 +1463,9 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
             color: activeTab === 'INVITATIONS' ? '#000000' : 'var(--text-secondary)',
             fontWeight: 700,
             cursor: 'pointer',
-            fontSize: '0.85rem'
+            fontSize: '0.85rem',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
           }}
         >
           <Users size={16} />
@@ -1466,7 +1485,9 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
             color: activeTab === 'CHECKINS' ? '#000000' : 'var(--text-secondary)',
             fontWeight: 700,
             cursor: 'pointer',
-            fontSize: '0.85rem'
+            fontSize: '0.85rem',
+            whiteSpace: 'nowrap',
+            flexShrink: 0
           }}
         >
           <CheckCircle2 size={16} />

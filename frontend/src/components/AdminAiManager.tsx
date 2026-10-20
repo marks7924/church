@@ -812,6 +812,49 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
         boxSizing: 'border-box'
       }}
     >
+      <style dangerouslySetInnerHTML={{ __html: `
+        .admin-ai-subtabs {
+          display: flex;
+          gap: 8px;
+          overflow-x: auto;
+          white-space: nowrap;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+          padding-bottom: 8px;
+          margin-bottom: 12px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          max-width: 100%;
+        }
+        .admin-ai-subtab-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          border-radius: 8px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.03);
+          color: var(--text-secondary);
+          font-size: 0.85rem;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+          flex-shrink: 0;
+          transition: all 0.2s ease;
+        }
+        .admin-ai-subtab-btn-active {
+          background: var(--accent-gold) !important;
+          color: #000000 !important;
+          border-color: var(--accent-gold) !important;
+          font-weight: 700 !important;
+          box-shadow: 0 4px 14px rgba(226, 183, 20, 0.25);
+        }
+        @media (max-width: 768px) {
+          .admin-chat-grid-container {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}} />
+
       {/* 1. Header Bar (Fully Mobile Responsive) */}
       <div
         style={{

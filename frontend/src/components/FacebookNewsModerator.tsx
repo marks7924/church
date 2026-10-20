@@ -350,8 +350,18 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
         </div>
       )}
 
-      {/* Moderation Status Tabs */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '10px' }}>
+      {/* Moderation Status Tabs - Fully Phone Responsive */}
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        marginBottom: '1.5rem',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        paddingBottom: '10px',
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'none',
+        maxWidth: '100%'
+      }}>
         {(['PENDING', 'PUBLISHED', 'ARCHIVED', 'FAILED'] as const).map(tab => (
           <button
             key={tab}
@@ -364,7 +374,9 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
               color: statusFilter === tab ? '#000000' : 'var(--text-secondary)',
               fontWeight: 700,
               cursor: 'pointer',
-              fontSize: '0.85rem'
+              fontSize: '0.85rem',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
             }}
           >
             {tab === 'PENDING' && (isAr ? 'بانتظار المراجعة (Pending)' : 'Pending Review')}
@@ -378,6 +390,16 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
       {/* Posts Cards Grid */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+          <div style={{
+            width: '28px',
+            height: '28px',
+            border: '3px solid rgba(226, 183, 20, 0.2)',
+            borderTopColor: 'var(--accent-gold)',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+            margin: '0 auto 12px auto'
+          }} />
+          <style dangerouslySetInnerHTML={{ __html: '@keyframes spin { to { transform: rotate(360deg); } }' }} />
           <p>{isAr ? 'جاري تحميل المنشورات...' : 'Loading posts...'}</p>
         </div>
       ) : posts.length > 0 ? (
