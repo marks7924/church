@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  BookOpen, Sparkles, SlidersHorizontal, Calendar, Check, 
-  RefreshCw, Save, Image as ImageIcon, Shield, ExternalLink 
+  Sparkles, Calendar, Check, RefreshCw, Save, 
+  Image as ImageIcon, ExternalLink, SlidersHorizontal, BookOpen, Layers
 } from 'lucide-react';
 import { API_URL } from '../config';
 
@@ -89,7 +89,7 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
       });
 
       if (res.ok) {
-        setVotdSuccessMsg('تمت جدولة ونشر آية اليوم والتأمل الروحي بنجاح!');
+        setVotdSuccessMsg('تمت جدولة ونشر آية اليوم والتأمل الروحي بنجاح في قاعدة البيانات!');
         setTimeout(() => setVotdSuccessMsg(null), 4000);
       } else {
         alert('حدث خطأ أثناء حفظ آية اليوم.');
@@ -138,225 +138,508 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
   };
 
   return (
-    <div className="w-full space-y-6" style={{ width: '100%', boxSizing: 'border-box' }}>
-      {/* Sub-tab Navigation */}
-      <div className="flex bg-slate-800/80 p-1 rounded-2xl border border-slate-700 w-fit">
+    <div className="w-full space-y-8" style={{ width: '100%', boxSizing: 'border-box' }} dir="rtl">
+      {/* Top Navigation Tabs - Cathedral architectural tabs with 8px radius */}
+      <div 
+        className="flex items-center gap-3 p-1.5 border"
+        style={{
+          backgroundColor: 'rgba(28, 29, 38, 0.85)',
+          borderColor: 'var(--border-color, #2a2c3a)',
+          borderRadius: '8px',
+          width: 'fit-content'
+        }}
+      >
         <button
           type="button"
           onClick={() => setActiveSubTab('votd')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-            activeSubTab === 'votd' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
-          }`}
+          className="px-5 py-2.5 text-sm font-bold transition-all flex items-center gap-2.5"
+          style={{
+            borderRadius: '6px',
+            backgroundColor: activeSubTab === 'votd' ? 'var(--accent-gold, #e2b714)' : 'transparent',
+            color: activeSubTab === 'votd' ? '#000000' : 'var(--text-secondary, #a0aec0)',
+            boxShadow: activeSubTab === 'votd' ? '0 4px 15px rgba(226, 183, 20, 0.25)' : 'none'
+          }}
         >
-          <Sparkles size={15} /> جدولة آية اليوم والتأمل
+          <Sparkles size={16} />
+          <span>جدولة آية اليوم والتأمل</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveSubTab('backgrounds')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-            activeSubTab === 'backgrounds' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
-          }`}
+          className="px-5 py-2.5 text-sm font-bold transition-all flex items-center gap-2.5"
+          style={{
+            borderRadius: '6px',
+            backgroundColor: activeSubTab === 'backgrounds' ? 'var(--accent-gold, #e2b714)' : 'transparent',
+            color: activeSubTab === 'backgrounds' ? '#000000' : 'var(--text-secondary, #a0aec0)',
+            boxShadow: activeSubTab === 'backgrounds' ? '0 4px 15px rgba(226, 183, 20, 0.25)' : 'none'
+          }}
         >
-          <ImageIcon size={15} /> إعدادات وتخصيص الخلفيات
+          <ImageIcon size={16} />
+          <span>إعدادات وتخصيص الخلفيات الرسمية</span>
         </button>
       </div>
 
-      {/* VOTD Scheduler Form */}
+      {/* VOTD Scheduler Form - Grand spacious cathedral card */}
       {activeSubTab === 'votd' && (
-        <form onSubmit={handleSaveVotd} className="w-full p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-5" style={{ width: '100%', boxSizing: 'border-box' }}>
-          <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
+        <form 
+          onSubmit={handleSaveVotd} 
+          className="w-full p-6 sm:p-8 md:p-10 border shadow-2xl space-y-8" 
+          style={{ 
+            width: '100%', 
+            boxSizing: 'border-box',
+            backgroundColor: 'rgba(28, 29, 38, 0.85)',
+            borderColor: 'var(--border-color, #2a2c3a)',
+            borderRadius: '8px'
+          }}
+        >
+          {/* Header */}
+          <div 
+            className="pb-5 border-b flex flex-wrap items-center justify-between gap-4"
+            style={{ borderColor: 'var(--border-color, #2a2c3a)' }}
+          >
             <div>
-              <h4 className="font-bold text-base text-amber-400">إدارة وجدولة آية اليوم والتأمل اليومي</h4>
-              <p className="text-xs text-slate-400">حدد الآية والشاهد والتأمل الروحي لأي تاريخ في روزنامة الكنيسة</p>
+              <h3 
+                className="font-extrabold text-xl md:text-2xl"
+                style={{
+                  background: 'linear-gradient(135deg, #ffffff 40%, var(--accent-gold, #e2b714) 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent'
+                }}
+              >
+                إدارة وجدولة آية اليوم والتأمل اليومي
+              </h3>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                حدد الآية والشاهد والتأمل الروحي وسؤال التطبيق العملي لأي تاريخ في روزنامة الكنيسة
+              </p>
             </div>
             <a 
               href="/fy/bible?view=votd" 
               target="_blank"
-              className="text-xs text-blue-400 hover:underline flex items-center gap-1 font-semibold"
+              className="px-4 py-2 text-xs font-bold flex items-center gap-2 transition hover:scale-105"
+              style={{
+                backgroundColor: 'rgba(226, 183, 20, 0.1)',
+                border: '1px solid rgba(226, 183, 20, 0.35)',
+                borderRadius: '6px',
+                color: 'var(--accent-gold, #e2b714)'
+              }}
             >
-              معاينة في الموقع <ExternalLink size={12} />
+              <span>معاينة في الموقع</span>
+              <ExternalLink size={14} />
             </a>
           </div>
 
           {votdSuccessMsg && (
-            <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
-              <Check size={16} /> {votdSuccessMsg}
+            <div 
+              className="p-4 border text-sm font-semibold flex items-center gap-3 animate-in fade-in"
+              style={{
+                backgroundColor: 'rgba(46, 204, 113, 0.15)',
+                borderColor: 'rgba(46, 204, 113, 0.4)',
+                borderRadius: '6px',
+                color: '#2ecc71'
+              }}
+            >
+              <Check size={18} /> {votdSuccessMsg}
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div>
-              <label className="text-xs font-bold text-slate-400 mb-1 block">التاريخ المجدول *</label>
-              <input 
-                type="date"
-                value={votdDate}
-                onChange={e => setVotdDate(e.target.value)}
-                required
-                className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs focus:outline-none focus:border-amber-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-400 mb-1 block">كود السفر (ID)</label>
-              <input 
-                type="text"
-                value={votdBookId}
-                onChange={e => setVotdBookId(e.target.value)}
-                placeholder="PHP, JHN, PSA..."
-                className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs focus:outline-none focus:border-amber-500 uppercase"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-400 mb-1 block">رقم الإصحاح</label>
-              <input 
-                type="number"
-                value={votdChapter}
-                onChange={e => setVotdChapter(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs focus:outline-none focus:border-amber-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-400 mb-1 block">رقم الآية</label>
-              <input 
-                type="number"
-                value={votdVerseNum}
-                onChange={e => setVotdVerseNum(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs focus:outline-none focus:border-amber-500"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-bold text-slate-400 mb-1 block">الشاهد بالعربية *</label>
-              <input 
-                type="text"
-                value={votdRefAr}
-                onChange={e => setVotdRefAr(e.target.value)}
-                required
-                placeholder="مثال: رسالة فيلبي 4: 13"
-                className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs focus:outline-none focus:border-amber-500 font-serif"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-400 mb-1 block">الشاهد بالإنجليزية</label>
-              <input 
-                type="text"
-                value={votdRefEn}
-                onChange={e => setVotdRefEn(e.target.value)}
-                placeholder="Example: Philippians 4:13"
-                className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs focus:outline-none focus:border-amber-500 font-sans"
-              />
-            </div>
-          </div>
-
+          {/* Metadata Grid */}
           <div>
-            <label className="text-xs font-bold text-slate-400 mb-1 block">نص الآية بالعربية *</label>
-            <textarea 
-              rows={2}
-              value={votdTextAr}
-              onChange={e => setVotdTextAr(e.target.value)}
-              required
-              className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 text-sm focus:outline-none focus:border-amber-500 font-serif"
-            />
+            <span className="text-xs font-bold tracking-wider uppercase mb-3 block" style={{ color: 'var(--accent-gold, #e2b714)' }}>
+              1. بيانات الإسناد والتاريخ
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div>
+                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                  التاريخ المجدول *
+                </label>
+                <input 
+                  type="date"
+                  value={votdDate}
+                  onChange={e => setVotdDate(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 text-sm focus:outline-none transition"
+                  style={{
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    borderColor: 'var(--border-color, #2a2c3a)',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderRadius: '8px',
+                    color: '#f8f9fa'
+                  }}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                  كود السفر (ID)
+                </label>
+                <input 
+                  type="text"
+                  value={votdBookId}
+                  onChange={e => setVotdBookId(e.target.value)}
+                  placeholder="PHP, JHN, PSA..."
+                  className="w-full px-4 py-3 text-sm uppercase focus:outline-none transition"
+                  style={{
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    borderColor: 'var(--border-color, #2a2c3a)',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderRadius: '8px',
+                    color: '#f8f9fa'
+                  }}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                  رقم الإصحاح
+                </label>
+                <input 
+                  type="number"
+                  value={votdChapter}
+                  onChange={e => setVotdChapter(e.target.value)}
+                  className="w-full px-4 py-3 text-sm focus:outline-none transition"
+                  style={{
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    borderColor: 'var(--border-color, #2a2c3a)',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderRadius: '8px',
+                    color: '#f8f9fa'
+                  }}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                  رقم الآية
+                </label>
+                <input 
+                  type="number"
+                  value={votdVerseNum}
+                  onChange={e => setVotdVerseNum(e.target.value)}
+                  className="w-full px-4 py-3 text-sm focus:outline-none transition"
+                  style={{
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    borderColor: 'var(--border-color, #2a2c3a)',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderRadius: '8px',
+                    color: '#f8f9fa'
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
+          {/* References Grid */}
           <div>
-            <label className="text-xs font-bold text-slate-400 mb-1 block">نص الآية بالإنجليزية (KJV)</label>
-            <textarea 
-              rows={2}
-              value={votdTextEn}
-              onChange={e => setVotdTextEn(e.target.value)}
-              className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 text-sm focus:outline-none focus:border-amber-500 font-sans"
-            />
+            <span className="text-xs font-bold tracking-wider uppercase mb-3 block" style={{ color: 'var(--accent-gold, #e2b714)' }}>
+              2. الشواهد الرسمية
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                  الشاهد بالعربية *
+                </label>
+                <input 
+                  type="text"
+                  value={votdRefAr}
+                  onChange={e => setVotdRefAr(e.target.value)}
+                  required
+                  placeholder="مثال: رسالة فيلبي 4: 13"
+                  className="w-full px-4 py-3 text-sm font-serif focus:outline-none transition"
+                  style={{
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    borderColor: 'var(--border-color, #2a2c3a)',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderRadius: '8px',
+                    color: '#f8f9fa'
+                  }}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                  الشاهد بالإنجليزية
+                </label>
+                <input 
+                  type="text"
+                  value={votdRefEn}
+                  onChange={e => setVotdRefEn(e.target.value)}
+                  placeholder="Example: Philippians 4:13"
+                  className="w-full px-4 py-3 text-sm font-sans focus:outline-none transition"
+                  style={{
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    borderColor: 'var(--border-color, #2a2c3a)',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderRadius: '8px',
+                    color: '#f8f9fa'
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-bold text-slate-400 mb-1 block">التأمل الروحي المعتمد (بالعربية)</label>
-              <textarea 
-                rows={3}
-                value={votdDevotionalAr}
-                onChange={e => setVotdDevotionalAr(e.target.value)}
-                className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 text-xs focus:outline-none focus:border-amber-500 leading-relaxed"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-400 mb-1 block">سؤال التطبيق العملي (بالعربية)</label>
-              <textarea 
-                rows={3}
-                value={votdQuestionAr}
-                onChange={e => setVotdQuestionAr(e.target.value)}
-                className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 text-xs focus:outline-none focus:border-amber-500 leading-relaxed"
-              />
+          {/* Verse Text Fields */}
+          <div>
+            <span className="text-xs font-bold tracking-wider uppercase mb-3 block" style={{ color: 'var(--accent-gold, #e2b714)' }}>
+              3. نصوص الآية
+            </span>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                  نص الآية بالعربية (مع حركات التشكيل) *
+                </label>
+                <textarea 
+                  rows={3}
+                  value={votdTextAr}
+                  onChange={e => setVotdTextAr(e.target.value)}
+                  required
+                  className="w-full p-4 text-base font-serif focus:outline-none transition leading-relaxed"
+                  style={{
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    borderColor: 'var(--border-color, #2a2c3a)',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderRadius: '8px',
+                    color: '#f8f9fa'
+                  }}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                  نص الآية بالإنجليزية (King James Version)
+                </label>
+                <textarea 
+                  rows={2}
+                  value={votdTextEn}
+                  onChange={e => setVotdTextEn(e.target.value)}
+                  className="w-full p-4 text-sm font-sans focus:outline-none transition"
+                  style={{
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    borderColor: 'var(--border-color, #2a2c3a)',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderRadius: '8px',
+                    color: '#f8f9fa'
+                  }}
+                />
+              </div>
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={votdSaving}
-            className="py-2.5 px-6 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg transition flex items-center gap-2 disabled:opacity-50"
-          >
-            {votdSaving ? <RefreshCw className="animate-spin" size={14} /> : <Save size={14} />}
-            <span>حفظ وجدولة آية اليوم</span>
-          </button>
+          {/* Devotional & Practical Question */}
+          <div>
+            <span className="text-xs font-bold tracking-wider uppercase mb-3 block" style={{ color: 'var(--accent-gold, #e2b714)' }}>
+              4. التأمل الرعوي والتطبيق العملي
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                  التأمل الروحي المعتمد (بالعربية)
+                </label>
+                <textarea 
+                  rows={4}
+                  value={votdDevotionalAr}
+                  onChange={e => setVotdDevotionalAr(e.target.value)}
+                  className="w-full p-4 text-sm focus:outline-none transition leading-relaxed"
+                  style={{
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    borderColor: 'var(--border-color, #2a2c3a)',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderRadius: '8px',
+                    color: '#f8f9fa'
+                  }}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                  سؤال التطبيق والنمو الشخصي (بالعربية)
+                </label>
+                <textarea 
+                  rows={4}
+                  value={votdQuestionAr}
+                  onChange={e => setVotdQuestionAr(e.target.value)}
+                  className="w-full p-4 text-sm focus:outline-none transition leading-relaxed"
+                  style={{
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    borderColor: 'var(--border-color, #2a2c3a)',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderRadius: '8px',
+                    color: '#f8f9fa'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Submit Action */}
+          <div className="pt-4 border-t flex justify-end" style={{ borderColor: 'var(--border-color, #2a2c3a)' }}>
+            <button
+              type="submit"
+              disabled={votdSaving}
+              className="py-3 px-8 text-sm font-bold flex items-center gap-2.5 transition-all shadow-lg hover:brightness-110 disabled:opacity-50"
+              style={{
+                backgroundColor: 'var(--accent-gold, #e2b714)',
+                color: '#000000',
+                borderRadius: '8px',
+                boxShadow: '0 8px 25px rgba(226, 183, 20, 0.3)'
+              }}
+            >
+              {votdSaving ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+              <span>حفظ وجدولة آية اليوم</span>
+            </button>
+          </div>
         </form>
       )}
 
       {/* Two-Backgrounds Configuration */}
       {activeSubTab === 'backgrounds' && (
-        <form onSubmit={handleSaveBgConfig} className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-5">
-          <div className="border-b border-slate-800 pb-3">
-            <h4 className="font-bold text-base text-amber-400">إعدادات وهوامش الصورتين الرسميتين للكنيسة</h4>
-            <p className="text-xs text-slate-400">التحكم في الهوامش الآمنة لحماية موضوع الصورة وألوان النصوص والشفافية</p>
+        <form 
+          onSubmit={handleSaveBgConfig} 
+          className="p-6 sm:p-8 md:p-10 border shadow-2xl space-y-8"
+          style={{ 
+            backgroundColor: 'rgba(28, 29, 38, 0.85)',
+            borderColor: 'var(--border-color, #2a2c3a)',
+            borderRadius: '8px'
+          }}
+        >
+          <div className="border-b pb-5" style={{ borderColor: 'var(--border-color, #2a2c3a)' }}>
+            <h3 
+              className="font-extrabold text-xl md:text-2xl"
+              style={{
+                background: 'linear-gradient(135deg, #ffffff 40%, var(--accent-gold, #e2b714) 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent'
+              }}
+            >
+              إعدادات وهوامش الصورتين الرسميتين للكنيسة
+            </h3>
+            <p className="text-sm mt-1" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+              التحكم الدقيق في الهوامش الآمنة لحماية الصليب والأيقونة، وضبط درجات الشفافية وألوان النصوص
+            </p>
           </div>
 
           {bgSuccessMsg && (
-            <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
-              <Check size={16} /> {bgSuccessMsg}
+            <div 
+              className="p-4 border text-sm font-semibold flex items-center gap-3 animate-in fade-in"
+              style={{
+                backgroundColor: 'rgba(46, 204, 113, 0.15)',
+                borderColor: 'rgba(46, 204, 113, 0.4)',
+                borderRadius: '6px',
+                color: '#2ecc71'
+              }}
+            >
+              <Check size={18} /> {bgSuccessMsg}
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/60 space-y-3">
-              <span className="text-xs font-bold text-amber-400 block">🌙 الخلفية الداكنة الرسمية</span>
-              <img src="/images/bible/bible-bg-dark.png" alt="Dark Background Asset" className="w-full rounded-lg aspect-video object-cover" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Dark Theme Asset */}
+            <div 
+              className="p-5 border space-y-4"
+              style={{
+                backgroundColor: 'rgba(18, 19, 26, 0.8)',
+                borderColor: 'var(--border-color, #2a2c3a)',
+                borderRadius: '8px'
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold" style={{ color: 'var(--accent-gold, #e2b714)' }}>
+                  🌙 الخلفية الداكنة الرسمية
+                </span>
+                <span className="text-xs px-2 py-1 font-mono rounded" style={{ backgroundColor: 'rgba(226, 183, 20, 0.1)', color: 'var(--accent-gold, #e2b714)' }}>
+                  16:9 4K
+                </span>
+              </div>
+              <div 
+                className="overflow-hidden border"
+                style={{
+                  borderRadius: '6px',
+                  borderColor: 'var(--border-color, #2a2c3a)'
+                }}
+              >
+                <img src="/images/bible/bible-bg-dark.png" alt="Dark Background Asset" className="w-full aspect-video object-cover" />
+              </div>
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">لون النص الافتراضي</label>
-                <div className="flex items-center gap-2">
+                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                  لون النص الافتراضي للخلفية الداكنة
+                </label>
+                <div className="flex items-center gap-3">
                   <input 
                     type="color" 
                     value={bgDarkColor}
                     onChange={e => setBgDarkColor(e.target.value)}
-                    className="w-8 h-8 rounded border-none cursor-pointer"
+                    className="w-10 h-10 border-none cursor-pointer"
+                    style={{ borderRadius: '6px' }}
                   />
-                  <span className="text-xs font-mono">{bgDarkColor}</span>
+                  <span className="text-sm font-mono px-3 py-1.5 border" style={{ backgroundColor: 'rgba(28, 29, 38, 0.9)', borderColor: 'var(--border-color, #2a2c3a)', borderRadius: '6px' }}>
+                    {bgDarkColor}
+                  </span>
                 </div>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/60 space-y-3">
-              <span className="text-xs font-bold text-amber-400 block">☀️ الخلفية الفاتحة الرسمية</span>
-              <img src="/images/bible/bible-bg-light.png" alt="Light Background Asset" className="w-full rounded-lg aspect-video object-cover" />
+            {/* Light Theme Asset */}
+            <div 
+              className="p-5 border space-y-4"
+              style={{
+                backgroundColor: 'rgba(18, 19, 26, 0.8)',
+                borderColor: 'var(--border-color, #2a2c3a)',
+                borderRadius: '8px'
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold" style={{ color: 'var(--accent-gold, #e2b714)' }}>
+                  ☀️ الخلفية الفاتحة الرسمية
+                </span>
+                <span className="text-xs px-2 py-1 font-mono rounded" style={{ backgroundColor: 'rgba(226, 183, 20, 0.1)', color: 'var(--accent-gold, #e2b714)' }}>
+                  16:9 4K
+                </span>
+              </div>
+              <div 
+                className="overflow-hidden border"
+                style={{
+                  borderRadius: '6px',
+                  borderColor: 'var(--border-color, #2a2c3a)'
+                }}
+              >
+                <img src="/images/bible/bible-bg-light.png" alt="Light Background Asset" className="w-full aspect-video object-cover" />
+              </div>
               <div>
-                <label className="text-xs text-slate-400 mb-1 block">لون النص الافتراضي</label>
-                <div className="flex items-center gap-2">
+                <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-secondary, #a0aec0)' }}>
+                  لون النص الافتراضي للخلفية الفاتحة
+                </label>
+                <div className="flex items-center gap-3">
                   <input 
                     type="color" 
                     value={bgLightColor}
                     onChange={e => setBgLightColor(e.target.value)}
-                    className="w-8 h-8 rounded border-none cursor-pointer"
+                    className="w-10 h-10 border-none cursor-pointer"
+                    style={{ borderRadius: '6px' }}
                   />
-                  <span className="text-xs font-mono">{bgLightColor}</span>
+                  <span className="text-sm font-mono px-3 py-1.5 border" style={{ backgroundColor: 'rgba(28, 29, 38, 0.9)', borderColor: 'var(--border-color, #2a2c3a)', borderRadius: '6px' }}>
+                    {bgLightColor}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          {/* Margins Sliders */}
+          <div 
+            className="p-6 border grid grid-cols-1 sm:grid-cols-2 gap-6"
+            style={{
+              backgroundColor: 'rgba(18, 19, 26, 0.6)',
+              borderColor: 'var(--border-color, #2a2c3a)',
+              borderRadius: '8px'
+            }}
+          >
             <div>
-              <div className="flex justify-between text-xs mb-1 font-bold">
+              <div className="flex justify-between text-xs mb-2 font-bold">
                 <span>الهامش الأفقي الآمن (Safe Margin H)</span>
-                <span className="text-amber-400">{bgHorizMargin}% (~{Math.round(1600 * bgHorizMargin / 100)}px)</span>
+                <span style={{ color: 'var(--accent-gold, #e2b714)' }}>{bgHorizMargin}% (~{Math.round(1600 * bgHorizMargin / 100)}px)</span>
               </div>
               <input 
                 type="range"
@@ -369,9 +652,9 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
               />
             </div>
             <div>
-              <div className="flex justify-between text-xs mb-1 font-bold">
+              <div className="flex justify-between text-xs mb-2 font-bold">
                 <span>الهامش الرأسي الآمن (Safe Margin V)</span>
-                <span className="text-amber-400">{bgVertMargin}% (~{Math.round(844 * bgVertMargin / 100)}px)</span>
+                <span style={{ color: 'var(--accent-gold, #e2b714)' }}>{bgVertMargin}% (~{Math.round(844 * bgVertMargin / 100)}px)</span>
               </div>
               <input 
                 type="range"
@@ -385,14 +668,22 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={bgSaving}
-            className="py-2.5 px-6 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg transition flex items-center gap-2 disabled:opacity-50"
-          >
-            {bgSaving ? <RefreshCw className="animate-spin" size={14} /> : <Save size={14} />}
-            <span>حفظ إعدادات وهوامش الخلفيات</span>
-          </button>
+          <div className="pt-2 flex justify-end">
+            <button
+              type="submit"
+              disabled={bgSaving}
+              className="py-3 px-8 text-sm font-bold flex items-center gap-2.5 transition-all shadow-lg hover:brightness-110 disabled:opacity-50"
+              style={{
+                backgroundColor: 'var(--accent-gold, #e2b714)',
+                color: '#000000',
+                borderRadius: '8px',
+                boxShadow: '0 8px 25px rgba(226, 183, 20, 0.3)'
+              }}
+            >
+              {bgSaving ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+              <span>حفظ إعدادات وهوامش الخلفيات</span>
+            </button>
+          </div>
         </form>
       )}
     </div>

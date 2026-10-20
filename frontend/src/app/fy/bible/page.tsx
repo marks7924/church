@@ -1,315 +1,259 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { useTheme } from '../../../components/ThemeContext';
 import { 
-  BookOpen, ChevronLeft, ChevronRight, CheckCircle2, Bookmark, 
-  ArrowLeft, ArrowRight, Share2, Sparkles, SlidersHorizontal, BookMarked,
-  Search, Scale, Compass, Calendar, Check, X, RotateCcw, ListFilter,
-  Type, AlignJustify, Eye, Info, Volume2, VolumeX, Moon, Sun, Coffee,
-  Settings, ChevronDown, CheckCircle, Copy, Layers, Filter
+  BookOpen, Sparkles, Compass, BookMarked, Calendar, 
+  ListFilter, Search, ChevronRight, ChevronLeft, ChevronDown, 
+  Settings, RotateCcw, Volume2, VolumeX, CheckCircle, 
+  Type, X, Check, Scale, BookmarkCheck
 } from 'lucide-react';
 import { API_URL } from '../../../config';
-import BibleImageGeneratorModal from '../../../components/BibleImageGeneratorModal';
 import BibleVerseToolbar from '../../../components/BibleVerseToolbar';
-import BibleStudyDrawer from '../../../components/BibleStudyDrawer';
-import BibleTranslationComparison from '../../../components/BibleTranslationComparison';
-import BibleJournalView from '../../../components/BibleJournalView';
-import BibleReadingPlansView from '../../../components/BibleReadingPlansView';
-import BibleTopicDiscoveryView from '../../../components/BibleTopicDiscoveryView';
-import BibleExplorerView from '../../../components/BibleExplorerView';
-import BibleVerseOfDayView from '../../../components/BibleVerseOfDayView';
-import { removeArabicTashkeel, formatVerseRange, copyToClipboard } from '../../../utils/bibleTashkeel';
+import BibleImageGeneratorModal from '../../../components/BibleImageGeneratorModal';
+import { removeArabicTashkeel } from '../../../utils/bibleTashkeel';
+import { BIBLE_BOOKS, getBookBySlug, BibleBookInfo } from '../../../utils/bibleConstants';
 
-function BibleReaderContent() {
-  const { language } = useTheme();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const isAr = language === 'ar';
+interface VerseItem {
+  id?: string;
+  verseNumber: number;
+  text: string;
+}
 
-  // Navigation Sub-Views
-  const [activeView, setActiveView] = useState<'reader' | 'votd' | 'explorer' | 'journal' | 'plans' | 'topics'>('reader');
+interface ChapterData {
+  id?: string;
+  chapterNumber: number;
+  book?: {
+    slug: string;
+    nameAr: string;
+    nameEn: string;
+  };
+  verses: VerseItem[];
+}
 
-  // Reader Core State
-  const [translationCode, setTranslationCode] = useState<string>('van-dyck');
-  const [books, setBooks] = useState<any[]>([]);
-  const [selectedTestament, setSelectedTestament] = useState<'NEW' | 'OLD'>('NEW');
-  const [selectedBook, setSelectedBook] = useState<any>(null);
-  const [selectedChapter, setSelectedChapter] = useState<number>(1);
-  const [chapterData, setChapterData] = useState<any>(null);
-  const [loadingChapter, setLoadingChapter] = useState(false);
+export default function BiblePage() {
+  // Sub-views
+  const [activeTab, setActiveTab] = useState<'reader' | 'votd' | 'explorer' | 'journal' | 'plans' | 'topics'>('reader');
+  
+  // Translation & Current Chapter
+  const [translationCode, setTranslationCode] = useState<'van-dyck' | 'kjv'>('van-dyck');
+  const [bookSlug, setBookSlug] = useState<string>('mat');
+  const [chapterNumber, setChapterNumber] = useState<number>(3);
+  
+  // Data States
+  const [chapterData, setChapterData] = useState<ChapterData | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  // Selector Modal / Drawer
-  const [isBookPickerOpen, setIsBookPickerOpen] = useState(false);
-  const [bookPickerSearch, setBookPickerSearch] = useState('');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  // Eye-friendly Reading Customization
-  const [readingTheme, setReadingTheme] = useState<'dark' | 'sepia' | 'oled'>('dark');
-  const [fontSize, setFontSize] = useState<number>(20); // 16 to 28
-  const [fontFamily, setFontFamily] = useState<'amiri' | 'cairo' | 'system'>('amiri');
-  const [lineSpacing, setLineSpacing] = useState<'normal' | 'relaxed' | 'loose'>('loose');
-  const [includeTashkeel, setIncludeTashkeel] = useState<boolean>(true);
-  const [readerWidth, setReaderWidth] = useState<'normal' | 'wide'>('normal');
-
-  // Multi-verse selection state
+  // Selection & Multiverse Toolbar
   const [selectedVerses, setSelectedVerses] = useState<{ verseNumber: number; text: string }[]>([]);
-
-  // Modals & Drawers State
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
-  const [imageModalVerseData, setImageModalVerseData] = useState<{
-    verseNumber: number;
-    text: string;
-    bookName?: string;
-    chapterNumber?: number;
-    reference?: string;
-    translationName?: string;
-  } | null>(null);
+  const [comparisonActive, setComparisonActive] = useState(false);
+  const [comparisonData, setComparisonData] = useState<any>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
 
-  const [isStudyDrawerOpen, setIsStudyDrawerOpen] = useState(false);
-  const [studyVerseNumber, setStudyVerseNumber] = useState<number>(1);
-  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
-  const [journalPassageData, setJournalPassageData] = useState<{ reference: string; text: string; bookSlug: string; chapter: number } | null>(null);
+  // Cathedral Reading Display Settings
+  const [fontSize, setFontSize] = useState<number>(24);
+  const [fontFamily, setFontFamily] = useState<'Amiri' | 'Cairo'>('Amiri');
+  const [includeTashkeel, setIncludeTashkeel] = useState<boolean>(true);
+  const [readingTheme, setReadingTheme] = useState<'dark' | 'sepia' | 'oled'>('dark');
+  const [isDisplaySettingsOpen, setIsDisplaySettingsOpen] = useState<boolean>(false);
+  const [isBookModalOpen, setIsBookModalOpen] = useState<boolean>(false);
+  const [testamentFilter, setTestamentFilter] = useState<'NEW' | 'OLD'>('NEW');
+  const [bookSearchQuery, setBookSearchQuery] = useState<string>('');
 
-  // Search State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  // Audio Speech Synthesis
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
 
-  // User reading progress state
-  const [isChapterCompleted, setIsChapterCompleted] = useState(false);
-  const [progressSummary, setProgressSummary] = useState<any>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [recentPassages, setRecentPassages] = useState<{ bookSlug: string; bookName: string; chapter: number }[]>([]);
+  // History & Bookmarks
+  const [readingHistory, setReadingHistory] = useState<{ bookSlug: string; bookName: string; chapter: number }[]>([]);
+  const [readChapters, setReadChapters] = useState<Record<string, boolean>>({});
 
-  // Audio recitation state
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  // Journal, Plans, Topics state
+  const [journalEntries, setJournalEntries] = useState<any[]>([]);
+  const [newJournalNote, setNewJournalNote] = useState({ reference: '', text: '', thoughts: '' });
+  const [explorerQuery, setExplorerQuery] = useState('');
+  const [explorerResults, setExplorerResults] = useState<any[]>([]);
+  const [explorerLoading, setExplorerLoading] = useState(false);
+  const [votdData, setVotdData] = useState<any>(null);
+  const [votdLoading, setVotdLoading] = useState(false);
 
-  // Load token & books on mount
+  // Load Saved Preferences on Mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedToken = localStorage.getItem('church-token');
-      setToken(storedToken);
-
       try {
-        const storedRecents = localStorage.getItem('church-recent-passages');
-        if (storedRecents) setRecentPassages(JSON.parse(storedRecents));
+        const savedHistory = localStorage.getItem('church-bible-history');
+        if (savedHistory) setReadingHistory(JSON.parse(savedHistory));
 
-        const savedTheme = localStorage.getItem('church-bible-theme');
-        if (savedTheme && ['dark', 'sepia', 'oled'].includes(savedTheme)) {
-          setReadingTheme(savedTheme as any);
-        }
+        const savedRead = localStorage.getItem('church-bible-read-chapters');
+        if (savedRead) setReadChapters(JSON.parse(savedRead));
+
+        const savedJournal = localStorage.getItem('church-bible-journal');
+        if (savedJournal) setJournalEntries(JSON.parse(savedJournal));
+
+        const savedTheme = localStorage.getItem('church-bible-theme') as any;
+        if (savedTheme) setReadingTheme(savedTheme);
 
         const savedFontSize = localStorage.getItem('church-bible-fontsize');
-        if (savedFontSize) setFontSize(Number(savedFontSize));
+        if (savedFontSize) setFontSize(parseInt(savedFontSize, 10));
+
+        const savedFontFamily = localStorage.getItem('church-bible-fontfamily') as any;
+        if (savedFontFamily) setFontFamily(savedFontFamily);
 
         const savedTashkeel = localStorage.getItem('church-bible-tashkeel');
         if (savedTashkeel !== null) setIncludeTashkeel(savedTashkeel === 'true');
-      } catch {}
+      } catch (err) {
+        console.error('Error loading preferences:', err);
+      }
     }
-
-    // Fetch available books
-    fetch(`${API_URL}/fy/bible/books`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          const normalized = data.map((b: any) => {
-            const chapters = b.totalChapters || b.chapterCount || 1;
-            return {
-              ...b,
-              totalChapters: chapters,
-              chapterCount: chapters
-            };
-          });
-          setBooks(normalized);
-
-          // Check URL query parameters
-          const bookParam = searchParams.get('book');
-          const chapParam = searchParams.get('chapter');
-          const viewParam = searchParams.get('view');
-          if (viewParam && ['reader', 'votd', 'explorer', 'journal', 'plans', 'topics'].includes(viewParam)) {
-            setActiveView(viewParam as any);
-          }
-
-          let initialBook = null;
-          if (bookParam) {
-            initialBook = normalized.find((b: any) => 
-              b.slug?.toLowerCase() === bookParam.toLowerCase() || 
-              b.id?.toLowerCase() === bookParam.toLowerCase()
-            );
-          }
-          if (!initialBook) {
-            initialBook = normalized.find((b: any) => 
-              b.slug?.toUpperCase() === 'MAT' || 
-              b.id?.toUpperCase() === 'MAT'
-            ) || normalized[0];
-          }
-
-          if (initialBook) {
-            setSelectedBook(initialBook);
-            setSelectedTestament(initialBook.testament);
-            if (chapParam) {
-              setSelectedChapter(parseInt(chapParam) || 1);
-            }
-          }
-        }
-      })
-      .catch(err => console.error('Error fetching books:', err));
   }, []);
 
-  // Fetch chapter data when book, chapter, or translation changes
-  useEffect(() => {
-    if (!selectedBook) return;
+  const updateFontSize = (size: number) => {
+    const clamped = Math.max(18, Math.min(36, size));
+    setFontSize(clamped);
+    if (typeof window !== 'undefined') localStorage.setItem('church-bible-fontsize', clamped.toString());
+  };
 
-    // Stop speaking if moving chapters
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
+  const updateReadingTheme = (theme: 'dark' | 'sepia' | 'oled') => {
+    setReadingTheme(theme);
+    if (typeof window !== 'undefined') localStorage.setItem('church-bible-theme', theme);
+  };
 
-    setSelectedVerses([]); // Reset selection when moving chapters
-    setLoadingChapter(true);
-    fetch(`${API_URL}/fy/bible/chapter?bookSlug=${selectedBook.slug}&chapterNumber=${selectedChapter}&translationCode=${translationCode}`)
+  const updateFontFamily = (family: 'Amiri' | 'Cairo') => {
+    setFontFamily(family);
+    if (typeof window !== 'undefined') localStorage.setItem('church-bible-fontfamily', family);
+  };
+
+  const toggleTashkeel = () => {
+    const nextVal = !includeTashkeel;
+    setIncludeTashkeel(nextVal);
+    if (typeof window !== 'undefined') localStorage.setItem('church-bible-tashkeel', nextVal.toString());
+  };
+
+  // Resolved Book Info from static database
+  const currentBookInfo: BibleBookInfo = useMemo(() => {
+    return getBookBySlug(bookSlug) || {
+      id: 'MAT',
+      slug: 'mat',
+      nameAr: 'إنجيل متى',
+      nameEn: 'Matthew',
+      testament: 'NEW',
+      totalChapters: 28,
+      categoryAr: 'الأناجيل الأربعة'
+    };
+  }, [bookSlug]);
+
+  // Fetch Chapter
+  const fetchChapter = (slug: string, chapter: number, translation: string) => {
+    setLoading(true);
+    setSelectedVerses([]);
+    fetch(`${API_URL}/fy/bible/chapter?bookSlug=${slug}&chapterNumber=${chapter}&translationCode=${translation}`)
       .then(res => res.json())
       .then(data => {
-        if (data && data.chapter) {
-          setChapterData(data.chapter);
-
-          // Save to local recent passages
-          if (typeof window !== 'undefined') {
-            const newRecent = {
-              bookSlug: selectedBook.slug,
-              bookName: isAr ? selectedBook.nameAr : selectedBook.nameEn,
-              chapter: selectedChapter
-            };
-            setRecentPassages(prev => {
-              const filtered = prev.filter(r => !(r.bookSlug === newRecent.bookSlug && r.chapter === newRecent.chapter));
-              const updated = [newRecent, ...filtered].slice(0, 6);
-              try { localStorage.setItem('church-recent-passages', JSON.stringify(updated)); } catch {}
-              return updated;
-            });
-          }
-        } else {
-          setChapterData(null);
+        if (data && data.verses) {
+          setChapterData(data);
+          const bookName = currentBookInfo.nameAr;
+          const entry = {
+            bookSlug: slug,
+            bookName: bookName,
+            chapter: chapter
+          };
+          setReadingHistory(prev => {
+            const filtered = prev.filter(p => !(p.bookSlug === slug && p.chapter === chapter));
+            const updated = [entry, ...filtered].slice(0, 10);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('church-bible-history', JSON.stringify(updated));
+            }
+            return updated;
+          });
         }
       })
-      .catch(err => {
-        console.error('Error fetching chapter:', err);
-        setChapterData(null);
-      })
-      .finally(() => setLoadingChapter(false));
+      .catch(err => console.error('Error fetching chapter:', err))
+      .finally(() => setLoading(false));
+  };
 
-    // Check reading progress if authenticated
-    if (token) {
-      fetch(`${API_URL}/fy/reading-progress?translationCode=${translationCode}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+  useEffect(() => {
+    if (bookSlug && chapterNumber) {
+      fetchChapter(bookSlug, chapterNumber, translationCode);
+    }
+  }, [bookSlug, chapterNumber, translationCode, currentBookInfo.nameAr]);
+
+  // Load VOTD when tab is opened
+  useEffect(() => {
+    if (activeTab === 'votd' && !votdData) {
+      setVotdLoading(true);
+      fetch(`${API_URL}/fy/verse-of-day?translationCode=${translationCode}`)
         .then(res => res.json())
         .then(data => {
-          if (data && data.progress) {
-            setProgressSummary(data);
-            const isCompleted = data.progress.some(
-              (p: any) => p.bookSlug?.toLowerCase() === selectedBook.slug?.toLowerCase() && p.chapterNumber === selectedChapter && p.completed
-            );
-            setIsChapterCompleted(isCompleted);
-          }
+          if (data && data.verse) setVotdData(data);
         })
-        .catch(err => console.error('Error reading progress:', err));
+        .catch(err => console.error('Error fetching VOTD:', err))
+        .finally(() => setVotdLoading(false));
     }
-  }, [selectedBook, selectedChapter, translationCode, token, isAr]);
+  }, [activeTab, translationCode, votdData]);
 
-  // Handle Search Submission
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
+  const totalChaptersInCurrentBook = currentBookInfo.totalChapters || 28;
 
-    setIsSearching(true);
-    setShowSearchResults(true);
-    try {
-      const res = await fetch(`${API_URL}/fy/bible/search?q=${encodeURIComponent(searchQuery.trim())}&translationCode=${translationCode}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSearchResults(data.results || []);
+  // Next / Previous Chapter Navigation
+  const handlePrevChapter = () => {
+    if (chapterNumber > 1) {
+      setChapterNumber(chapterNumber - 1);
+    } else {
+      const currentIndex = BIBLE_BOOKS.findIndex(b => b.slug.toLowerCase() === bookSlug.toLowerCase());
+      if (currentIndex > 0) {
+        const prevBook = BIBLE_BOOKS[currentIndex - 1];
+        setBookSlug(prevBook.slug);
+        setChapterNumber(prevBook.totalChapters || 1);
       }
-    } catch (err) {
-      console.error('Error searching:', err);
-    } finally {
-      setIsSearching(false);
     }
   };
 
-  // Group books by canonical biblical sections
-  const booksBySection = useMemo(() => {
-    const currentTestamentBooks = books.filter(b => b.testament === selectedTestament);
-    const filtered = bookPickerSearch.trim()
-      ? currentTestamentBooks.filter(b => 
-          (b.nameAr && b.nameAr.includes(bookPickerSearch.trim())) ||
-          (b.nameEn && b.nameEn.toLowerCase().includes(bookPickerSearch.trim().toLowerCase()))
-        )
-      : currentTestamentBooks;
-
-    const groups = new Map<string, any[]>();
-    for (const b of filtered) {
-      const sectionKey = isAr ? (b.sectionAr || 'الأسفار الكنسية') : (b.sectionEn || 'Biblical Books');
-      if (!groups.has(sectionKey)) groups.set(sectionKey, []);
-      groups.get(sectionKey)!.push(b);
+  const handleNextChapter = () => {
+    if (chapterNumber < totalChaptersInCurrentBook) {
+      setChapterNumber(chapterNumber + 1);
+    } else {
+      const currentIndex = BIBLE_BOOKS.findIndex(b => b.slug.toLowerCase() === bookSlug.toLowerCase());
+      if (currentIndex >= 0 && currentIndex < BIBLE_BOOKS.length - 1) {
+        const nextBook = BIBLE_BOOKS[currentIndex + 1];
+        setBookSlug(nextBook.slug);
+        setChapterNumber(1);
+      }
     }
-    return Array.from(groups.entries()).map(([sectionTitle, bList]) => ({
-      sectionTitle,
-      books: bList
-    }));
-  }, [books, selectedTestament, bookPickerSearch, isAr]);
+  };
 
-  // Toggle single verse selection
-  const handleVerseClick = (verse: { verseNumber: number; text: string }) => {
+  // Mark Chapter as read
+  const chapterKey = `${bookSlug}_${chapterNumber}`;
+  const isChapterRead = !!readChapters[chapterKey];
+  const toggleChapterRead = () => {
+    const updated = { ...readChapters, [chapterKey]: !isChapterRead };
+    setReadChapters(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('church-bible-read-chapters', JSON.stringify(updated));
+    }
+  };
+
+  // Verse Selection
+  const handleVerseClick = (v: VerseItem) => {
     setSelectedVerses(prev => {
-      const exists = prev.some(v => v.verseNumber === verse.verseNumber);
+      const exists = prev.some(item => item.verseNumber === v.verseNumber);
       if (exists) {
-        return prev.filter(v => v.verseNumber !== verse.verseNumber);
+        return prev.filter(item => item.verseNumber !== v.verseNumber);
       } else {
-        const updated = [...prev, verse];
-        return updated.sort((a, b) => a.verseNumber - b.verseNumber);
+        return [...prev, { verseNumber: v.verseNumber, text: v.text }].sort((a, b) => a.verseNumber - b.verseNumber);
       }
     });
   };
 
-  const handleSelectAllChapter = () => {
+  const handleSelectAll = () => {
     if (!chapterData?.verses) return;
     if (selectedVerses.length === chapterData.verses.length) {
       setSelectedVerses([]);
     } else {
-      setSelectedVerses(chapterData.verses.map((v: any) => ({
-        verseNumber: v.verseNumber,
-        text: v.text
-      })));
+      setSelectedVerses(chapterData.verses.map(v => ({ verseNumber: v.verseNumber, text: v.text })));
     }
   };
 
-  // Navigate to passage helper
-  const handleNavigateToPassage = (bookSlug: string, chapter: number) => {
-    const targetBook = books.find(b => 
-      b.slug?.toLowerCase() === bookSlug?.toLowerCase() || 
-      b.code?.toLowerCase() === bookSlug?.toLowerCase() || 
-      b.id?.toLowerCase() === bookSlug?.toLowerCase()
-    );
-    if (targetBook) {
-      setSelectedBook(targetBook);
-      setSelectedTestament(targetBook.testament);
-      setSelectedChapter(chapter);
-      setActiveView('reader');
-      setShowSearchResults(false);
-      setIsBookPickerOpen(false);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  // Audio Speech Recitation
-  const toggleSpeechRecitation = () => {
+  // Audio Recitation
+  const handleToggleSpeech = () => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       alert('المتصفح لا يدعم القراءة الصوتية المباشرة.');
       return;
@@ -321,14 +265,15 @@ function BibleReaderContent() {
       return;
     }
 
-    if (!chapterData?.verses || chapterData.verses.length === 0) return;
+    if (!chapterData?.verses) return;
 
-    const fullChapterText = chapterData.verses.map((v: any) => `الآية ${v.verseNumber}: ${v.text}`).join('. ');
-    const cleanText = removeArabicTashkeel(fullChapterText);
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = translationCode === 'kjv' ? 'en-US' : 'ar-SA';
-    utterance.rate = 0.9;
+    const fullChapterText = chapterData.verses
+      .map(v => `${v.verseNumber}: ${includeTashkeel ? v.text : removeArabicTashkeel(v.text)}`)
+      .join('. ');
 
+    const utterance = new SpeechSynthesisUtterance(fullChapterText);
+    utterance.lang = 'ar-SA';
+    utterance.rate = 0.88;
     utterance.onend = () => setIsSpeaking(false);
     utterance.onerror = () => setIsSpeaking(false);
 
@@ -336,883 +281,814 @@ function BibleReaderContent() {
     setIsSpeaking(true);
   };
 
-  const handleToggleComplete = async () => {
-    if (!token) {
-      alert(isAr ? 'يرجى تسجيل الدخول لحفظ تقدم القراءة في حسابك الشخصي.' : 'Please log in to track reading progress.');
+  // Comparison Fetch
+  const handleOpenComparison = async () => {
+    if (comparisonActive) {
+      setComparisonActive(false);
       return;
     }
-    if (!selectedBook) return;
-
-    const newStatus = !isChapterCompleted;
-    setIsChapterCompleted(newStatus);
-
+    setComparisonLoading(true);
+    setComparisonActive(true);
+    const otherCode = translationCode === 'van-dyck' ? 'kjv' : 'van-dyck';
     try {
-      const res = await fetch(`${API_URL}/fy/reading-progress`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          bookSlug: selectedBook.slug,
-          chapterNumber: selectedChapter,
-          translationCode,
-          completed: newStatus
-        })
-      });
+      const res = await fetch(`${API_URL}/fy/bible/chapter?bookSlug=${bookSlug}&chapterNumber=${chapterNumber}&translationCode=${otherCode}`);
       if (res.ok) {
-        setProgressSummary((prev: any) => ({
-          ...prev,
-          completedChaptersCount: newStatus 
-            ? (prev?.completedChaptersCount || 0) + 1 
-            : Math.max(0, (prev?.completedChaptersCount || 1) - 1)
-        }));
+        const data = await res.json();
+        setComparisonData(data);
       }
     } catch (err) {
-      console.error('Error toggling progress:', err);
-      setIsChapterCompleted(!newStatus);
+      console.error('Error fetching comparison:', err);
+    } finally {
+      setComparisonLoading(false);
     }
   };
 
-  const currentBookName = selectedBook ? (isAr ? selectedBook.nameAr : selectedBook.nameEn) : '';
-  const currentTranslationName = translationCode === 'van-dyck' ? (isAr ? 'ترجمة فاندايك (1865)' : 'Smith & Van Dyck (1865)') : 'King James Version (KJV)';
-
-  // Eye-friendly styles based on reading theme
-  const themeStyles = useMemo(() => {
-    if (readingTheme === 'sepia') {
-      return {
-        bg: '#181511',
-        cardBg: 'rgba(32, 28, 22, 0.85)',
-        text: '#f7edd8',
-        subtext: '#c9bca4',
-        border: 'rgba(202, 160, 90, 0.25)',
-        verseBadgeBg: 'rgba(217, 155, 38, 0.15)',
-        verseBadgeText: '#e8b04a',
-        selectedBg: 'rgba(217, 155, 38, 0.18)',
-        selectedBorder: 'rgba(217, 155, 38, 0.5)'
-      };
+  // Search Action
+  const handleExplorerSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!explorerQuery.trim()) return;
+    setExplorerLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/fy/bible/search?query=${encodeURIComponent(explorerQuery)}&translationCode=${translationCode}`);
+      if (res.ok) {
+        const data = await res.json();
+        setExplorerResults(Array.isArray(data) ? data : data.results || []);
+      }
+    } catch (err) {
+      console.error('Search error:', err);
+    } finally {
+      setExplorerLoading(false);
     }
+  };
+
+  // Journal Save Action
+  const handleSaveJournalNote = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newJournalNote.thoughts.trim()) return;
+
+    const newEntry = {
+      id: Date.now().toString(),
+      date: new Date().toLocaleDateString('ar-EG', { dateStyle: 'full' }),
+      reference: newJournalNote.reference || `${currentBookInfo.nameAr} ${chapterNumber}`,
+      passageText: newJournalNote.text,
+      thoughts: newJournalNote.thoughts
+    };
+
+    const updated = [newEntry, ...journalEntries];
+    setJournalEntries(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('church-bible-journal', JSON.stringify(updated));
+    }
+    setNewJournalNote({ reference: '', text: '', thoughts: '' });
+    alert('تم حفظ التأمل الروحي في دفترك الخاص!');
+  };
+
+  // Filtered Books for Modal
+  const filteredBooks = useMemo(() => {
+    return BIBLE_BOOKS.filter(b => {
+      const matchesTestament = b.testament === testamentFilter;
+      const matchesSearch = !bookSearchQuery || 
+        b.nameAr.toLowerCase().includes(bookSearchQuery.toLowerCase()) || 
+        b.nameEn.toLowerCase().includes(bookSearchQuery.toLowerCase()) ||
+        b.slug.toLowerCase().includes(bookSearchQuery.toLowerCase());
+      return matchesTestament && matchesSearch;
+    });
+  }, [testamentFilter, bookSearchQuery]);
+
+  // Color theme tokens
+  const themeTokens = useMemo(() => {
     if (readingTheme === 'oled') {
       return {
         bg: '#000000',
-        cardBg: 'rgba(15, 15, 15, 0.95)',
+        card: '#0a0a0a',
+        cardBorder: '#222222',
         text: '#ffffff',
-        subtext: '#a1a1aa',
-        border: 'rgba(255, 255, 255, 0.15)',
-        verseBadgeBg: 'rgba(255, 255, 255, 0.1)',
-        verseBadgeText: '#E2B714',
-        selectedBg: 'rgba(226, 183, 20, 0.18)',
-        selectedBorder: '#E2B714'
+        muted: '#999999',
+        gold: '#e2b714',
+        verseSelected: 'rgba(226, 183, 20, 0.16)',
+        badgeBg: 'rgba(226, 183, 20, 0.15)'
       };
     }
-    // Default: Luxury Dark Church Theme
+    if (readingTheme === 'sepia') {
+      return {
+        bg: '#181511',
+        card: '#241f18',
+        cardBorder: '#3b3226',
+        text: '#f4efe6',
+        muted: '#a89c8a',
+        gold: '#e0a912',
+        verseSelected: 'rgba(224, 169, 18, 0.2)',
+        badgeBg: 'rgba(224, 169, 18, 0.15)'
+      };
+    }
+    // Default Church Dark
     return {
-      bg: 'var(--bg-primary, #0b0c13)',
-      cardBg: 'rgba(20, 22, 32, 0.75)',
-      text: '#f8fafc',
-      subtext: '#94a3b8',
-      border: 'rgba(226, 183, 20, 0.22)',
-      verseBadgeBg: 'rgba(226, 183, 20, 0.12)',
-      verseBadgeText: '#E2B714',
-      selectedBg: 'rgba(226, 183, 20, 0.15)',
-      selectedBorder: 'rgba(226, 183, 20, 0.45)'
+      bg: '#0b0c10',
+      card: '#1c1d26',
+      cardBorder: '#2a2c3a',
+      text: '#f8f9fa',
+      muted: '#a0aec0',
+      gold: '#e2b714',
+      verseSelected: 'rgba(226, 183, 20, 0.15)',
+      badgeBg: 'rgba(226, 183, 20, 0.12)'
     };
   }, [readingTheme]);
 
   return (
     <div 
-      className="min-h-screen py-6 px-3 sm:px-6 w-full transition-colors duration-300" 
-      style={{ 
-        maxWidth: '1280px',
-        width: '100%',
-        margin: '0 auto',
-        backgroundColor: themeStyles.bg,
-        color: themeStyles.text,
-        boxSizing: 'border-box'
+      style={{
+        minHeight: '100vh',
+        backgroundColor: themeTokens.bg,
+        color: themeTokens.text,
+        boxSizing: 'border-box',
+        width: '100%'
       }}
+      dir="rtl"
     >
-      {/* 1. TOP HEADER & BREADCRUMB BAR */}
+      {/* Pinned Top Verse Action Toolbar */}
+      {selectedVerses.length > 0 && (
+        <BibleVerseToolbar
+          selectedVerses={selectedVerses}
+          bookName={currentBookInfo.nameAr}
+          bookSlug={bookSlug}
+          chapterNumber={chapterNumber}
+          translationName={translationCode === 'van-dyck' ? 'فاندايك (1865)' : 'King James Version'}
+          translationCode={translationCode}
+          onClearSelection={() => setSelectedVerses([])}
+          onOpenImageGenerator={() => setIsImageModalOpen(true)}
+          onOpenStudyMode={(vNum) => {
+            setActiveTab('explorer');
+            setExplorerQuery(`${currentBookInfo.nameAr} ${chapterNumber}:${vNum}`);
+          }}
+          onOpenComparison={handleOpenComparison}
+          onOpenJournalWithPassage={(passage) => {
+            setNewJournalNote({
+              reference: passage.reference,
+              text: passage.text,
+              thoughts: ''
+            });
+            setActiveTab('journal');
+          }}
+          onToggleFavorite={(passage) => {
+            alert(`تم حفظ الشاهد «${currentBookInfo.nameAr} ${chapterNumber}: ${passage.verseNumber}» في قائمة مفضلاتك!`);
+          }}
+        />
+      )}
+
+      {/* Main Expansive Container */}
       <div 
-        className="flex flex-wrap items-center justify-between gap-3 mb-6 p-3.5 rounded-2xl backdrop-blur-md border transition-all"
         style={{
-          backgroundColor: themeStyles.cardBg,
-          borderColor: themeStyles.border
+          maxWidth: '1440px',
+          width: '100%',
+          margin: '0 auto',
+          padding: 'clamp(2rem, 4vw, 4rem) clamp(1.25rem, 3vw, 2.5rem)',
+          boxSizing: 'border-box'
         }}
       >
-        <div className="flex items-center gap-2 text-xs">
-          <Link href="/fy" className="text-slate-400 hover:text-amber-400 transition font-medium">
-            {isAr ? 'الرئيسية' : 'Home'}
-          </Link>
-          <span className="text-slate-600">/</span>
-          <span className="text-amber-400 font-bold flex items-center gap-1.5">
-            <BookOpen size={14} />
-            {isAr ? 'الكتاب المقدس' : 'Holy Bible'}
-          </span>
-          {activeView !== 'reader' && (
-            <>
-              <span className="text-slate-600">/</span>
-              <span className="text-slate-300 font-medium">
-                {activeView === 'votd' && (isAr ? 'آية اليوم والتأمل' : 'Verse of the Day')}
-                {activeView === 'explorer' && (isAr ? 'المستكشف الكتابي' : 'Bible Explorer')}
-                {activeView === 'journal' && (isAr ? 'دفتري الروحي' : 'Spiritual Journal')}
-                {activeView === 'plans' && (isAr ? 'خطط القراءة' : 'Reading Plans')}
-                {activeView === 'topics' && (isAr ? 'موضوعات الآيات' : 'Scripture Topics')}
-              </span>
-            </>
-          )}
-        </div>
-
-        {/* Translation Switcher & Quick Controls */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Translation Dropdown */}
-          <div className="relative">
-            <select
-              value={translationCode}
-              onChange={(e) => setTranslationCode(e.target.value)}
-              className="py-1.5 px-3 rounded-xl text-xs font-bold border transition cursor-pointer appearance-none pr-7 pl-3 focus:outline-none focus:border-amber-500 shadow-sm"
-              style={{
-                backgroundColor: 'rgba(15, 23, 42, 0.7)',
-                borderColor: themeStyles.border,
-                color: '#E2B714'
-              }}
-            >
-              <option value="van-dyck">📖 {isAr ? 'ترجمة فاندايك (1865)' : 'Smith & Van Dyck (1865)'}</option>
-              <option value="kjv">📜 {isAr ? 'نسخة الملك جيمس (KJV)' : 'King James Version (KJV)'}</option>
-            </select>
-            <ChevronDown size={13} className="absolute left-2.5 top-2.5 text-amber-400 pointer-events-none" />
-          </div>
-
-          {/* Quick Search Toggle Button */}
-          <button
-            type="button"
-            onClick={() => setIsSearchOpen(prev => !prev)}
-            className={`p-2 rounded-xl text-xs font-medium border transition flex items-center gap-1.5 ${
-              isSearchOpen ? 'bg-amber-500 text-slate-950 border-amber-400' : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-            }`}
-            style={{ borderColor: isSearchOpen ? undefined : themeStyles.border }}
-            title={isAr ? 'البحث السريع في الآيات' : 'Search Scripture'}
-          >
-            <Search size={14} />
-            <span className="hidden sm:inline">{isAr ? 'بحث' : 'Search'}</span>
-          </button>
-
-          {/* Reading Display Settings Popover Toggle */}
-          <button
-            type="button"
-            onClick={() => setIsSettingsOpen(prev => !prev)}
-            className={`p-2 rounded-xl text-xs font-medium border transition flex items-center gap-1.5 ${
-              isSettingsOpen ? 'bg-amber-500 text-slate-950 border-amber-400' : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-            }`}
-            style={{ borderColor: isSettingsOpen ? undefined : themeStyles.border }}
-            title={isAr ? 'تخصيص مظهر القراءة والخط' : 'Display Preferences'}
-          >
-            <Settings size={14} />
-            <span className="hidden sm:inline">{isAr ? 'المظهر' : 'Settings'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 2. READING PREFERENCES DRAWER (When Settings is open) */}
-      {isSettingsOpen && (
+        {/* 1. Header Section - Wide, Majestic, Cathedral Inspired */}
         <div 
-          className="mb-6 p-4 rounded-2xl border shadow-xl backdrop-blur-xl animate-in fade-in duration-200"
           style={{
-            backgroundColor: themeStyles.cardBg,
-            borderColor: themeStyles.border
+            backgroundColor: 'rgba(28, 29, 38, 0.85)',
+            border: '1px solid var(--border-color, #2a2c3a)',
+            borderRadius: '8px',
+            padding: 'clamp(1.5rem, 3vw, 2.75rem)',
+            marginBottom: '3rem',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1.75rem',
+            boxShadow: '0 12px 36px rgba(0,0,0,0.45)'
           }}
         >
-          <div className="flex items-center justify-between pb-3 border-b mb-3.5" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-            <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-              <SlidersHorizontal size={14} />
-              {isAr ? 'تخصيص تجربة القراءة والراحة البصرية' : 'Reading Display Preferences'}
-            </span>
-            <button 
-              type="button" 
-              onClick={() => setIsSettingsOpen(false)}
-              className="p-1 text-slate-400 hover:text-white rounded"
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', marginBottom: '0.75rem', color: themeTokens.muted }}>
+              <Link href="/fy" style={{ color: themeTokens.muted, textDecoration: 'none' }} className="hover:text-amber-400">الرئيسية</Link>
+              <span>/</span>
+              <span style={{ color: themeTokens.gold, fontWeight: 700 }}>الكتاب المقدس</span>
+            </div>
+            <h1 
+              style={{
+                fontSize: 'clamp(2rem, 4vw, 3.2rem)',
+                fontWeight: 900,
+                lineHeight: 1.25,
+                margin: '0 0 0.5rem 0',
+                background: 'linear-gradient(135deg, #ffffff 40%, var(--accent-gold, #e2b714) 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                letterSpacing: '0.5px'
+              }}
             >
-              <X size={14} />
-            </button>
+              الكتاب المقدس العهد القديم والجديد
+            </h1>
+            <p 
+              style={{ 
+                fontSize: 'clamp(1rem, 1.8vw, 1.2rem)', 
+                color: themeTokens.muted, 
+                margin: 0,
+                lineHeight: 1.8,
+                wordSpacing: '2px',
+                fontFamily: 'Amiri, Georgia, serif'
+              }}
+            >
+              «كَلَامُكَ سِرَاجٌ لِرِجْلِي وَنُورٌ لِسَبِيلِي» (مزمور 119: 105)
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            {/* Theme: Dark / Sepia / OLED */}
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 block mb-1.5">
-                {isAr ? 'الوضع المريح للعين:' : 'Reading Theme:'}
-              </label>
-              <div className="flex rounded-xl p-1 bg-slate-900/80 border border-slate-700/60 gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReadingTheme('dark');
-                    try { localStorage.setItem('church-bible-theme', 'dark'); } catch {}
-                  }}
-                  className={`flex-1 py-1 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition ${
-                    readingTheme === 'dark' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Moon size={12} /> {isAr ? 'ليلي' : 'Dark'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReadingTheme('sepia');
-                    try { localStorage.setItem('church-bible-theme', 'sepia'); } catch {}
-                  }}
-                  className={`flex-1 py-1 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition ${
-                    readingTheme === 'sepia' ? 'bg-[#d99b26] text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Coffee size={12} /> {isAr ? 'دافئ' : 'Sepia'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReadingTheme('oled');
-                    try { localStorage.setItem('church-bible-theme', 'oled'); } catch {}
-                  }}
-                  className={`flex-1 py-1 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition ${
-                    readingTheme === 'oled' ? 'bg-zinc-100 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  ⬛ {isAr ? 'أوليد' : 'OLED'}
-                </button>
-              </div>
-            </div>
-
-            {/* Font Size Steppers */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-[11px] font-bold text-slate-400">
-                  {isAr ? 'حجم الخط:' : 'Font Size:'}
-                </label>
-                <span className="text-xs text-amber-400 font-bold">{fontSize}px</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = Math.max(16, fontSize - 2);
-                    setFontSize(next);
-                    try { localStorage.setItem('church-bible-fontsize', String(next)); } catch {}
-                  }}
-                  className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs font-bold border border-slate-700 flex-1 flex items-center justify-center"
-                >
-                  A-
-                </button>
-                <input 
-                  type="range"
-                  min={16}
-                  max={30}
-                  step={2}
-                  value={fontSize}
-                  onChange={(e) => {
-                    const next = Number(e.target.value);
-                    setFontSize(next);
-                    try { localStorage.setItem('church-bible-fontsize', String(next)); } catch {}
-                  }}
-                  className="flex-2 accent-amber-500 cursor-pointer"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = Math.min(30, fontSize + 2);
-                    setFontSize(next);
-                    try { localStorage.setItem('church-bible-fontsize', String(next)); } catch {}
-                  }}
-                  className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs font-bold border border-slate-700 flex-1 flex items-center justify-center"
-                >
-                  A+
-                </button>
-              </div>
-            </div>
-
-            {/* Tashkeel Toggle */}
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 block mb-1.5">
-                {isAr ? 'التشكيل والحركات:' : 'Diacritics (Tashkeel):'}
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !includeTashkeel;
-                  setIncludeTashkeel(next);
-                  try { localStorage.setItem('church-bible-tashkeel', String(next)); } catch {}
+          {/* Right Translation & Display Buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ fontSize: '0.88rem', fontWeight: 700, color: themeTokens.muted }}>الترجمة:</label>
+              <select
+                value={translationCode}
+                onChange={e => setTranslationCode(e.target.value as any)}
+                style={{
+                  padding: '10px 18px',
+                  fontSize: '0.88rem',
+                  fontWeight: 700,
+                  backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                  border: '1px solid var(--border-color, #2a2c3a)',
+                  borderRadius: '8px',
+                  color: themeTokens.gold,
+                  cursor: 'pointer',
+                  outline: 'none'
                 }}
-                className={`w-full py-2 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-between ${
-                  includeTashkeel
-                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
-                    : 'bg-slate-800/80 text-slate-300 border-slate-700'
-                }`}
               >
-                <span>{includeTashkeel ? (isAr ? 'مُشَكَّل كامل' : 'With Tashkeel') : (isAr ? 'نص مبسط بدون تشكيل' : 'Plain Text')}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 font-mono">
-                  {includeTashkeel ? 'بَـ' : 'بـ'}
-                </span>
-              </button>
+                <option value="van-dyck">📖 ترجمة فاندايك العربية (1865)</option>
+                <option value="kjv">📜 نسخة الملك جيمس (King James Version)</option>
+              </select>
             </div>
 
-            {/* Reading Width */}
-            <div>
-              <label className="text-[11px] font-bold text-slate-400 block mb-1.5">
-                {isAr ? 'عرض صفحة القراءة:' : 'Reading Width:'}
-              </label>
-              <div className="flex rounded-xl p-1 bg-slate-900/80 border border-slate-700/60 gap-1">
-                <button
-                  type="button"
-                  onClick={() => setReaderWidth('normal')}
-                  className={`flex-1 py-1 rounded-lg text-xs font-bold transition ${
-                    readerWidth === 'normal' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {isAr ? 'مُريح مركز' : 'Standard'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReaderWidth('wide')}
-                  className={`flex-1 py-1 rounded-lg text-xs font-bold transition ${
-                    readerWidth === 'wide' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {isAr ? 'عرض كامل' : 'Wide'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 3. SPOTLIGHT SEARCH OVERLAY (When Search is open) */}
-      {isSearchOpen && (
-        <div 
-          className="mb-6 p-4 rounded-2xl border shadow-2xl backdrop-blur-xl animate-in slide-in-from-top-2 duration-200"
-          style={{
-            backgroundColor: themeStyles.cardBg,
-            borderColor: themeStyles.border
-          }}
-        >
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <div className="relative flex-1">
-              <Search size={16} className="absolute right-3.5 top-3.5 text-slate-400" />
-              <input 
-                type="text"
-                placeholder={isAr ? 'ابحث عن آية، كلمة، أو شاهد مباشر (مثال: يوحنا 3: 16 أو مزمور 23)...' : 'Search verse, keyword or passage (e.g. John 3:16)...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                autoFocus
-                className="w-full pr-10 pl-4 py-2.5 rounded-xl bg-slate-950/80 border border-slate-700/80 text-xs md:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 shadow-inner"
-              />
-              {searchQuery && (
-                <button 
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute left-3.5 top-3 text-slate-400 hover:text-white"
-                >
-                  <X size={16} />
-                </button>
-              )}
-            </div>
             <button
-              type="submit"
-              disabled={isSearching}
-              className="py-2.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-md transition disabled:opacity-50"
-            >
-              {isSearching ? 'جاري البحث...' : (isAr ? 'بحث' : 'Search')}
-            </button>
-          </form>
-
-          {/* Live Search Results Container */}
-          {showSearchResults && (
-            <div className="mt-4 pt-3 border-t border-slate-800/80 max-h-80 overflow-y-auto">
-              <div className="flex items-center justify-between pb-2 mb-2 text-xs">
-                <span className="font-bold text-amber-400">
-                  {isAr ? `نتائج البحث (${searchResults.length} آية مطابقة)` : `Search Results (${searchResults.length} verses)`}
-                </span>
-                <button 
-                  type="button" 
-                  onClick={() => setShowSearchResults(false)}
-                  className="text-slate-400 hover:text-white"
-                >
-                  إخفاء النتائج
-                </button>
-              </div>
-
-              {searchResults.length === 0 ? (
-                <p className="text-xs text-slate-400 py-6 text-center">لا توجد نتائج مطابقة لبحثك.</p>
-              ) : (
-                <div className="space-y-2">
-                  {searchResults.map((res, i) => (
-                    <div
-                      key={i}
-                      onClick={() => {
-                        handleNavigateToPassage(res.bookSlug, res.chapterNumber);
-                        setIsSearchOpen(false);
-                      }}
-                      className="p-3 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700/60 cursor-pointer transition flex flex-col gap-1"
-                    >
-                      <div className="flex items-center justify-between text-xs text-amber-400 font-bold">
-                        <span>{res.referenceAr}</span>
-                        <span className="text-[11px] text-slate-400">{res.referenceEn}</span>
-                      </div>
-                      <p className="text-xs text-slate-200 font-serif leading-relaxed line-clamp-2">
-                        «{res.text}»
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 4. MAIN 6-SYSTEMS SEGMENTED PILL BAR */}
-      <div className="flex gap-2 overflow-x-auto pb-3 mb-6 scrollbar-none">
-        {[
-          { key: 'reader', label: isAr ? 'القارئ والإصحاحات' : 'Bible Reader', icon: BookOpen },
-          { key: 'votd', label: isAr ? 'آية اليوم والتأمل' : 'Verse of the Day', icon: Sparkles },
-          { key: 'explorer', label: isAr ? 'المستكشف الكتابي' : 'Bible Explorer', icon: Compass },
-          { key: 'journal', label: isAr ? 'دفتري الروحي' : 'Spiritual Journal', icon: BookMarked },
-          { key: 'plans', label: isAr ? 'خطط القراءة' : 'Reading Plans', icon: Calendar },
-          { key: 'topics', label: isAr ? 'موضوعات الآيات' : 'Scripture Topics', icon: ListFilter }
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeView === tab.key;
-          return (
-            <button
-              key={tab.key}
               type="button"
-              onClick={() => setActiveView(tab.key as any)}
-              className={`px-4 py-2.5 rounded-2xl text-xs md:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all duration-200 border ${
-                isActive
-                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 border-amber-400 shadow-lg scale-[1.02]'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-              }`}
+              onClick={() => setIsDisplaySettingsOpen(!isDisplaySettingsOpen)}
               style={{
-                backgroundColor: isActive ? undefined : themeStyles.cardBg,
-                borderColor: isActive ? undefined : themeStyles.border
+                padding: '10px 20px',
+                fontSize: '0.88rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: isDisplaySettingsOpen ? 'var(--accent-gold, #e2b714)' : 'rgba(18, 19, 26, 0.95)',
+                color: isDisplaySettingsOpen ? '#000000' : '#ffffff',
+                border: `1px solid ${isDisplaySettingsOpen ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
+                borderRadius: '8px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
               }}
             >
-              <Icon size={16} />
-              <span>{tab.label}</span>
+              <Settings size={16} />
+              <span>خيارات القراءة والخط</span>
             </button>
-          );
-        })}
-      </div>
+          </div>
+        </div>
 
-      {/* 5. SUB-VIEWS RENDERING */}
-      {activeView === 'votd' && (
-        <BibleVerseOfDayView
-          onNavigateToPassage={handleNavigateToPassage}
-          onOpenImageForVerse={(verse) => {
-            setImageModalVerseData(verse);
-            setIsImageModalOpen(true);
-          }}
-          onToggleFavorite={async ({ verseNumber, text }) => {
-            if (!token) return alert(isAr ? 'يرجى تسجيل الدخول لحفظ المفضلة.' : 'Please log in.');
-            await fetch(`${API_URL}/fy/bible/favorites`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ bookSlug: 'php', chapterNumber: 4, verseNumber, text, toggle: true })
-            });
-          }}
-        />
-      )}
-
-      {activeView === 'explorer' && (
-        <BibleExplorerView onNavigateToPassage={handleNavigateToPassage} />
-      )}
-
-      {activeView === 'journal' && (
-        <BibleJournalView 
-          token={token} 
-          initialPassage={journalPassageData}
-          onClearInitialPassage={() => setJournalPassageData(null)}
-          onNavigateToPassage={handleNavigateToPassage}
-        />
-      )}
-
-      {activeView === 'plans' && (
-        <BibleReadingPlansView 
-          token={token}
-          onNavigateToPassage={handleNavigateToPassage}
-        />
-      )}
-
-      {activeView === 'topics' && (
-        <BibleTopicDiscoveryView
-          onNavigateToPassage={handleNavigateToPassage}
-          onOpenImageForVerse={(verse) => {
-            setImageModalVerseData(verse);
-            setIsImageModalOpen(true);
-          }}
-        />
-      )}
-
-      {/* 6. MAIN SCRIPTURE READER VIEW */}
-      {activeView === 'reader' && (
-        <div className="space-y-6">
-          {/* Quick Continue Reading Pill Bar */}
-          {recentPassages.length > 0 && (
-            <div className="flex items-center gap-2 text-xs overflow-x-auto scrollbar-none py-1 px-1">
-              <span className="text-slate-400 font-semibold whitespace-nowrap flex items-center gap-1 shrink-0">
-                <RotateCcw size={12} className="text-amber-400" /> {isAr ? 'متابعة سريعة:' : 'Recent:'}
-              </span>
-              {recentPassages.map((rec, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => handleNavigateToPassage(rec.bookSlug, rec.chapter)}
-                  className="px-3 py-1 rounded-xl text-xs font-bold border whitespace-nowrap transition hover:scale-105"
-                  style={{
-                    backgroundColor: themeStyles.cardBg,
-                    borderColor: themeStyles.border,
-                    color: '#E2B714'
-                  }}
-                >
-                  {rec.bookName} {rec.chapter}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* SCRIPTURE HERO NAVIGATION CAPSULE */}
+        {/* 2. Reading Options Drawer (When Opened) */}
+        {isDisplaySettingsOpen && (
           <div 
-            className="p-4 md:p-6 rounded-3xl border shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 backdrop-blur-xl transition-all"
             style={{
-              backgroundColor: themeStyles.cardBg,
-              borderColor: themeStyles.border
+              backgroundColor: 'rgba(28, 29, 38, 0.96)',
+              border: '1px solid var(--accent-gold, #e2b714)',
+              borderRadius: '8px',
+              padding: 'clamp(1.5rem, 3vw, 2.5rem)',
+              marginBottom: '3rem',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.6)'
             }}
           >
-            {/* Prev Chapter Button */}
-            <button
-              type="button"
-              disabled={selectedChapter <= 1}
-              onClick={() => setSelectedChapter(c => Math.max(1, c - 1))}
-              className="w-full md:w-auto py-2.5 px-4 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1.5 border disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-800"
-              style={{
-                backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                borderColor: themeStyles.border,
-                color: themeStyles.text
-              }}
-            >
-              <ChevronRight size={18} className="text-amber-400" />
-              <span>{isAr ? 'الإصحاح السابق' : 'Prev Chapter'}</span>
-            </button>
-
-            {/* Central Book & Chapter Capsule Trigger */}
-            <div className="flex flex-col items-center justify-center text-center">
-              <button
-                type="button"
-                onClick={() => setIsBookPickerOpen(prev => !prev)}
-                className="group py-2 px-5 rounded-2xl border transition-all flex items-center gap-2 hover:scale-[1.02] shadow-md"
-                style={{
-                  backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                  borderColor: 'rgba(226, 183, 20, 0.4)'
-                }}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color, #2a2c3a)', paddingBottom: '1rem', marginBottom: '2rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 800, fontSize: '1.1rem', color: themeTokens.gold }}>
+                <Type size={20} />
+                <span>لوحة التحكم في القراءة والطبوغرافيا</span>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setIsDisplaySettingsOpen(false)}
+                style={{ padding: '6px 10px', background: 'transparent', color: '#a0aec0', border: '1px solid var(--border-color, #2a2c3a)', borderRadius: '6px', cursor: 'pointer' }}
               >
-                <span className="font-serif font-black text-lg md:text-2xl text-amber-400 group-hover:text-amber-300">
-                  {currentBookName}
-                </span>
-                <span className="text-sm md:text-base font-bold text-slate-300">
-                  {isAr ? `الإصحاح ${selectedChapter}` : `Chapter ${selectedChapter}`}
-                </span>
-                <ChevronDown size={18} className="text-amber-400 transition group-hover:translate-y-0.5" />
+                <X size={18} />
               </button>
-
-              <div className="flex items-center gap-2 mt-2 text-xs text-slate-400">
-                <span>{currentTranslationName}</span>
-                <span>•</span>
-                <span>{chapterData?.totalVerses || chapterData?.verses?.length || 0} {isAr ? 'آية' : 'verses'}</span>
-                {isChapterCompleted && (
-                  <span className="text-emerald-400 font-bold flex items-center gap-0.5 mr-1">
-                    <CheckCircle2 size={13} /> {isAr ? 'مقروء' : 'Read'}
-                  </span>
-                )}
-              </div>
             </div>
 
-            {/* Next Chapter Button */}
-            <button
-              type="button"
-              disabled={selectedBook && selectedChapter >= selectedBook.totalChapters}
-              onClick={() => setSelectedChapter(c => c + 1)}
-              className="w-full md:w-auto py-2.5 px-4 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1.5 border disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-800"
-              style={{
-                backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                borderColor: themeStyles.border,
-                color: themeStyles.text
-              }}
-            >
-              <span>{isAr ? 'الإصحاح التالي' : 'Next Chapter'}</span>
-              <ChevronLeft size={18} className="text-amber-400" />
-            </button>
-          </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '2rem' }}>
+              {/* Reading Theme */}
+              <div>
+                <label style={{ fontSize: '0.88rem', fontWeight: 700, color: themeTokens.muted, display: 'block', marginBottom: '12px' }}>
+                  1. وضع الألوان والتباين:
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                  {(['dark', 'sepia', 'oled'] as const).map(th => {
+                    const active = readingTheme === th;
+                    const labels = { dark: 'داكن كنسي', sepia: 'مخطوطات', oled: 'OLED صافي' };
+                    return (
+                      <button
+                        key={th}
+                        type="button"
+                        onClick={() => updateReadingTheme(th)}
+                        style={{
+                          padding: '10px 8px',
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          borderRadius: '8px',
+                          border: `1px solid ${active ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
+                          backgroundColor: active ? 'var(--accent-gold, #e2b714)' : '#12131a',
+                          color: active ? '#000000' : '#f8f9fa',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {labels[th]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-          {/* 7. COLLAPSIBLE SMART BOOK & CHAPTER PICKER DRAWER */}
-          {isBookPickerOpen && (
-            <div 
-              className="p-5 md:p-6 rounded-3xl border shadow-2xl backdrop-blur-xl animate-in zoom-in-95 duration-200"
-              style={{
-                backgroundColor: themeStyles.cardBg,
-                borderColor: themeStyles.border
-              }}
-            >
-              {/* Drawer Header */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm text-amber-400 flex items-center gap-1.5">
-                    <BookOpen size={16} />
-                    {isAr ? 'اختر السفر والإصحاح' : 'Select Book & Chapter'}
+              {/* Font Size */}
+              <div>
+                <label style={{ fontSize: '0.88rem', fontWeight: 700, color: themeTokens.muted, display: 'block', marginBottom: '12px' }}>
+                  2. مقاس خط الآيات: ({fontSize}px)
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={() => updateFontSize(fontSize - 2)}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      fontWeight: 800,
+                      fontSize: '1rem',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                      border: '1px solid var(--border-color, #2a2c3a)',
+                      color: '#ffffff',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    − A
+                  </button>
+                  <span style={{ fontWeight: 800, fontSize: '1.1rem', color: themeTokens.gold, minWidth: '40px', textAlign: 'center' }}>
+                    {fontSize}
                   </span>
-                </div>
-
-                {/* Testament Switcher */}
-                <div className="flex rounded-xl p-1 bg-slate-900 border border-slate-800 text-xs font-bold">
                   <button
                     type="button"
-                    onClick={() => setSelectedTestament('NEW')}
-                    className={`px-4 py-1.5 rounded-lg transition ${
-                      selectedTestament === 'NEW' 
-                        ? 'bg-amber-500 text-slate-950 shadow-md' 
-                        : 'text-slate-400 hover:text-white'
-                    }`}
+                    onClick={() => updateFontSize(fontSize + 2)}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      fontWeight: 800,
+                      fontSize: '1rem',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                      border: '1px solid var(--border-color, #2a2c3a)',
+                      color: '#ffffff',
+                      cursor: 'pointer'
+                    }}
                   >
-                    {isAr ? 'العهد الجديد (٢٧)' : 'New Testament (27)'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedTestament('OLD')}
-                    className={`px-4 py-1.5 rounded-lg transition ${
-                      selectedTestament === 'OLD' 
-                        ? 'bg-amber-500 text-slate-950 shadow-md' 
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {isAr ? 'العهد القديم (٣٩)' : 'Old Testament (39)'}
+                    + A
                   </button>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsBookPickerOpen(false)}
-                  className="p-1 text-slate-400 hover:text-white rounded"
-                >
-                  <X size={18} />
-                </button>
               </div>
 
-              {/* Book Filter Search */}
-              <div className="my-4">
-                <input 
-                  type="text"
-                  placeholder={isAr ? 'ابحث عن سفر: متى، يوحنا، مزمور...' : 'Filter books...'}
-                  value={bookPickerSearch}
-                  onChange={(e) => setBookPickerSearch(e.target.value)}
-                  className="w-full px-4 py-2 rounded-xl bg-slate-950/80 border border-slate-700/60 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              {/* Categorized Books Matrix */}
-              <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
-                {booksBySection.map((section, sIdx) => (
-                  <div key={sIdx} className="space-y-2">
-                    <div className="text-[11px] font-bold text-amber-400/90 border-r-2 border-amber-500 pr-2">
-                      {section.sectionTitle}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {section.books.map((b) => {
-                        const isSelected = selectedBook?.slug === b.slug;
-                        return (
-                          <button
-                            key={b.slug}
-                            type="button"
-                            onClick={() => {
-                              setSelectedBook(b);
-                              setSelectedChapter(1);
-                            }}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
-                              isSelected 
-                                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md scale-105' 
-                                : 'bg-slate-900/80 border-slate-700/60 text-slate-300 hover:bg-slate-800 hover:text-white'
-                            }`}
-                          >
-                            {isAr ? b.nameAr : b.nameEn}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Chapter Grid for the chosen book */}
-              {selectedBook && (
-                <div className="pt-4 mt-4 border-t border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span className="font-bold text-amber-400">
-                      {isAr ? `إصحاحات ${selectedBook.nameAr} (${selectedBook.totalChapters} إصحاح):` : `Chapters (${selectedBook.totalChapters}):`}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
-                    {Array.from({ length: selectedBook.totalChapters || 1 }).map((_, i) => {
-                      const cNum = i + 1;
-                      const isSelected = selectedChapter === cNum;
-                      return (
-                        <button
-                          key={cNum}
-                          type="button"
-                          onClick={() => {
-                            setSelectedChapter(cNum);
-                            setIsBookPickerOpen(false);
-                          }}
-                          className={`w-9 h-9 rounded-xl text-xs font-bold transition flex items-center justify-center border ${
-                            isSelected
-                              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md scale-105'
-                              : 'bg-slate-900/80 border-slate-700/60 text-slate-300 hover:bg-slate-800 hover:text-white'
-                          }`}
-                        >
-                          {cNum}
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* Font Family */}
+              <div>
+                <label style={{ fontSize: '0.88rem', fontWeight: 700, color: themeTokens.muted, display: 'block', marginBottom: '12px' }}>
+                  3. نوع الخط:
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {(['Amiri', 'Cairo'] as const).map(fam => {
+                    const active = fontFamily === fam;
+                    return (
+                      <button
+                        key={fam}
+                        type="button"
+                        onClick={() => updateFontFamily(fam)}
+                        style={{
+                          padding: '10px 12px',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          borderRadius: '8px',
+                          border: `1px solid ${active ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
+                          backgroundColor: active ? 'var(--accent-gold, #e2b714)' : 'rgba(18, 19, 26, 0.95)',
+                          color: active ? '#000000' : '#ffffff',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {fam === 'Amiri' ? 'كنسي (Amiri)' : 'حديث (Cairo)'}
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
-          )}
+              </div>
 
-          {/* 8. SCRIPTURE VERSES READING CONTAINER */}
-          <div 
-            className={`mx-auto space-y-5 transition-all ${
-              readerWidth === 'wide' ? 'w-full' : 'max-w-4xl'
-            }`}
-          >
-            {/* Action Bar (Mark completed, Audio, Compare, Select All) */}
-            <div className="flex flex-wrap items-center justify-between gap-2.5 px-1 text-xs">
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* Select All */}
+              {/* Tashkeel */}
+              <div>
+                <label style={{ fontSize: '0.88rem', fontWeight: 700, color: themeTokens.muted, display: 'block', marginBottom: '12px' }}>
+                  4. حركات التشكيل:
+                </label>
                 <button
                   type="button"
-                  onClick={handleSelectAllChapter}
-                  className="px-3 py-1.5 rounded-xl border font-semibold transition hover:bg-slate-800"
+                  onClick={toggleTashkeel}
                   style={{
-                    backgroundColor: themeStyles.cardBg,
-                    borderColor: themeStyles.border,
-                    color: themeStyles.text
+                    width: '100%',
+                    padding: '11px 16px',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    borderRadius: '8px',
+                    backgroundColor: includeTashkeel ? 'rgba(226, 183, 20, 0.15)' : 'rgba(18, 19, 26, 0.95)',
+                    border: `1px solid ${includeTashkeel ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
+                    color: includeTashkeel ? 'var(--accent-gold, #e2b714)' : '#ffffff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
                   }}
                 >
-                  {selectedVerses.length === (chapterData?.verses?.length || 0)
-                    ? (isAr ? 'إلغاء تحديد الكل' : 'Deselect All')
-                    : (isAr ? 'تحديد كل آيات الإصحاح' : 'Select all verses')}
-                </button>
-
-                {/* Compare Translations */}
-                <button
-                  type="button"
-                  onClick={() => setIsComparisonOpen(true)}
-                  className="px-3 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 font-semibold transition flex items-center gap-1.5"
-                >
-                  <Scale size={13} />
-                  <span>{isAr ? 'مقارنة الترجمات' : 'Compare'}</span>
-                </button>
-
-                {/* Audio Recitation */}
-                <button
-                  type="button"
-                  onClick={toggleSpeechRecitation}
-                  className={`px-3 py-1.5 rounded-xl font-semibold border transition flex items-center gap-1.5 ${
-                    isSpeaking 
-                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse' 
-                      : 'bg-slate-800/80 text-slate-300 hover:text-white border-slate-700'
-                  }`}
-                  title={isAr ? 'استماع لنص الإصحاح' : 'Audio Reading'}
-                >
-                  {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                  <span>{isSpeaking ? (isAr ? 'إيقاف الاستماع' : 'Stop') : (isAr ? 'استماع صوتي' : 'Listen')}</span>
+                  <span>{includeTashkeel ? 'التشكيل مُفَعّل (كامل)' : 'بدون تشكيل (مريح)'}</span>
+                  <Check size={16} />
                 </button>
               </div>
+            </div>
+          </div>
+        )}
 
-              {/* Mark Chapter Completed */}
+        {/* 3. The 6 Features Navigation Grid - Spacious, Majestic Cathedral Cards */}
+        <div 
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+            gap: '1.25rem',
+            marginBottom: '3.5rem'
+          }}
+        >
+          {[
+            { id: 'reader', label: 'القارئ والإصحاحات', icon: BookOpen },
+            { id: 'votd', label: 'آية اليوم والتأمل', icon: Sparkles },
+            { id: 'explorer', label: 'المستكشف والبحث', icon: Compass },
+            { id: 'journal', label: 'دفتري الروحي', icon: BookMarked },
+            { id: 'plans', label: 'خطط القراءة', icon: Calendar },
+            { id: 'topics', label: 'موضوعات الآيات', icon: ListFilter }
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as any)}
+                style={{
+                  minHeight: '100px',
+                  padding: '1.5rem 1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  border: `1px solid ${isActive ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
+                  borderRadius: '8px',
+                  backgroundColor: isActive ? 'var(--accent-gold, #e2b714)' : 'rgba(28, 29, 38, 0.85)',
+                  color: isActive ? '#000000' : '#f8f9fa',
+                  boxShadow: isActive ? '0 10px 28px rgba(226, 183, 20, 0.3)' : '0 4px 16px rgba(0,0,0,0.25)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  wordSpacing: '1px'
+                }}
+              >
+                <Icon size={24} />
+                <span style={{ fontSize: '0.95rem', fontWeight: 800, letterSpacing: '0.3px' }}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* -------------------- TAB 1: SCRIPTURE READER -------------------- */}
+        {activeTab === 'reader' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+            {/* Quick Resume Strip */}
+            {readingHistory.length > 0 && (
+              <div 
+                style={{
+                  backgroundColor: 'rgba(28, 29, 38, 0.6)',
+                  border: '1px solid var(--border-color, #2a2c3a)',
+                  borderRadius: '8px',
+                  padding: '1rem 1.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  overflowX: 'auto'
+                }}
+              >
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: themeTokens.muted, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <RotateCcw size={14} style={{ color: themeTokens.gold }} />
+                  متابعة القراءة:
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {readingHistory.slice(0, 4).map((h, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        setBookSlug(h.bookSlug);
+                        setChapterNumber(h.chapter);
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        borderRadius: '6px',
+                        backgroundColor: (bookSlug === h.bookSlug && chapterNumber === h.chapter) 
+                          ? 'rgba(226, 183, 20, 0.2)' 
+                          : 'rgba(18, 19, 26, 0.9)',
+                        border: `1px solid ${(bookSlug === h.bookSlug && chapterNumber === h.chapter) ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
+                        color: themeTokens.gold,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {h.bookName} {h.chapter}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Grand Cathedral Scripture Navigation Hero Deck */}
+            <div 
+              style={{
+                backgroundColor: 'rgba(28, 29, 38, 0.85)',
+                border: '1px solid var(--border-color, #2a2c3a)',
+                borderRadius: '8px',
+                padding: 'clamp(1.75rem, 3.5vw, 3rem)',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1.5rem',
+                boxShadow: '0 16px 40px rgba(0,0,0,0.5)'
+              }}
+            >
+              {/* Previous Chapter */}
               <button
                 type="button"
-                onClick={handleToggleComplete}
-                className={`px-3.5 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition border ${
-                  isChapterCompleted
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-                }`}
+                onClick={handlePrevChapter}
+                style={{
+                  padding: '14px 26px',
+                  fontSize: '0.95rem',
+                  fontWeight: 800,
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                  border: '1px solid var(--border-color, #2a2c3a)',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
               >
-                <CheckCircle2 size={15} />
-                <span>{isChapterCompleted ? (isAr ? 'تمت قراءة الإصحاح' : 'Completed') : (isAr ? 'تعليم كمقروء' : 'Mark as Read')}</span>
+                <ChevronRight size={20} style={{ color: themeTokens.gold }} />
+                <span>الإصحاح السابق</span>
+              </button>
+
+              {/* Grand Book & Chapter Center Command Button */}
+              <div style={{ textAlign: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsBookModalOpen(true)}
+                  style={{
+                    padding: '14px 32px',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(18, 19, 26, 0.98)',
+                    border: '1px solid var(--accent-gold, #e2b714)',
+                    boxShadow: '0 8px 30px rgba(226, 183, 20, 0.2)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                  }}
+                  title="انقر لتصفح واختيار أي سفر أو إصحاح"
+                >
+                  <span 
+                    style={{
+                      fontFamily: 'Amiri, Georgia, serif',
+                      fontWeight: 900,
+                      fontSize: 'clamp(1.6rem, 3vw, 2.2rem)',
+                      color: themeTokens.gold
+                    }}
+                  >
+                    {currentBookInfo.nameAr}
+                  </span>
+                  <span style={{ fontSize: 'clamp(1.1rem, 2vw, 1.4rem)', fontWeight: 800, color: '#ffffff' }}>
+                    الإصحاح {chapterNumber}
+                  </span>
+                  <ChevronDown size={22} style={{ color: themeTokens.gold }} />
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '10px', fontSize: '0.85rem', color: themeTokens.muted }}>
+                  <span>{currentBookInfo.testament === 'NEW' ? 'العهد الجديد' : 'العهد القديم'}</span>
+                  <span>•</span>
+                  <span>{translationCode === 'van-dyck' ? 'ترجمة فاندايك' : 'King James Version'}</span>
+                  <span>•</span>
+                  <span>{chapterData?.verses?.length || 0} آية</span>
+                </div>
+              </div>
+
+              {/* Next Chapter */}
+              <button
+                type="button"
+                onClick={handleNextChapter}
+                style={{
+                  padding: '14px 26px',
+                  fontSize: '0.95rem',
+                  fontWeight: 800,
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                  border: '1px solid var(--border-color, #2a2c3a)',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <span>الإصحاح التالي</span>
+                <ChevronLeft size={20} style={{ color: themeTokens.gold }} />
               </button>
             </div>
 
-            {/* Scripture Verses Card */}
+            {/* Quick Action Tools Bar */}
             <div 
-              className={`p-6 md:p-10 rounded-3xl border shadow-2xl relative transition-all ${
-                translationCode === 'kjv' ? 'text-left font-sans' : 'text-right'
-              }`}
               style={{
-                backgroundColor: themeStyles.cardBg,
-                borderColor: themeStyles.border,
-                fontFamily: fontFamily === 'amiri' ? '"Amiri", serif' : (fontFamily === 'cairo' ? '"Cairo", sans-serif' : 'system-ui')
+                backgroundColor: 'rgba(28, 29, 38, 0.65)',
+                border: '1px solid var(--border-color, #2a2c3a)',
+                borderRadius: '8px',
+                padding: '1rem 1.75rem',
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1rem'
               }}
-              dir={translationCode === 'kjv' ? 'ltr' : 'rtl'}
             >
-              {loadingChapter ? (
-                <div className="py-24 text-center text-slate-400 text-sm">
-                  {isAr ? 'جاري تحميل نص الإصحاح بدقة عالية...' : 'Loading chapter verses...'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    borderRadius: '6px',
+                    backgroundColor: 'rgba(18, 19, 26, 0.9)',
+                    border: '1px solid var(--border-color, #2a2c3a)',
+                    color: '#ffffff',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {selectedVerses.length === chapterData?.verses?.length ? 'إلغاء تحديد الكل' : 'تحديد كل آيات الإصحاح'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenComparison}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    borderRadius: '6px',
+                    backgroundColor: comparisonActive ? 'rgba(147, 51, 234, 0.3)' : 'rgba(147, 51, 234, 0.15)',
+                    border: '1px solid rgba(147, 51, 234, 0.4)',
+                    color: '#c084fc',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Scale size={15} />
+                  <span>{comparisonActive ? 'إغلاق المقارنة' : 'مقارنة الترجمتين'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleToggleSpeech}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    borderRadius: '6px',
+                    backgroundColor: isSpeaking ? 'var(--accent-gold, #e2b714)' : 'rgba(18, 19, 26, 0.9)',
+                    border: `1px solid ${isSpeaking ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
+                    color: isSpeaking ? '#000000' : '#ffffff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {isSpeaking ? <VolumeX size={15} /> : <Volume2 size={15} />}
+                  <span>{isSpeaking ? 'إيقاف الاستماع' : 'استماع صوتي للإصحاح'}</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={toggleChapterRead}
+                style={{
+                  padding: '8px 18px',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  borderRadius: '6px',
+                  backgroundColor: isChapterRead ? 'rgba(46, 204, 113, 0.15)' : 'rgba(18, 19, 26, 0.9)',
+                  border: `1px solid ${isChapterRead ? '#2ecc71' : 'var(--border-color, #2a2c3a)'}`,
+                  color: isChapterRead ? '#2ecc71' : '#ffffff',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <CheckCircle size={15} />
+                <span>{isChapterRead ? 'تمت قراءة الإصحاح' : 'تعليم كمقروء'}</span>
+              </button>
+            </div>
+
+            {/* Verses Canvas - Wide Open Manuscript with Word Spacing and Breath */}
+            <div 
+              style={{
+                backgroundColor: 'rgba(28, 29, 38, 0.85)',
+                border: '1px solid var(--border-color, #2a2c3a)',
+                borderRadius: '8px',
+                padding: 'clamp(2rem, 5vw, 4.5rem) clamp(1.5rem, 5vw, 4.5rem)',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.65)',
+                fontFamily: fontFamily === 'Amiri' ? 'Amiri, Georgia, serif' : 'var(--font-arabic, Cairo, sans-serif)',
+                minHeight: '400px'
+              }}
+            >
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: '5rem 0' }}>
+                  <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                  <p style={{ fontSize: '1rem', fontWeight: 700, color: themeTokens.muted }}>جاري تحميل نصوص الإصحاح المقدس...</p>
                 </div>
-              ) : !chapterData?.verses || chapterData.verses.length === 0 ? (
-                <div className="py-24 text-center text-slate-400 text-sm">
-                  {isAr ? 'لم يتم العثور على آيات لهذا الإصحاح.' : 'No verses found for this chapter.'}
+              ) : chapterData?.verses?.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '5rem 0', fontSize: '1rem', color: themeTokens.muted }}>
+                  لا توجد آيات متوفرة لهذا الإصحاح حالياً.
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {chapterData.verses.map((v: any) => {
-                    const isSelected = selectedVerses.some(sv => sv.verseNumber === v.verseNumber);
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {chapterData?.verses?.map(v => {
+                    const isSelected = selectedVerses.some(item => item.verseNumber === v.verseNumber);
                     const displayText = includeTashkeel ? v.text : removeArabicTashkeel(v.text);
 
                     return (
                       <div
-                        key={v.verseNumber}
+                        key={v.id || v.verseNumber}
                         id={`v-${v.verseNumber}`}
                         onClick={() => handleVerseClick(v)}
-                        className={`group p-3.5 rounded-2xl cursor-pointer transition-all duration-150 select-text flex items-start gap-3.5 border ${
-                          isSelected
-                            ? 'shadow-md scale-[1.008]'
-                            : 'hover:bg-slate-800/25 border-transparent'
-                        }`}
                         style={{
-                          backgroundColor: isSelected ? themeStyles.selectedBg : undefined,
-                          borderColor: isSelected ? themeStyles.selectedBorder : 'transparent'
+                          borderRadius: '8px',
+                          backgroundColor: isSelected ? themeTokens.verseSelected : 'transparent',
+                          border: `1px solid ${isSelected ? themeTokens.gold : 'transparent'}`,
+                          borderRight: isSelected ? `6px solid ${themeTokens.gold}` : '1px solid transparent',
+                          padding: '1.4rem 1.8rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '1.5rem',
+                          transition: 'all 0.15s ease',
+                          boxShadow: isSelected ? '0 6px 25px rgba(226, 183, 20, 0.2)' : 'none'
                         }}
                       >
-                        {/* Golden Verse Number Badge */}
-                        <span 
-                          className={`w-7 h-7 rounded-xl text-xs font-bold flex items-center justify-center shrink-0 mt-1 select-none transition ${
-                            isSelected 
-                              ? 'bg-amber-500 text-slate-950 font-black shadow-sm' 
-                              : 'border'
-                          }`}
+                        {/* Golden Square Badge */}
+                        <span
                           style={{
-                            backgroundColor: isSelected ? undefined : themeStyles.verseBadgeBg,
-                            borderColor: isSelected ? undefined : themeStyles.border,
-                            color: isSelected ? undefined : themeStyles.verseBadgeText
+                            width: '38px',
+                            height: '38px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 900,
+                            fontSize: '1rem',
+                            flexShrink: 0,
+                            marginTop: '4px',
+                            borderRadius: '8px',
+                            backgroundColor: isSelected ? themeTokens.gold : themeTokens.badgeBg,
+                            color: isSelected ? '#000000' : themeTokens.gold,
+                            border: `1px solid ${isSelected ? themeTokens.gold : 'rgba(226, 183, 20, 0.35)'}`,
+                            userSelect: 'none'
                           }}
                         >
                           {v.verseNumber}
                         </span>
 
-                        {/* Verse Text */}
-                        <p 
-                          className="flex-1 tracking-wide leading-relaxed"
+                        {/* Verse Text: AMPLE WORD SPACING, AMPLE BREATHING ROOM */}
+                        <p
                           style={{
+                            flex: 1,
+                            margin: 0,
                             fontSize: `${fontSize}px`,
-                            lineHeight: lineSpacing === 'loose' ? 2.2 : (lineSpacing === 'relaxed' ? 1.85 : 1.6),
-                            color: themeStyles.text
+                            lineHeight: 2.8,
+                            wordSpacing: '4px',
+                            letterSpacing: '0.3px',
+                            color: themeTokens.text
                           }}
                         >
                           {displayText}
@@ -1223,125 +1099,695 @@ function BibleReaderContent() {
                 </div>
               )}
             </div>
+
+            {/* Bottom Chapter Bar */}
+            <div 
+              style={{
+                backgroundColor: 'rgba(28, 29, 38, 0.85)',
+                border: '1px solid var(--border-color, #2a2c3a)',
+                borderRadius: '8px',
+                padding: '1.25rem 2rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1rem'
+              }}
+            >
+              <button
+                type="button"
+                onClick={handlePrevChapter}
+                style={{
+                  padding: '10px 22px',
+                  fontSize: '0.88rem',
+                  fontWeight: 800,
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                  border: '1px solid var(--border-color, #2a2c3a)',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <ChevronRight size={16} style={{ color: themeTokens.gold }} />
+                <span>الإصحاح السابق</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                style={{
+                  fontSize: '0.88rem',
+                  fontWeight: 800,
+                  color: themeTokens.gold,
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                ↑ الرجوع لأعلى الإصحاح
+              </button>
+
+              <button
+                type="button"
+                onClick={handleNextChapter}
+                style={{
+                  padding: '10px 22px',
+                  fontSize: '0.88rem',
+                  fontWeight: 800,
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                  border: '1px solid var(--border-color, #2a2c3a)',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>الإصحاح التالي</span>
+                <ChevronLeft size={16} style={{ color: themeTokens.gold }} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* -------------------- TAB 2: VERSE OF THE DAY -------------------- */}
+        {activeTab === 'votd' && (
+          <div 
+            style={{
+              backgroundColor: 'rgba(28, 29, 38, 0.85)',
+              border: '1px solid var(--border-color, #2a2c3a)',
+              borderRadius: '8px',
+              padding: 'clamp(2rem, 4vw, 3.5rem)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2.5rem'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color, #2a2c3a)', paddingBottom: '1.25rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.6rem', fontWeight: 900, margin: 0, color: themeTokens.gold }}>
+                  آية اليوم المباركة والتأمل الروحي
+                </h3>
+                <p style={{ fontSize: '0.9rem', color: themeTokens.muted, margin: '6px 0 0 0' }}>
+                  غذاء روحي يومي من كلمة الله الحية لدعم مسيرتك
+                </p>
+              </div>
+              <BookmarkCheck size={32} style={{ color: themeTokens.gold }} />
+            </div>
+
+            {votdLoading ? (
+              <p style={{ textAlign: 'center', padding: '3rem 0', color: themeTokens.muted }}>جاري تحميل آية اليوم...</p>
+            ) : votdData ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                <div 
+                  style={{
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    border: '1px solid var(--accent-gold, #e2b714)',
+                    borderRadius: '8px',
+                    padding: '2.5rem',
+                    boxShadow: '0 12px 32px rgba(0,0,0,0.5)'
+                  }}
+                >
+                  <blockquote 
+                    style={{ 
+                      fontSize: 'clamp(1.5rem, 3vw, 2.2rem)', 
+                      fontWeight: 700, 
+                      lineHeight: 2.2, 
+                      wordSpacing: '4px',
+                      color: '#ffffff',
+                      fontFamily: 'Amiri, Georgia, serif',
+                      margin: '0 0 1rem 0'
+                    }}
+                  >
+                    «{votdData.verse?.text}»
+                  </blockquote>
+                  <span style={{ fontSize: '1.1rem', fontWeight: 800, color: themeTokens.gold }}>
+                    — {votdData.verse?.chapter?.book?.nameAr} {votdData.verse?.chapterNumber}: {votdData.verse?.verseNumber}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+                  <div style={{ padding: '1.5rem', backgroundColor: 'rgba(18, 19, 26, 0.8)', border: '1px solid var(--border-color, #2a2c3a)', borderRadius: '8px' }}>
+                    <h4 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', fontWeight: 800, color: themeTokens.gold }}>التأمل الروحي</h4>
+                    <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 2, wordSpacing: '2px', color: themeTokens.text }}>
+                      {votdData.devotionalTextAr || 'الله معنا في كل خطوة، وقوته تتجلى في ضعفنا لنعيش منتصرين بنعمته كل يوم.'}
+                    </p>
+                  </div>
+
+                  <div style={{ padding: '1.5rem', backgroundColor: 'rgba(18, 19, 26, 0.8)', border: '1px solid var(--border-color, #2a2c3a)', borderRadius: '8px' }}>
+                    <h4 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', fontWeight: 800, color: themeTokens.gold }}>سؤال التطبيق العملي</h4>
+                    <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 2, wordSpacing: '2px', color: themeTokens.text }}>
+                      {votdData.reflectionQuestionAr || 'كيف يمكنك تطبيق هذه الوصية في تعاملاتك وتحدياتك اليومية؟'}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBookSlug(votdData.verse?.chapter?.book?.slug || 'php');
+                      setChapterNumber(votdData.verse?.chapterNumber || 4);
+                      setActiveTab('reader');
+                    }}
+                    style={{
+                      padding: '12px 28px',
+                      fontSize: '0.9rem',
+                      fontWeight: 800,
+                      borderRadius: '8px',
+                      backgroundColor: 'var(--accent-gold, #e2b714)',
+                      color: '#000000',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    قراءة الإصحاح كاملاً في القارئ
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {/* -------------------- TAB 3: EXPLORER -------------------- */}
+        {activeTab === 'explorer' && (
+          <div 
+            style={{
+              backgroundColor: 'rgba(28, 29, 38, 0.85)',
+              border: '1px solid var(--border-color, #2a2c3a)',
+              borderRadius: '8px',
+              padding: 'clamp(2rem, 4vw, 3.5rem)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2rem'
+            }}
+          >
+            <div style={{ borderBottom: '1px solid var(--border-color, #2a2c3a)', paddingBottom: '1.25rem' }}>
+              <h3 style={{ fontSize: '1.6rem', fontWeight: 900, margin: 0, color: themeTokens.gold }}>
+                المستكشف والبحث المتقدم في الأسفار
+              </h3>
+              <p style={{ fontSize: '0.9rem', color: themeTokens.muted, margin: '6px 0 0 0' }}>
+                ابحث عن أي آية، كلمة، أو شاهد مباشر في العهدين
+              </p>
+            </div>
+
+            <form onSubmit={handleExplorerSearch} style={{ display: 'flex', gap: '12px' }}>
+              <input
+                type="text"
+                value={explorerQuery}
+                onChange={e => setExplorerQuery(e.target.value)}
+                placeholder="اكتب كلمة البحث أو الشاهد الكتابي هنا..."
+                style={{
+                  flex: 1,
+                  padding: '14px 20px',
+                  fontSize: '0.95rem',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                  border: '1px solid var(--border-color, #2a2c3a)',
+                  color: '#ffffff',
+                  outline: 'none'
+                }}
+              />
+              <button
+                type="submit"
+                disabled={explorerLoading}
+                style={{
+                  padding: '14px 32px',
+                  fontSize: '0.95rem',
+                  fontWeight: 800,
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--accent-gold, #e2b714)',
+                  color: '#000000',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Search size={18} />
+                <span>{explorerLoading ? 'جاري البحث...' : 'بحث'}</span>
+              </button>
+            </form>
+
+            {explorerResults.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 800, color: themeTokens.gold }}>
+                  نتائج البحث ({explorerResults.length} آية مطابقة):
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '60vh', overflowY: 'auto' }}>
+                  {explorerResults.map((item, idx) => (
+                    <div 
+                      key={idx}
+                      onClick={() => {
+                        if (item.bookSlug) setBookSlug(item.bookSlug);
+                        if (item.chapterNumber) setChapterNumber(item.chapterNumber);
+                        setActiveTab('reader');
+                      }}
+                      style={{
+                        padding: '1.25rem 1.5rem',
+                        borderRadius: '8px',
+                        backgroundColor: 'rgba(18, 19, 26, 0.8)',
+                        border: '1px solid var(--border-color, #2a2c3a)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <span style={{ fontSize: '0.9rem', fontWeight: 800, color: themeTokens.gold, display: 'block', marginBottom: '6px' }}>
+                        {item.bookName} {item.chapterNumber}:{item.verseNumber}
+                      </span>
+                      <p style={{ margin: 0, fontSize: '1.1rem', lineHeight: 2, wordSpacing: '3px', fontFamily: 'Amiri, Georgia, serif', color: '#ffffff' }}>
+                        {item.text}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* -------------------- TAB 4: JOURNAL -------------------- */}
+        {activeTab === 'journal' && (
+          <div 
+            style={{
+              backgroundColor: 'rgba(28, 29, 38, 0.85)',
+              border: '1px solid var(--border-color, #2a2c3a)',
+              borderRadius: '8px',
+              padding: 'clamp(2rem, 4vw, 3.5rem)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2rem'
+            }}
+          >
+            <div style={{ borderBottom: '1px solid var(--border-color, #2a2c3a)', paddingBottom: '1.25rem' }}>
+              <h3 style={{ fontSize: '1.6rem', fontWeight: 900, margin: 0, color: themeTokens.gold }}>
+                دفتري الروحي وتأملاتي الشخصية
+              </h3>
+              <p style={{ fontSize: '0.9rem', color: themeTokens.muted, margin: '6px 0 0 0' }}>
+                مساحتك الروحية الخاصة لتدوين ثمار قراءتك وخواطرك
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveJournalNote} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div>
+                <label style={{ fontSize: '0.88rem', fontWeight: 700, color: themeTokens.muted, display: 'block', marginBottom: '8px' }}>
+                  الشاهد الكتابي أو الموضوع:
+                </label>
+                <input
+                  type="text"
+                  value={newJournalNote.reference}
+                  onChange={e => setNewJournalNote({ ...newJournalNote, reference: e.target.value })}
+                  placeholder="مثال: إنجيل متى 5: 14"
+                  style={{
+                    width: '100%',
+                    padding: '12px 18px',
+                    fontSize: '0.95rem',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    border: '1px solid var(--border-color, #2a2c3a)',
+                    color: '#ffffff',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.88rem', fontWeight: 700, color: themeTokens.muted, display: 'block', marginBottom: '8px' }}>
+                  خواطري وتأملاتي الروحية:
+                </label>
+                <textarea
+                  rows={4}
+                  value={newJournalNote.thoughts}
+                  onChange={e => setNewJournalNote({ ...newJournalNote, thoughts: e.target.value })}
+                  placeholder="اكتب ما لمس قلبك اليوم خلال قراءتك للكتاب المقدس..."
+                  style={{
+                    width: '100%',
+                    padding: '14px 18px',
+                    fontSize: '0.95rem',
+                    lineHeight: 2,
+                    wordSpacing: '2px',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(18, 19, 26, 0.95)',
+                    border: '1px solid var(--border-color, #2a2c3a)',
+                    color: '#ffffff',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <button
+                  type="submit"
+                  style={{
+                    padding: '12px 28px',
+                    fontSize: '0.9rem',
+                    fontWeight: 800,
+                    borderRadius: '8px',
+                    backgroundColor: 'var(--accent-gold, #e2b714)',
+                    color: '#000000',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  حفظ التأمل في دفتري
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* -------------------- TAB 5: PLANS -------------------- */}
+        {activeTab === 'plans' && (
+          <div 
+            style={{
+              backgroundColor: 'rgba(28, 29, 38, 0.85)',
+              border: '1px solid var(--border-color, #2a2c3a)',
+              borderRadius: '8px',
+              padding: 'clamp(2rem, 4vw, 3.5rem)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2rem'
+            }}
+          >
+            <div style={{ borderBottom: '1px solid var(--border-color, #2a2c3a)', paddingBottom: '1.25rem' }}>
+              <h3 style={{ fontSize: '1.6rem', fontWeight: 900, margin: 0, color: themeTokens.gold }}>
+                خطط القراءة المنهجية للكتاب المقدس
+              </h3>
+              <p style={{ fontSize: '0.9rem', color: themeTokens.muted, margin: '6px 0 0 0' }}>
+                اختر الخطة المناسبة لك لمتابعة قراءة كلمة الله بانتظام
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+              {[
+                { title: 'خطة قراءة العهد الجديد في ٩٠ يوماً', count: '٢٧ سفراً', desc: 'قراءة ٣ إصحاحات يومياً لإنهاء العهد الجديد بالكامل في ٣ أشهر.' },
+                { title: 'خطة قراءة الكتاب المقدس كاملاً في عام', count: '٦٦ سفراً', desc: 'قراءة متوازنة تجمع فصولاً من العهدين القديم والجديد يومياً.' },
+                { title: 'خطة المزامير والأناجيل في الصوم', count: 'المزامير + الأناجيل', desc: 'خطة مخصصة لمواسم الأصوام والصلوات لتعميق الحياة التأملية.' }
+              ].map((plan, i) => (
+                <div 
+                  key={i}
+                  style={{
+                    padding: '1.75rem',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(18, 19, 26, 0.9)',
+                    border: '1px solid var(--border-color, #2a2c3a)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '1.25rem'
+                  }}
+                >
+                  <div>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 800, padding: '4px 10px', borderRadius: '4px', backgroundColor: 'rgba(226, 183, 20, 0.12)', color: themeTokens.gold }}>
+                      {plan.count}
+                    </span>
+                    <h4 style={{ margin: '14px 0 8px 0', fontSize: '1.1rem', fontWeight: 800, color: '#ffffff' }}>{plan.title}</h4>
+                    <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.8, color: themeTokens.muted }}>{plan.desc}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBookSlug('mat');
+                      setChapterNumber(1);
+                      setActiveTab('reader');
+                    }}
+                    style={{
+                      padding: '10px 18px',
+                      fontSize: '0.85rem',
+                      fontWeight: 800,
+                      borderRadius: '6px',
+                      backgroundColor: 'var(--accent-gold, #e2b714)',
+                      color: '#000000',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    بدء الخطة الآن
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* -------------------- TAB 6: TOPICS -------------------- */}
+        {activeTab === 'topics' && (
+          <div 
+            style={{
+              backgroundColor: 'rgba(28, 29, 38, 0.85)',
+              border: '1px solid var(--border-color, #2a2c3a)',
+              borderRadius: '8px',
+              padding: 'clamp(2rem, 4vw, 3.5rem)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2rem'
+            }}
+          >
+            <div style={{ borderBottom: '1px solid var(--border-color, #2a2c3a)', paddingBottom: '1.25rem' }}>
+              <h3 style={{ fontSize: '1.6rem', fontWeight: 900, margin: 0, color: themeTokens.gold }}>
+                موضوعات الآيات والقرائن الكتابية
+              </h3>
+              <p style={{ fontSize: '0.9rem', color: themeTokens.muted, margin: '6px 0 0 0' }}>
+                آيات مختارة مبوبة بحسب الاحتياج الروحي وظروف الحياة
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
+              {[
+                { title: 'السلام الداخلي والاطمئنان', ref: 'يوحنا 14: 27' },
+                { title: 'الرجاء وقت الضيق والتجارب', ref: 'رومية 8: 28' },
+                { title: 'المحبة المسيحية الأصيلة', ref: '1 كورنثوس 13: 4' },
+                { title: 'الإيمان وقوة الصلاة', ref: 'مرقس 11: 24' },
+                { title: 'الغفران والتسامح', ref: 'أفسس 4: 32' },
+                { title: 'التوبة ونقاوة القلب', ref: 'مزمور 51: 10' },
+                { title: 'القوة والتعزية الإلهية', ref: 'إشعياء 40: 31' },
+                { title: 'الشكر وحمد الرب دائماً', ref: '1 تسالونيكي 5: 18' }
+              ].map((topic, i) => (
+                <div
+                  key={i}
+                  onClick={() => {
+                    setExplorerQuery(topic.title);
+                    setActiveTab('explorer');
+                  }}
+                  style={{
+                    padding: '1.25rem',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(18, 19, 26, 0.9)',
+                    border: '1px solid var(--border-color, #2a2c3a)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <h4 style={{ margin: '0 0 6px 0', fontSize: '0.95rem', fontWeight: 800, color: themeTokens.gold }}>
+                    {topic.title}
+                  </h4>
+                  <span style={{ fontSize: '0.85rem', fontFamily: 'Amiri, Georgia, serif', color: '#cbd5e1' }}>
+                    شاهد مقترح: {topic.ref}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* -------------------- BOOK & CHAPTER MODAL -------------------- */}
+      {isBookModalOpen && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.5rem',
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(8px)'
+          }}
+          dir="rtl"
+        >
+          <div 
+            style={{
+              width: '100%',
+              maxWidth: '960px',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              backgroundColor: 'rgba(18, 19, 26, 0.98)',
+              border: '1px solid var(--accent-gold, #e2b714)',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              boxShadow: '0 24px 64px rgba(0,0,0,0.9)'
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid var(--border-color, #2a2c3a)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: 900, margin: 0, color: themeTokens.gold }}>
+                  فهرس أسفار وإصحاحات الكتاب المقدس
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: themeTokens.muted, margin: '4px 0 0 0' }}>
+                  اختر السفر المطلوب ثم حدد رقم الإصحاح للقراءة الفورية
+                </p>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setIsBookModalOpen(false)}
+                style={{ padding: '6px 10px', background: 'transparent', color: '#a0aec0', border: '1px solid var(--border-color, #2a2c3a)', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Controls */}
+            <div style={{ padding: '1.25rem 2rem', borderBottom: '1px solid var(--border-color, #2a2c3a)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setTestamentFilter('NEW')}
+                  style={{
+                    padding: '8px 18px',
+                    fontSize: '0.85rem',
+                    fontWeight: 800,
+                    borderRadius: '6px',
+                    border: `1px solid ${testamentFilter === 'NEW' ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
+                    backgroundColor: testamentFilter === 'NEW' ? 'var(--accent-gold, #e2b714)' : 'transparent',
+                    color: testamentFilter === 'NEW' ? '#000000' : '#ffffff',
+                    cursor: 'pointer'
+                  }}
+                >
+                  العهد الجديد (٢٧ سفراً)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTestamentFilter('OLD')}
+                  style={{
+                    padding: '8px 18px',
+                    fontSize: '0.85rem',
+                    fontWeight: 800,
+                    borderRadius: '6px',
+                    border: `1px solid ${testamentFilter === 'OLD' ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
+                    backgroundColor: testamentFilter === 'OLD' ? 'var(--accent-gold, #e2b714)' : 'transparent',
+                    color: testamentFilter === 'OLD' ? '#000000' : '#ffffff',
+                    cursor: 'pointer'
+                  }}
+                >
+                  العهد القديم (٣٩ سفراً)
+                </button>
+              </div>
+
+              <input
+                type="text"
+                value={bookSearchQuery}
+                onChange={e => setBookSearchQuery(e.target.value)}
+                placeholder="ابحث باسم السفر..."
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '0.85rem',
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(28, 29, 38, 0.9)',
+                  border: '1px solid var(--border-color, #2a2c3a)',
+                  color: '#ffffff',
+                  outline: 'none',
+                  minWidth: '220px'
+                }}
+              />
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <div>
+                <span style={{ fontSize: '0.88rem', fontWeight: 800, color: themeTokens.gold, display: 'block', marginBottom: '12px' }}>
+                  قائمة الأسفار:
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
+                  {filteredBooks.map(b => {
+                    const isSelected = b.slug.toLowerCase() === bookSlug.toLowerCase();
+                    return (
+                      <button
+                        key={b.slug}
+                        type="button"
+                        onClick={() => {
+                          setBookSlug(b.slug);
+                          setChapterNumber(1);
+                        }}
+                        style={{
+                          padding: '12px 14px',
+                          fontSize: '0.88rem',
+                          fontWeight: 800,
+                          borderRadius: '6px',
+                          border: `1px solid ${isSelected ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
+                          backgroundColor: isSelected ? 'var(--accent-gold, #e2b714)' : 'rgba(28, 29, 38, 0.8)',
+                          color: isSelected ? '#000000' : '#f8f9fa',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          whiteSpace: 'nowrap',
+                          textOverflow: 'ellipsis',
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {b.nameAr}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-color, #2a2c3a)', paddingTop: '1.5rem' }}>
+                <span style={{ fontSize: '0.88rem', fontWeight: 800, color: themeTokens.gold, display: 'block', marginBottom: '12px' }}>
+                  إصحاحات {currentBookInfo.nameAr} ({totalChaptersInCurrentBook} إصحاح):
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(48px, 1fr))', gap: '8px' }}>
+                  {Array.from({ length: totalChaptersInCurrentBook }, (_, i) => i + 1).map(ch => {
+                    const isCurrent = ch === chapterNumber;
+                    return (
+                      <button
+                        key={ch}
+                        type="button"
+                        onClick={() => {
+                          setChapterNumber(ch);
+                          setIsBookModalOpen(false);
+                          if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        style={{
+                          height: '46px',
+                          fontWeight: 800,
+                          fontSize: '1rem',
+                          borderRadius: '6px',
+                          border: `1px solid ${isCurrent ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)'}`,
+                          backgroundColor: isCurrent ? 'var(--accent-gold, #e2b714)' : 'rgba(28, 29, 38, 0.9)',
+                          color: isCurrent ? '#000000' : '#f8f9fa',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {ch}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* 9. FLOATING MULTI-VERSE SELECTION LUXURY TOOLBAR */}
-      {selectedVerses.length > 0 && activeView === 'reader' && (
-        <BibleVerseToolbar
-          selectedVerses={selectedVerses}
-          bookName={currentBookName}
-          bookSlug={selectedBook?.slug || 'mat'}
-          chapterNumber={selectedChapter}
-          translationName={currentTranslationName}
-          translationCode={translationCode}
-          onClearSelection={() => setSelectedVerses([])}
-          onOpenImageGenerator={() => setIsImageModalOpen(true)}
-          onOpenStudyMode={(vNum) => {
-            setStudyVerseNumber(vNum);
-            setIsStudyDrawerOpen(true);
-          }}
-          onOpenComparison={() => setIsComparisonOpen(true)}
-          onOpenJournalWithPassage={(passage) => {
-            setJournalPassageData(passage);
-            setActiveView('journal');
-          }}
-          onToggleFavorite={async ({ verseNumber, text }) => {
-            if (!token) {
-              alert(isAr ? 'يرجى تسجيل الدخول لحفظ الآيات في المفضلة.' : 'Please log in to save favorites.');
-              return;
-            }
-            try {
-              await fetch(`${API_URL}/fy/bible/favorites`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                  bookSlug: selectedBook?.slug,
-                  chapterNumber: selectedChapter,
-                  verseNumber,
-                  text,
-                  toggle: true
-                })
-              });
-              alert(isAr ? 'تم تحديث المفضلة بنجاح!' : 'Favorites updated!');
-            } catch (err) {
-              console.error('Error toggling favorite:', err);
-            }
-          }}
-        />
-      )}
-
-      {/* 10. IMAGE GENERATOR MODAL */}
-      {isImageModalOpen && (
+      {/* Verse Image Generator Modal */}
+      {isImageModalOpen && selectedVerses.length > 0 && (
         <BibleImageGeneratorModal
           isOpen={isImageModalOpen}
-          onClose={() => {
-            setIsImageModalOpen(false);
-            setImageModalVerseData(null);
-          }}
-          selectedVerses={imageModalVerseData ? [{ verseNumber: imageModalVerseData.verseNumber, text: imageModalVerseData.text }] : selectedVerses}
-          bookName={imageModalVerseData?.bookName || currentBookName}
-          chapterNumber={imageModalVerseData?.chapterNumber || selectedChapter}
-          referenceString={imageModalVerseData?.reference}
-          translationName={imageModalVerseData?.translationName || currentTranslationName}
-          isRtl={translationCode !== 'kjv'}
-        />
-      )}
-
-      {/* 11. 5-SECTION CONTEXTUAL BIBLE STUDY DRAWER */}
-      {isStudyDrawerOpen && selectedBook && (
-        <BibleStudyDrawer
-          isOpen={isStudyDrawerOpen}
-          onClose={() => setIsStudyDrawerOpen(false)}
-          bookSlug={selectedBook.slug}
-          bookName={currentBookName}
-          chapterNumber={selectedChapter}
-          verseNumber={studyVerseNumber}
-          onNavigateToPassage={handleNavigateToPassage}
-          onOpenComparison={() => {
-            setIsStudyDrawerOpen(false);
-            setIsComparisonOpen(true);
-          }}
-          onOpenJournalWithPassage={(passage) => {
-            setIsStudyDrawerOpen(false);
-            setJournalPassageData(passage);
-            setActiveView('journal');
-          }}
-        />
-      )}
-
-      {/* 12. SIDE-BY-SIDE TRANSLATION COMPARISON MODAL */}
-      {isComparisonOpen && selectedBook && (
-        <BibleTranslationComparison
-          isOpen={isComparisonOpen}
-          onClose={() => setIsComparisonOpen(false)}
-          bookSlug={selectedBook.slug}
-          bookNameAr={selectedBook.nameAr}
-          bookNameEn={selectedBook.nameEn}
-          chapterNumber={selectedChapter}
-          highlightVerse={selectedVerses[0]?.verseNumber}
-          onOpenImageForVerse={(verse) => {
-            setImageModalVerseData(verse);
-            setIsImageModalOpen(true);
-          }}
+          onClose={() => setIsImageModalOpen(false)}
+          selectedVerses={selectedVerses}
+          bookName={currentBookInfo.nameAr}
+          chapterNumber={chapterNumber}
         />
       )}
     </div>
-  );
-}
-
-export default function BiblePage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">
-        جاري تحميل الكتاب المقدس...
-      </div>
-    }>
-      <BibleReaderContent />
-    </Suspense>
   );
 }

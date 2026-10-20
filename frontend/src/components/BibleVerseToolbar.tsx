@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { 
   Copy, Image as ImageIcon, BookOpen, Bookmark, Edit3, X, 
-  Check, Sparkles, Scale, FileText 
+  Check, Scale, FileText 
 } from 'lucide-react';
 import { removeArabicTashkeel, formatVerseRange, copyToClipboard } from '../utils/bibleTashkeel';
 
@@ -73,41 +73,68 @@ export default function BibleVerseToolbar({
   };
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-11/12 max-w-4xl animate-in fade-in slide-in-from-bottom-4 duration-200">
+    /* Pinned strictly to the top as requested */
+    <div 
+      className="fixed top-3 sm:top-5 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-6xl animate-in fade-in slide-in-from-top-4 duration-200"
+      dir="rtl"
+    >
       <div 
-        className="rounded-2xl p-2.5 md:p-3 shadow-2xl border flex flex-col md:flex-row items-center justify-between gap-3 backdrop-blur-xl"
+        className="p-3 md:p-3.5 shadow-2xl flex flex-col lg:flex-row items-center justify-between gap-3 backdrop-blur-xl"
         style={{
-          backgroundColor: 'rgba(15, 23, 42, 0.94)',
-          borderColor: 'rgba(226, 183, 20, 0.35)',
-          boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.6), 0 0 25px rgba(226, 183, 20, 0.15)'
+          backgroundColor: 'rgba(18, 19, 26, 0.98)',
+          borderColor: 'var(--accent-gold, #e2b714)',
+          borderWidth: '1px',
+          borderStyle: 'solid',
+          borderRadius: '8px',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.85), 0 0 25px rgba(226, 183, 20, 0.2)'
         }}
       >
         {/* Left: Selected count and reference info */}
-        <div className="flex items-center gap-2.5 w-full md:w-auto justify-between md:justify-start px-2">
-          <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-amber-500 text-slate-950 font-black text-xs flex items-center justify-center">
+        <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-start px-2 border-b lg:border-b-0 pb-2 lg:pb-0" style={{ borderColor: 'var(--border-color, #2a2c3a)' }}>
+          <div className="flex items-center gap-2.5">
+            <span 
+              className="w-7 h-7 flex items-center justify-center font-black text-xs shrink-0"
+              style={{
+                backgroundColor: 'var(--accent-gold, #e2b714)',
+                color: '#000000',
+                borderRadius: '4px'
+              }}
+            >
               {selectedVerses.length}
             </span>
-            <span className="font-bold text-sm text-amber-400">
+            <span 
+              className="font-bold text-sm md:text-base font-serif"
+              style={{ color: 'var(--accent-gold, #e2b714)' }}
+            >
               {fullReference}
             </span>
           </div>
           <button 
             type="button" 
             onClick={onClearSelection}
-            className="md:hidden p-1 text-slate-400 hover:text-white rounded-lg"
+            className="lg:hidden p-1.5 text-slate-400 hover:text-white transition"
+            style={{ borderRadius: '6px', border: '1px solid var(--border-color, #2a2c3a)' }}
+            title="إلغاء التحديد"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
-        {/* Center / Right: Action buttons */}
-        <div className="flex items-center gap-1.5 flex-wrap justify-center w-full md:w-auto">
-          {/* Copy Plain */}
+        {/* Center / Right: Sleek rectangular action buttons matching church web theme */}
+        <div className="flex items-center gap-2 flex-wrap justify-center w-full lg:w-auto">
+          {/* Copy Exact */}
           <button
             type="button"
             onClick={() => handleCopy('exact')}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-200 flex items-center gap-1.5 border border-slate-700 transition"
+            className="px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 transition hover:scale-[1.02]"
+            style={{
+              backgroundColor: 'rgba(28, 29, 38, 0.9)',
+              borderColor: 'var(--border-color, #2a2c3a)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderRadius: '6px',
+              color: '#f8f9fa'
+            }}
             title="نسخ نص الآيات المحدد"
           >
             {copiedType === 'exact' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
@@ -118,10 +145,18 @@ export default function BibleVerseToolbar({
           <button
             type="button"
             onClick={() => handleCopy('no-tashkeel')}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-200 flex items-center gap-1.5 border border-slate-700 transition"
+            className="px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 transition hover:scale-[1.02]"
+            style={{
+              backgroundColor: 'rgba(28, 29, 38, 0.9)',
+              borderColor: 'var(--border-color, #2a2c3a)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderRadius: '6px',
+              color: '#f8f9fa'
+            }}
             title="نسخ بدون حركات التشكيل العربية"
           >
-            {copiedType === 'no-tashkeel' ? <Check size={14} className="text-emerald-400" /> : <span className="font-bold text-xs text-amber-400">ب</span>}
+            {copiedType === 'no-tashkeel' ? <Check size={14} className="text-emerald-400" /> : <span className="font-bold text-xs" style={{ color: 'var(--accent-gold, #e2b714)' }}>ب</span>}
             <span>{copiedType === 'no-tashkeel' ? 'تم النسخ!' : 'بدون تشكيل'}</span>
           </button>
 
@@ -129,21 +164,34 @@ export default function BibleVerseToolbar({
           <button
             type="button"
             onClick={() => handleCopy('with-reference')}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-200 flex items-center gap-1.5 border border-slate-700 transition"
+            className="px-3.5 py-2 text-xs font-semibold flex items-center gap-1.5 transition hover:scale-[1.02]"
+            style={{
+              backgroundColor: 'rgba(28, 29, 38, 0.9)',
+              borderColor: 'var(--border-color, #2a2c3a)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderRadius: '6px',
+              color: '#f8f9fa'
+            }}
             title="نسخ مع الشاهد والترجمة"
           >
             {copiedType === 'with-reference' ? <Check size={14} className="text-emerald-400" /> : <FileText size={14} />}
             <span className="hidden sm:inline">{copiedType === 'with-reference' ? 'تم النسخ!' : 'مع الشاهد'}</span>
           </button>
 
-          {/* Image Generator Modal */}
+          {/* Image Generator Modal - Highlighted Gold */}
           <button
             type="button"
             onClick={onOpenImageGenerator}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 flex items-center gap-1.5 shadow-md transition"
+            className="px-4 py-2 text-xs font-bold flex items-center gap-1.5 transition hover:brightness-110 shadow-lg"
+            style={{
+              backgroundColor: 'var(--accent-gold, #e2b714)',
+              color: '#000000',
+              borderRadius: '6px'
+            }}
             title="تصميم خلفية آية بالصورتين الرسميتين"
           >
-            <ImageIcon size={14} />
+            <ImageIcon size={15} />
             <span>تصميم صورة</span>
           </button>
 
@@ -151,7 +199,15 @@ export default function BibleVerseToolbar({
           <button
             type="button"
             onClick={() => onOpenStudyMode(selectedVerses[0]?.verseNumber || 1)}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 flex items-center gap-1.5 transition"
+            className="px-3 py-2 text-xs font-semibold flex items-center gap-1.5 transition hover:scale-[1.02]"
+            style={{
+              backgroundColor: 'rgba(52, 152, 219, 0.15)',
+              borderColor: 'rgba(52, 152, 219, 0.4)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderRadius: '6px',
+              color: '#60a5fa'
+            }}
             title="فتح دراسة الآية والقرائن"
           >
             <BookOpen size={14} />
@@ -162,7 +218,15 @@ export default function BibleVerseToolbar({
           <button
             type="button"
             onClick={onOpenComparison}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 flex items-center gap-1.5 transition"
+            className="px-3 py-2 text-xs font-semibold flex items-center gap-1.5 transition hover:scale-[1.02]"
+            style={{
+              backgroundColor: 'rgba(147, 51, 234, 0.15)',
+              borderColor: 'rgba(147, 51, 234, 0.4)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderRadius: '6px',
+              color: '#c084fc'
+            }}
             title="مقارنة النص في الترجمات الأخرى"
           >
             <Scale size={14} />
@@ -178,7 +242,15 @@ export default function BibleVerseToolbar({
               bookSlug,
               chapter: chapterNumber
             })}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition"
+            className="px-3 py-2 text-xs font-semibold flex items-center gap-1.5 transition hover:scale-[1.02]"
+            style={{
+              backgroundColor: 'rgba(28, 29, 38, 0.9)',
+              borderColor: 'var(--border-color, #2a2c3a)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderRadius: '6px',
+              color: '#f8f9fa'
+            }}
             title="كتابة تأمل في دفتري الروحي"
           >
             <Edit3 size={14} />
@@ -192,11 +264,15 @@ export default function BibleVerseToolbar({
               verseNumber: selectedVerses[0]?.verseNumber || 1,
               text: cleanRawTextOnly
             })}
-            className={`p-1.5 rounded-xl border transition ${
-              isFavorite 
-                ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' 
-                : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white'
-            }`}
+            className="p-2 transition hover:scale-[1.05]"
+            style={{
+              backgroundColor: isFavorite ? 'rgba(226, 183, 20, 0.2)' : 'rgba(28, 29, 38, 0.9)',
+              borderColor: isFavorite ? 'var(--accent-gold, #e2b714)' : 'var(--border-color, #2a2c3a)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderRadius: '6px',
+              color: isFavorite ? 'var(--accent-gold, #e2b714)' : '#a0aec0'
+            }}
             title="إضافة إلى الآيات المفضلة"
           >
             <Bookmark size={15} fill={isFavorite ? 'currentColor' : 'none'} />
@@ -206,10 +282,18 @@ export default function BibleVerseToolbar({
           <button 
             type="button" 
             onClick={onClearSelection}
-            className="hidden md:flex p-1.5 text-slate-400 hover:text-white rounded-lg transition"
+            className="hidden lg:flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-400 hover:text-white transition"
+            style={{
+              backgroundColor: 'rgba(28, 29, 38, 0.5)',
+              borderColor: 'var(--border-color, #2a2c3a)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderRadius: '6px'
+            }}
             title="إلغاء التحديد"
           >
-            <X size={16} />
+            <X size={15} />
+            <span>إغلاق</span>
           </button>
         </div>
       </div>
