@@ -57,6 +57,21 @@ export default function EventsPublicPage() {
           setPhone(parsed.phone || '');
         } catch {}
       }
+
+      if (storedToken) {
+        fetch(`${API_URL}/auth/me`, {
+          headers: { Authorization: `Bearer ${storedToken}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data && (data.user || data.id)) {
+              const fresh = data.user || data;
+              setUser(fresh);
+              localStorage.setItem('church-user', JSON.stringify(fresh));
+            }
+          })
+          .catch(err => console.error('Error refreshing events user:', err));
+      }
     }
   }, []);
 
@@ -132,8 +147,10 @@ export default function EventsPublicPage() {
         return;
       }
 
-      const isChurchMember = ['PRIEST', 'BISHOP', 'SUPER_ADMIN', 'CHURCH_ADMIN', 'SECRETARY'].includes(user.role) ||
-                             user.familyProfileStatus === 'APPROVED';
+      const isChurchMember = ['PRIEST', 'BISHOP', 'SUPER_ADMIN', 'CHURCH_ADMIN', 'SECRETARY', 'DEVELOPER'].includes(user.role) ||
+                             user.familyProfileStatus === 'APPROVED' ||
+                             user.isChurchMember === true ||
+                             user.isVerified === true;
 
       if (!isChurchMember) {
         setWebAlertModal({

@@ -5,6 +5,7 @@ import { requireAuth, requireRoles } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types';
 import { Role } from '@prisma/client';
 import { logAction } from '../utils/logger';
+import { sendEmail } from '../services/notification.service';
 
 // System 3: Events, VIP Invitations & Continuous QR Check-in
 const router = Router();
@@ -457,7 +458,8 @@ router.get('/my-invitations', requireAuth, async (req: AuthRequest, res: Respons
             date: true,
             startTime: true,
             endTime: true,
-            type: true
+            type: true,
+            status: true
           }
         },
         location: {
@@ -472,9 +474,142 @@ router.get('/my-invitations', requireAuth, async (req: AuthRequest, res: Respons
       }
     });
 
-    return res.status(200).json(invitations);
+    const formatted = invitations.map(inv => {
+      const isCancelledByAdmin = Boolean(inv.status === 'CANCELLED' && inv.notes && inv.notes.startsWith('ADMIN_CANCELLED:'));
+      const hoursSince = (Date.now() - new Date(inv.updatedAt).getTime()) / (1000 * 60 * 60);
+      const showAdminAlert24h = Boolean(isCancelledByAdmin && hoursSince <= 24);
+      const cancelReason = isCancelledByAdmin ? inv.notes!.replace('ADMIN_CANCELLED:', '').trim() : null;
+
+      const isEventCancelled = inv.event?.status === 'CANCELLED' || (inv.notes && inv.notes.startsWith('EVENT_CANCELLED:'));
+      const eventCancelReason = (inv.notes && inv.notes.startsWith('EVENT_CANCELLED:'))
+        ? inv.notes.replace('EVENT_CANCELLED:', '').trim()
+        : null;
+
+      return {
+        ...inv,
+        showAdminAlert24h,
+        adminCancelReason: cancelReason,
+        isEventCancelled: Boolean(isEventCancelled),
+        eventCancelReason
+      };
+    });
+
+    return res.status(200).json(formatted);
   } catch (error: any) {
     return res.status(500).json({ error: 'Failed to fetch member invitations.' });
+  }
+});
+
+/**
+ * 4b. POST /api/invitations/my-invitations/:id/cancel
+ * Member: Cancel an active invitation (single or all tickets for event)
+ */
+router.post('/my-invitations/:id/cancel', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { cancelAllForEvent } = req.body;
+    const userId = req.user!.userId;
+    const userEmail = (req.user!.email || '').toLowerCase();
+
+    const invitation = await prisma.eventInvitation.findUnique({
+      where: { id },
+      include: { event: true, location: true }
+    });
+
+    if (!invitation) {
+      return res.status(404).json({ error: 'Invitation not found.', errorAr: 'الدعوة غير موجودة.' });
+    }
+
+    const isOwner = (invitation.userId && invitation.userId === userId) ||
+                    (invitation.recipientEmail && invitation.recipientEmail.toLowerCase() === userEmail);
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Unauthorized to cancel this pass.', errorAr: 'غير مصرح لك بإلغاء هذه الدعوة.' });
+    }
+
+    if (invitation.status === 'CANCELLED') {
+      return res.status(400).json({ error: 'Already cancelled.', errorAr: 'تم إلغاء هذه الدعوة مسبقاً.' });
+    }
+
+    if (invitation.status === 'REDEEMED') {
+      return res.status(400).json({ error: 'Cannot cancel redeemed pass.', errorAr: 'لا يمكن إلغاء بطاقة تم استخدامها وحضور الفعالية بها.' });
+    }
+
+    let toCancel = [invitation];
+    if (cancelAllForEvent) {
+      toCancel = await prisma.eventInvitation.findMany({
+        where: {
+          eventId: invitation.eventId,
+          status: 'ACTIVE',
+          OR: [
+            { userId },
+            { recipientEmail: userEmail }
+          ]
+        },
+        include: { event: true, location: true }
+      });
+    }
+
+    for (const inv of toCancel) {
+      const loc = await prisma.eventLocation.findUnique({ where: { id: inv.locationId } });
+      const wasFull = loc ? (loc.isFull || loc.confirmedCount >= loc.maxCapacity) : false;
+
+      await prisma.$transaction(async (tx) => {
+        await tx.eventInvitation.update({
+          where: { id: inv.id },
+          data: { status: 'CANCELLED', notes: 'CANCELLED_BY_USER' }
+        });
+        if (loc && loc.confirmedCount > 0) {
+          await tx.eventLocation.update({
+            where: { id: inv.locationId },
+            data: {
+              confirmedCount: { decrement: 1 },
+              isFull: false
+            }
+          });
+        }
+      });
+
+      // If this location was full when cancellation occurred, trigger reopen prompt for admins
+      if (wasFull && loc) {
+        const remainingSeats = Math.max(1, loc.maxCapacity - Math.max(0, loc.confirmedCount - 1));
+        await prisma.systemConfig.upsert({
+          where: { key: `reopen_prompt_${loc.id}` },
+          create: {
+            key: `reopen_prompt_${loc.id}`,
+            value: JSON.stringify({
+              eventId: inv.eventId,
+              locationId: loc.id,
+              eventTitleAr: inv.event.titleAr,
+              locationNameAr: loc.nameAr,
+              availableSeats: remainingSeats,
+              maxCapacity: loc.maxCapacity,
+              timestamp: Date.now()
+            })
+          },
+          update: {
+            value: JSON.stringify({
+              eventId: inv.eventId,
+              locationId: loc.id,
+              eventTitleAr: inv.event.titleAr,
+              locationNameAr: loc.nameAr,
+              availableSeats: remainingSeats,
+              maxCapacity: loc.maxCapacity,
+              timestamp: Date.now()
+            })
+          }
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      messageAr: `تم إلغاء ${toCancel.length === 1 ? 'الدعوة' : `جميع الدعوات (${toCancel.length})`} وإعادة المقعد بنجاح.`,
+      messageEn: `Successfully cancelled ${toCancel.length} invitation(s).`,
+      cancelledCount: toCancel.length
+    });
+  } catch (error: any) {
+    console.error('Error cancelling invitation:', error);
+    return res.status(500).json({ error: 'Failed to cancel invitation.' });
   }
 });
 
@@ -1095,6 +1230,49 @@ router.patch(
         });
       }
 
+      // Handle full locations list update (names, capacities, new venues)
+      if (Array.isArray(req.body.locations)) {
+        for (const loc of req.body.locations) {
+          const capNum = Math.max(1, parseInt(String(loc.maxCapacity || loc.capacity || '100'), 10));
+          if (loc.id) {
+            const existingLoc = await prisma.eventLocation.findUnique({ where: { id: loc.id } });
+            if (existingLoc) {
+              await prisma.eventLocation.update({
+                where: { id: loc.id },
+                data: {
+                  nameAr: loc.nameAr ? String(loc.nameAr).trim() : existingLoc.nameAr,
+                  nameEn: loc.nameEn ? String(loc.nameEn).trim() : (loc.nameAr ? String(loc.nameAr).trim() : existingLoc.nameEn),
+                  maxCapacity: capNum,
+                  isFull: existingLoc.confirmedCount >= capNum
+                }
+              });
+            }
+          } else if (loc.nameAr && String(loc.nameAr).trim()) {
+            await prisma.eventLocation.create({
+              data: {
+                eventId: id,
+                nameAr: String(loc.nameAr).trim(),
+                nameEn: String(loc.nameEn || loc.nameAr).trim(),
+                maxCapacity: capNum,
+                confirmedCount: 0,
+                isFull: false
+              }
+            });
+          }
+        }
+      }
+
+      // Handle deleted locations
+      if (Array.isArray(req.body.deletedLocationIds)) {
+        for (const delId of req.body.deletedLocationIds) {
+          try {
+            await prisma.eventLocation.delete({ where: { id: delId } });
+          } catch (e) {
+            console.error('Error deleting event location:', e);
+          }
+        }
+      }
+
       if (Array.isArray(req.body.locationCapacities)) {
         for (const locCap of req.body.locationCapacities) {
           if (locCap.id && locCap.maxCapacity) {
@@ -1124,7 +1302,7 @@ router.patch(
           isPublicVisible: isPublicVisible !== undefined ? Boolean(isPublicVisible) : undefined,
           isApplicationActive: isApplicationActive !== undefined ? Boolean(isApplicationActive) : undefined,
           status: isApplicationActive !== undefined ? (isApplicationActive ? 'OPEN' : 'DRAFT') : undefined,
-          eligibilityRulesJson: rules ? JSON.stringify(rules) : undefined
+          eligibilityRulesJson: rules ? (typeof rules === 'string' ? rules : JSON.stringify(rules)) : undefined
         },
         include: { locations: true }
       });
@@ -1161,6 +1339,429 @@ router.delete(
       });
     } catch (error: any) {
       return res.status(500).json({ error: 'Failed to delete event.' });
+    }
+  }
+);
+
+// Helper to derive event cancellation passcode
+function getEventCancellationPasscode(eventId: string): string {
+  const hash = crypto.createHash('sha256').update(`church-cancel-salt-${eventId}`).digest('hex').toUpperCase();
+  return `EVT-CANCEL-${hash.slice(0, 6)}`;
+}
+
+/**
+ * 12. GET /api/invitations/admin/events/:id/cancellation-passcode
+ * SuperAdmin & Developer: View the unique event cancellation passcode
+ */
+router.get(
+  '/admin/events/:id/cancellation-passcode',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const event = await prisma.event.findUnique({ where: { id } });
+      if (!event) return res.status(404).json({ error: 'Event not found.' });
+
+      const passcode = getEventCancellationPasscode(id);
+      return res.status(200).json({ passcode });
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to get cancellation passcode.' });
+    }
+  }
+);
+
+/**
+ * 13. POST /api/invitations/admin/events/:id/cancel-event
+ * SuperAdmin / Developer / ChurchAdmin: Cancel an entire event with passcode verification
+ */
+router.post(
+  '/admin/events/:id/cancel-event',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { passcode, reason } = req.body;
+
+      if (!passcode || !reason) {
+        return res.status(400).json({
+          error: 'Passcode and cancellation reason are required.',
+          errorAr: 'يرجى إدخال كود التأكيد السري الخاص بالإلغاء وسبب الإلغاء.'
+        });
+      }
+
+      const expectedPasscode = getEventCancellationPasscode(id);
+      if (passcode.trim().toUpperCase() !== expectedPasscode) {
+        return res.status(403).json({
+          error: 'Invalid cancellation passcode. Only Superadmin or Developer can provide this code.',
+          errorAr: 'رمز الإلغاء السري غير صحيح. هذا الرمز مخصص للمطور أو السوبر أدمن فقط.'
+        });
+      }
+
+      const event = await prisma.event.findUnique({
+        where: { id },
+        include: { invitations: true }
+      });
+      if (!event) return res.status(404).json({ error: 'Event not found.' });
+
+      // Mark event cancelled and close application
+      await prisma.event.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+          isApplicationActive: false
+        }
+      });
+
+      // Invalidate all active invitations
+      const activeInvs = event.invitations.filter(i => i.status === 'ACTIVE' || i.status === 'PENDING');
+      for (const inv of activeInvs) {
+        await prisma.eventInvitation.update({
+          where: { id: inv.id },
+          data: {
+            status: 'CANCELLED',
+            notes: `EVENT_CANCELLED: ${reason.trim()}`
+          }
+        });
+      }
+
+      // Collect emails and send apology notices
+      const uniqueEmails = Array.from(new Set(activeInvs.map(i => i.recipientEmail).filter(Boolean)));
+      for (const email of uniqueEmails) {
+        await sendEmail(
+          email,
+          `نعتذر عن إلغاء فعالية: ${event.titleAr}`,
+          `<div style="font-family: sans-serif; direction: rtl; text-align: right; padding: 20px;">
+            <h2 style="color: #c0392b;">إشعار إلغاء فعالية رسمية</h2>
+            <p>أحباءنا في كنيسة العذراء،</p>
+            <p>نحيطكم علماً بأنه قد تقرر إلغاء فعالية <b>${event.titleAr}</b> المقررة بتاريخ ${new Date(event.date).toLocaleDateString('ar-EG')}.</p>
+            <div style="background: #fbeee6; border-right: 4px solid #e74c3c; padding: 12px; margin: 16px 0;">
+              <b>سبب الإلغاء:</b> ${reason.trim()}
+            </div>
+            <p style="color: #7f8c8d;">نعتذر بشدة عن أي إزعاج، ونحيطكم علماً بأن جميع بطاقات الدخول (QR Codes) المرتبطة بهذه الفعالية أصبحت ملغاة وغير صالحة.</p>
+            <p>دمتم في رعاية المسيح ومحبته.</p>
+          </div>`
+        ).catch(err => console.error('Failed to send event cancellation email to:', email, err));
+      }
+
+      logAction(
+        req.user!.userId,
+        req.user!.email,
+        req.user!.fullName || 'Admin',
+        'EVENT_CANCELLED_OFFICIALLY',
+        `Cancelled event #${id} ("${event.titleAr}"). Affected participants: ${uniqueEmails.length}. Reason: "${reason}"`
+      );
+
+      return res.status(200).json({
+        success: true,
+        messageAr: `تم إلغاء الفعالية بنجاح، وإبطال جميع البطاقات (${activeInvs.length}) وإرسال إيميلات الاعتذار للمشاركين.`,
+        messageEn: `Event cancelled successfully. ${activeInvs.length} passes invalidated and apology emails dispatched.`
+      });
+    } catch (error: any) {
+      console.error('Error cancelling event:', error);
+      return res.status(500).json({ error: 'Failed to cancel event.' });
+    }
+  }
+);
+
+/**
+ * 14. GET /api/invitations/admin/events/:eventId/attendees
+ * Admin: View full attendee list per location with VIP on top then Standard, and complete user/membership profile
+ */
+router.get(
+  '/admin/events/:eventId/attendees',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { eventId } = req.params;
+      const { locationId } = req.query;
+
+      const whereClause: any = { eventId };
+      if (locationId && locationId !== 'ALL') {
+        whereClause.locationId = String(locationId);
+      }
+
+      const invitations = await prisma.eventInvitation.findMany({
+        where: whereClause,
+        include: {
+          location: true,
+          user: {
+            include: {
+              familyProfile: true
+            }
+          }
+        },
+        orderBy: [
+          { type: 'desc' }, // VIP first
+          { createdAt: 'desc' }
+        ]
+      });
+
+      // Format response
+      const attendees = invitations.map(inv => {
+        const u = inv.user;
+        const fp = u?.familyProfile;
+
+        return {
+          id: inv.id,
+          recipientName: inv.recipientName,
+          recipientEmail: inv.recipientEmail,
+          type: inv.type, // 'VIP' or 'STANDARD'
+          status: inv.status,
+          qrToken: inv.qrToken,
+          redeemedAt: inv.redeemedAt,
+          createdAt: inv.createdAt,
+          notes: inv.notes,
+          locationId: inv.locationId,
+          locationNameAr: inv.location?.nameAr,
+          locationNameEn: inv.location?.nameEn,
+          userId: inv.userId,
+          userDetails: u ? {
+            id: u.id,
+            fullName: u.fullName,
+            email: u.email,
+            phone: u.phone,
+            role: u.role,
+            isVerified: u.isVerified,
+            isChurchMember: Boolean(u.isVerified || fp?.status === 'APPROVED')
+          } : null,
+          familyProfile: fp ? {
+            id: fp.id,
+            fullName: fp.fullName,
+            nationalId: fp.nationalId,
+            phoneNumbers: fp.phoneNumbers,
+            email: fp.email,
+            street: fp.street,
+            buildingNumber: fp.buildingNumber,
+            floor: fp.floor,
+            apartment: fp.apartment,
+            job: fp.job,
+            socialStatus: fp.socialStatus,
+            wifeName: fp.wifeName,
+            wifePhone: fp.wifePhone,
+            wifeJob: fp.wifeJob,
+            wifeConfessionFather: fp.wifeConfessionFather,
+            children: (() => { try { return JSON.parse(fp.childrenJson); } catch { return []; } })(),
+            relatives: (() => { try { return JSON.parse(fp.relativesJson); } catch { return []; } })(),
+            status: fp.status,
+            notes: fp.notes
+          } : null
+        };
+      });
+
+      return res.status(200).json(attendees);
+    } catch (error: any) {
+      console.error('Error fetching attendees:', error);
+      return res.status(500).json({ error: 'Failed to fetch attendees.' });
+    }
+  }
+);
+
+/**
+ * 15. POST /api/invitations/admin/invitations/:id/cancel
+ * Admin: Cancel an attendee's invitation with verification and reason, sends email and alerts user for 24h
+ */
+router.post(
+  '/admin/invitations/:id/cancel',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+
+      if (!reason || !reason.trim()) {
+        return res.status(400).json({
+          error: 'Cancellation reason is required.',
+          errorAr: 'يرجى كتابة سبب إلغاء الدعوة لتوضيحه للمستخدم.'
+        });
+      }
+
+      const invitation = await prisma.eventInvitation.findUnique({
+        where: { id },
+        include: { event: true, location: true, user: true }
+      });
+
+      if (!invitation) {
+        return res.status(404).json({ error: 'Invitation not found.' });
+      }
+
+      if (invitation.status === 'CANCELLED') {
+        return res.status(400).json({ error: 'Invitation is already cancelled.' });
+      }
+
+      const loc = await prisma.eventLocation.findUnique({ where: { id: invitation.locationId } });
+      const wasFull = loc ? (loc.isFull || loc.confirmedCount >= loc.maxCapacity) : false;
+
+      await prisma.$transaction(async (tx) => {
+        await tx.eventInvitation.update({
+          where: { id },
+          data: {
+            status: 'CANCELLED',
+            notes: `ADMIN_CANCELLED: ${reason.trim()}`
+          }
+        });
+
+        if (loc && loc.confirmedCount > 0) {
+          await tx.eventLocation.update({
+            where: { id: invitation.locationId },
+            data: {
+              confirmedCount: { decrement: 1 },
+              isFull: false
+            }
+          });
+        }
+      });
+
+      // If location was full, create a reopen prompt alert in SystemConfig
+      if (wasFull && loc) {
+        const remainingSeats = Math.max(1, loc.maxCapacity - Math.max(0, loc.confirmedCount - 1));
+        await prisma.systemConfig.upsert({
+          where: { key: `reopen_prompt_${loc.id}` },
+          create: {
+            key: `reopen_prompt_${loc.id}`,
+            value: JSON.stringify({
+              eventId: invitation.eventId,
+              locationId: loc.id,
+              eventTitleAr: invitation.event.titleAr,
+              locationNameAr: loc.nameAr,
+              availableSeats: remainingSeats,
+              maxCapacity: loc.maxCapacity,
+              timestamp: Date.now()
+            })
+          },
+          update: {
+            value: JSON.stringify({
+              eventId: invitation.eventId,
+              locationId: loc.id,
+              eventTitleAr: invitation.event.titleAr,
+              locationNameAr: loc.nameAr,
+              availableSeats: remainingSeats,
+              maxCapacity: loc.maxCapacity,
+              timestamp: Date.now()
+            })
+          }
+        });
+      }
+
+      // Send cancellation email to recipient
+      if (invitation.recipientEmail) {
+        await sendEmail(
+          invitation.recipientEmail,
+          `إلغاء دعوتك لفعالية: ${invitation.event.titleAr}`,
+          `<div style="font-family: sans-serif; direction: rtl; text-align: right; padding: 20px;">
+            <h2 style="color: #c0392b;">إشعار إلغاء دعوة لحضور فعالية</h2>
+            <p>عزيزنا/عزيزتنا <b>${invitation.recipientName}</b>،</p>
+            <p>نحيطك علماً بأنه قد تم إلغاء حجز دعوتك لفعالية <b>${invitation.event.titleAr}</b> المقررة بتاريخ ${new Date(invitation.event.date).toLocaleDateString('ar-EG')}.</p>
+            <div style="background: #fbeee6; border-right: 4px solid #e74c3c; padding: 12px; margin: 16px 0;">
+              <b>سبب الإلغاء من إدارة الكنيسة:</b> ${reason.trim()}
+            </div>
+            <p style="color: #7f8c8d;">لمزيد من التفاصيل أو الاستفسار، يرجى التواصل مع أمانة الكنيسة.</p>
+          </div>`
+        ).catch(err => console.error('Error sending cancellation email to attendee:', err));
+      }
+
+      logAction(
+        req.user!.userId,
+        req.user!.email,
+        req.user!.fullName || 'Admin',
+        'ADMIN_CANCELLED_INVITATION',
+        `Admin cancelled invitation #${id} for ${invitation.recipientName}. Reason: "${reason}"`
+      );
+
+      return res.status(200).json({
+        success: true,
+        messageAr: 'تم إلغاء الدعوة بنجاح وإشعار المستخدم عبر البريد الإلكتروني وداخل حسابه.',
+        messageEn: 'Invitation cancelled successfully, email sent and alert activated in user dashboard.'
+      });
+    } catch (error: any) {
+      console.error('Error in admin cancellation:', error);
+      return res.status(500).json({ error: 'Failed to cancel invitation.' });
+    }
+  }
+);
+
+/**
+ * 16. GET /api/invitations/admin/reopen-alerts
+ * Admin: Get all pending reopen capacity prompts
+ */
+router.get(
+  '/admin/reopen-alerts',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const configs = await prisma.systemConfig.findMany({
+        where: {
+          key: { startsWith: 'reopen_prompt_' }
+        }
+      });
+
+      const alerts = [];
+      for (const c of configs) {
+        try {
+          alerts.push(JSON.parse(c.value));
+        } catch {}
+      }
+
+      return res.status(200).json(alerts);
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to get reopen alerts.' });
+    }
+  }
+);
+
+/**
+ * 17. POST /api/invitations/admin/reopen-alerts/:locationId/resolve
+ * Admin: Decide whether to reopen application for freed seats or keep closed
+ */
+router.post(
+  '/admin/reopen-alerts/:locationId/resolve',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { locationId } = req.params;
+      const { action } = req.body; // 'reopen' or 'keep_closed'
+
+      const loc = await prisma.eventLocation.findUnique({ where: { id: locationId } });
+      if (!loc) return res.status(404).json({ error: 'Location not found.' });
+
+      if (action === 'reopen') {
+        await prisma.eventLocation.update({
+          where: { id: locationId },
+          data: { isFull: false }
+        });
+        await prisma.event.update({
+          where: { id: loc.eventId },
+          data: { isApplicationActive: true }
+        });
+      } else {
+        await prisma.eventLocation.update({
+          where: { id: locationId },
+          data: { isFull: true }
+        });
+      }
+
+      // Delete the prompt
+      await prisma.systemConfig.delete({
+        where: { key: `reopen_prompt_${locationId}` }
+      }).catch(() => {});
+
+      return res.status(200).json({
+        success: true,
+        action,
+        messageAr: action === 'reopen'
+          ? 'تم فتح باب التقديم للمقاعد الشاغرة بنجاح!'
+          : 'تم إبقاء التقديم مغلقاً بنجاح.',
+        messageEn: action === 'reopen'
+          ? 'Application reopened for remaining seats!'
+          : 'Application kept closed.'
+      });
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to resolve reopen alert.' });
     }
   }
 );

@@ -342,17 +342,30 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    return res.status(200).json({
+    const isApprovedMember = user.familyProfile?.status === 'APPROVED';
+    const isStaffOrPriest = ['PRIEST', 'BISHOP', 'SUPER_ADMIN', 'CHURCH_ADMIN', 'SECRETARY', 'DEVELOPER'].includes(user.role);
+
+    const userPayload = {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
       phone: user.phone,
       nationalId: user.nationalId,
       role: user.role,
-      isVerified: user.isVerified,
+      isVerified: user.isVerified || isApprovedMember,
+      isChurchMember: isStaffOrPriest || isApprovedMember,
+      hasFamilyProfile: !!user.familyProfile,
+      familyProfileStatus: user.familyProfile?.status || null,
+      familyProfileNotes: user.familyProfile?.notes || null,
+      familyProfileUpdatedAt: user.familyProfile?.updatedAt || null,
       language: user.language,
       familyProfile: user.familyProfile,
       priestProfile: user.priestProfile
+    };
+
+    return res.status(200).json({
+      ...userPayload,
+      user: userPayload
     });
   } catch (error) {
     return res.status(500).json({ error: 'Server error.' });

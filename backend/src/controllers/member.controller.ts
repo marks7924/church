@@ -50,6 +50,17 @@ router.post('/register-profile', requireAuth, async (req: AuthRequest, res: Resp
       return res.status(400).json({ error: 'Your family profile is already approved and registered.' });
     }
 
+    if (existingProfile && existingProfile.status === MembershipStatus.REJECTED) {
+      const hoursSince = (Date.now() - new Date(existingProfile.updatedAt).getTime()) / (1000 * 60 * 60);
+      if (hoursSince < 24) {
+        const remainingHours = Math.ceil(24 - hoursSince);
+        return res.status(400).json({
+          error: `Please wait ${remainingHours} hours before resubmitting your application.`,
+          errorAr: `يرجى الانتظار ${remainingHours} ساعة قبل إعادة تقديم طلب العضوية بعد الرفض (متاح بعد مرور 24 ساعة).`
+        });
+      }
+    }
+
     // Check if nationalId is duplicate (excluding the user's own profile if they are resubmitting a rejected one)
     const duplicateId = await prisma.familyHead.findFirst({
       where: {
@@ -221,7 +232,15 @@ router.patch('/:id/status', requireAuth, requireRoles([Role.SECRETARY, Role.CHUR
       where: { id: profileId },
       data: {
         status,
-        notes: adminNotes ? `${profile.notes || ''}\n[Admin Notes]: ${adminNotes}` : profile.notes
+        notes: adminNotes !== undefined ? adminNotes.trim() : profile.notes
+      }
+    });
+
+    // Sync isVerified flag on the associated User account
+    await prisma.user.update({
+      where: { id: profile.userId },
+      data: {
+        isVerified: status === MembershipStatus.APPROVED
       }
     });
 
@@ -274,6 +293,237 @@ router.patch('/:id/notes', requireAuth, requireRoles([Role.SECRETARY, Role.CHURC
     return res.status(200).json({ message: 'Notes updated successfully.', profile: updated });
   } catch (error) {
     return res.status(500).json({ error: 'Server error updating notes.' });
+  }
+});
+
+// 7. Admin: Create a new family membership for a user by email
+router.post('/admin/create', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN, Role.DEVELOPER]), async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      userEmail,
+      fullName,
+      nationalId,
+      street,
+      buildingNumber,
+      floor,
+      apartment,
+      job,
+      phoneNumbers,
+      socialStatus = 'SINGLE',
+      wifeName,
+      wifeNationalId,
+      wifeJob,
+      wifePhone,
+      wifeEmail,
+      wifeConfessionFather,
+      children = [],
+      relatives = [],
+      servants = [],
+      notes,
+      status = 'APPROVED'
+    } = req.body;
+
+    if (!userEmail || !fullName || !nationalId || !phoneNumbers) {
+      return res.status(400).json({
+        error: 'Email, Full Name, National ID, and Phone Number are required.',
+        errorAr: 'البريد الإلكتروني والاسم الكامل والرقم القومي ورقم الهاتف مطلوبة.'
+      });
+    }
+
+    const cleanEmail = String(userEmail).trim().toLowerCase();
+    let user = await prisma.user.findFirst({
+      where: { email: { equals: cleanEmail, mode: 'insensitive' } }
+    });
+
+    if (!user) {
+      // Create registered user shell so they can log in or link immediately
+      const bcrypt = require('bcrypt');
+      const defaultPasswordHash = await bcrypt.hash('Church@2026', 10);
+      user = await prisma.user.create({
+        data: {
+          email: cleanEmail,
+          passwordHash: defaultPasswordHash,
+          fullName: fullName.trim(),
+          nationalId: nationalId.trim(),
+          phone: phoneNumbers.split(',')[0].trim(),
+          role: Role.MEMBER,
+          isVerified: status === 'APPROVED'
+        }
+      });
+    } else {
+      if (status === 'APPROVED') {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { isVerified: true }
+        });
+      }
+    }
+
+    // Check if user already has a family profile
+    const existing = await prisma.familyHead.findUnique({
+      where: { userId: user.id }
+    });
+
+    const dataPayload = {
+      fullName: fullName.trim(),
+      nationalId: nationalId.trim(),
+      street: street ? street.trim() : 'العنوان الرئيسي',
+      buildingNumber: buildingNumber ? buildingNumber.trim() : '1',
+      floor: floor ? floor.trim() : '1',
+      apartment: apartment ? apartment.trim() : '1',
+      job: job ? job.trim() : 'غير محدد',
+      phoneNumbers: phoneNumbers.trim(),
+      email: cleanEmail,
+      socialStatus,
+      wifeName: wifeName ? wifeName.trim() : null,
+      wifeNationalId: wifeNationalId ? wifeNationalId.trim() : null,
+      wifeJob: wifeJob ? wifeJob.trim() : null,
+      wifePhone: wifePhone ? wifePhone.trim() : null,
+      wifeEmail: wifeEmail ? wifeEmail.trim() : null,
+      wifeConfessionFather: wifeConfessionFather ? wifeConfessionFather.trim() : null,
+      childrenJson: typeof children === 'string' ? children : JSON.stringify(children || []),
+      relativesJson: typeof relatives === 'string' ? relatives : JSON.stringify(relatives || []),
+      servantsJson: typeof servants === 'string' ? servants : JSON.stringify(servants || []),
+      notes: notes ? notes.trim() : null,
+      status: (status === 'APPROVED' ? MembershipStatus.APPROVED : MembershipStatus.PENDING)
+    };
+
+    let profile;
+    if (existing) {
+      profile = await prisma.familyHead.update({
+        where: { id: existing.id },
+        data: dataPayload
+      });
+    } else {
+      profile = await prisma.familyHead.create({
+        data: {
+          userId: user.id,
+          ...dataPayload
+        }
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      messageAr: 'تم تسجيل العضوية الكنسية للأسرة وربطها بحساب المستخدم بنجاح!',
+      messageEn: 'Family membership created and linked to user account successfully!',
+      profile
+    });
+  } catch (error: any) {
+    console.error('Error creating membership by admin:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create membership.' });
+  }
+});
+
+// 8. Admin: Edit an existing family membership
+router.put('/:id', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN, Role.DEVELOPER]), async (req: AuthRequest, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const {
+      fullName,
+      nationalId,
+      street,
+      buildingNumber,
+      floor,
+      apartment,
+      job,
+      phoneNumbers,
+      email,
+      socialStatus,
+      wifeName,
+      wifeNationalId,
+      wifeJob,
+      wifePhone,
+      wifeEmail,
+      wifeConfessionFather,
+      children,
+      relatives,
+      servants,
+      notes,
+      status
+    } = req.body;
+
+    const existing = await prisma.familyHead.findUnique({
+      where: { id: profileId },
+      include: { user: true }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'Family membership profile not found.' });
+    }
+
+    const updated = await prisma.familyHead.update({
+      where: { id: profileId },
+      data: {
+        fullName: fullName ? fullName.trim() : existing.fullName,
+        nationalId: nationalId ? nationalId.trim() : existing.nationalId,
+        street: street !== undefined ? street.trim() : existing.street,
+        buildingNumber: buildingNumber !== undefined ? buildingNumber.trim() : existing.buildingNumber,
+        floor: floor !== undefined ? floor.trim() : existing.floor,
+        apartment: apartment !== undefined ? apartment.trim() : existing.apartment,
+        job: job !== undefined ? job.trim() : existing.job,
+        phoneNumbers: phoneNumbers !== undefined ? phoneNumbers.trim() : existing.phoneNumbers,
+        email: email !== undefined ? email.trim() : existing.email,
+        socialStatus: socialStatus || existing.socialStatus,
+        wifeName: wifeName !== undefined ? (wifeName ? wifeName.trim() : null) : existing.wifeName,
+        wifeNationalId: wifeNationalId !== undefined ? (wifeNationalId ? wifeNationalId.trim() : null) : existing.wifeNationalId,
+        wifeJob: wifeJob !== undefined ? (wifeJob ? wifeJob.trim() : null) : existing.wifeJob,
+        wifePhone: wifePhone !== undefined ? (wifePhone ? wifePhone.trim() : null) : existing.wifePhone,
+        wifeEmail: wifeEmail !== undefined ? (wifeEmail ? wifeEmail.trim() : null) : existing.wifeEmail,
+        wifeConfessionFather: wifeConfessionFather !== undefined ? (wifeConfessionFather ? wifeConfessionFather.trim() : null) : existing.wifeConfessionFather,
+        childrenJson: children !== undefined ? (typeof children === 'string' ? children : JSON.stringify(children)) : existing.childrenJson,
+        relativesJson: relatives !== undefined ? (typeof relatives === 'string' ? relatives : JSON.stringify(relatives)) : existing.relativesJson,
+        servantsJson: servants !== undefined ? (typeof servants === 'string' ? servants : JSON.stringify(servants)) : existing.servantsJson,
+        notes: notes !== undefined ? notes.trim() : existing.notes,
+        status: status ? (status as MembershipStatus) : existing.status
+      }
+    });
+
+    if (status && existing.userId) {
+      await prisma.user.update({
+        where: { id: existing.userId },
+        data: { isVerified: status === MembershipStatus.APPROVED }
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      messageAr: 'تم تحديث بيانات العضوية بنجاح.',
+      messageEn: 'Membership profile updated successfully.',
+      profile: updated
+    });
+  } catch (error: any) {
+    console.error('Error updating membership profile:', error);
+    return res.status(500).json({ error: error.message || 'Failed to update membership profile.' });
+  }
+});
+
+// 9. Admin: Delete an existing family membership
+router.delete('/:id', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN, Role.DEVELOPER]), async (req: AuthRequest, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const existing = await prisma.familyHead.findUnique({ where: { id: profileId } });
+    if (!existing) {
+      return res.status(404).json({ error: 'Family membership profile not found.' });
+    }
+
+    if (existing.userId) {
+      await prisma.user.update({
+        where: { id: existing.userId },
+        data: { isVerified: false }
+      }).catch(() => {});
+    }
+
+    await prisma.familyHead.delete({ where: { id: profileId } });
+
+    return res.status(200).json({
+      success: true,
+      messageAr: 'تم حذف ملف العضوية بنجاح.',
+      messageEn: 'Membership profile deleted successfully.'
+    });
+  } catch (error: any) {
+    console.error('Error deleting membership profile:', error);
+    return res.status(500).json({ error: 'Failed to delete membership profile.' });
   }
 });
 

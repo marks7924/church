@@ -5,7 +5,7 @@ import { useTheme } from './ThemeContext';
 import { 
   QrCode, Camera, CheckCircle2, AlertTriangle, XCircle, Users, PlusCircle, 
   RefreshCw, MapPin, Crown, Search, ShieldAlert, ArrowLeft, ArrowRight, Eye, EyeOff, Trash2, Undo2,
-  Calendar, Clock, Check, Lock, Unlock, PlayCircle, Sparkles, Repeat
+  Calendar, Clock, Check, Lock, Unlock, PlayCircle, Sparkles, Repeat, Edit3, Key, Copy, Phone, Mail, User, FileText
 } from 'lucide-react';
 import { API_URL } from '../config';
 import VipInvitationCard from './VipInvitationCard';
@@ -87,6 +87,271 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
   const [renewEndTime, setRenewEndTime] = useState<string>('21:00');
   const [renewLocationCaps, setRenewLocationCaps] = useState<Array<{ id: string; nameAr: string; maxCapacity: number }>>([]);
   const [isRenewing, setIsRenewing] = useState<boolean>(false);
+
+  // Edit Event Modal states
+  const [showEditEventModal, setShowEditEventModal] = useState<boolean>(false);
+  const [editingEvent, setEditingEvent] = useState<any | null>(null);
+  const [editTitleAr, setEditTitleAr] = useState<string>('');
+  const [editTitleEn, setEditTitleEn] = useState<string>('');
+  const [editDescAr, setEditDescAr] = useState<string>('');
+  const [editDate, setEditDate] = useState<string>('');
+  const [editStartTime, setEditStartTime] = useState<string>('18:00');
+  const [editEndTime, setEditEndTime] = useState<string>('21:00');
+  const [editLocations, setEditLocations] = useState<Array<{ id?: string; nameAr: string; maxCapacity: number }>>([]);
+  const [deletedLocationIds, setDeletedLocationIds] = useState<string[]>([]);
+  const [editRequireMember, setEditRequireMember] = useState<boolean>(false);
+  const [editMinAge, setEditMinAge] = useState<number | ''>('');
+  const [editIsPublicVisible, setEditIsPublicVisible] = useState<boolean>(true);
+  const [editIsApplicationActive, setEditIsApplicationActive] = useState<boolean>(true);
+  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
+
+  const handleOpenEditModal = (ev: any) => {
+    setEditingEvent(ev);
+    setEditTitleAr(ev.titleAr || '');
+    setEditTitleEn(ev.titleEn || '');
+    setEditDescAr(ev.descriptionAr || '');
+    const dStr = ev.date ? new Date(ev.date).toISOString().split('T')[0] : '';
+    setEditDate(dStr);
+    setEditStartTime(ev.startTime || '18:00');
+    setEditEndTime(ev.endTime || '21:00');
+    setEditIsPublicVisible(Boolean(ev.isPublicVisible));
+    setEditIsApplicationActive(Boolean(ev.isApplicationActive));
+
+    let rules: any = {};
+    try { rules = JSON.parse(ev.eligibilityRulesJson || '{}'); } catch {}
+    setEditRequireMember(Boolean(rules.requireVerifiedMember));
+    setEditMinAge(rules.minAge !== undefined ? rules.minAge : '');
+
+    setEditLocations(
+      (ev.locations || []).map((l: any) => ({
+        id: l.id,
+        nameAr: l.nameAr,
+        maxCapacity: l.maxCapacity
+      }))
+    );
+    setDeletedLocationIds([]);
+    setShowEditEventModal(true);
+  };
+
+  const handleSaveEditEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !editingEvent || !editTitleAr.trim()) return;
+    setIsSavingEdit(true);
+
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/events/${editingEvent.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          titleAr: editTitleAr.trim(),
+          titleEn: editTitleEn.trim() || undefined,
+          descriptionAr: editDescAr.trim(),
+          date: editDate ? editDate : undefined,
+          startTime: editStartTime,
+          endTime: editEndTime,
+          isPublicVisible: editIsPublicVisible,
+          isApplicationActive: editIsApplicationActive,
+          rules: {
+            requireVerifiedMember: editRequireMember,
+            minAge: editMinAge !== '' ? editMinAge : undefined
+          },
+          locations: editLocations,
+          deletedLocationIds: deletedLocationIds
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setActionMsg(isAr ? '✓ تم حفظ جميع تعديلات الفعالية والأماكن والقواعد بنجاح!' : '✓ Event updated successfully!');
+        setShowEditEventModal(false);
+        refreshAdminEvents(true);
+      } else {
+        alert(data.error || 'Failed to update event.');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Current logged in user info (for SuperAdmin/Dev check)
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const uStr = localStorage.getItem('church-user');
+      if (uStr) {
+        try { setCurrentUser(JSON.parse(uStr)); } catch {}
+      }
+    }
+  }, []);
+  const isSuperAdminOrDev = currentUser && ['SUPER_ADMIN', 'DEVELOPER'].includes(currentUser.role);
+
+  // Attendees List per Event/Location states
+  const [eventAttendees, setEventAttendees] = useState<any[]>([]);
+  const [isLoadingAttendees, setIsLoadingAttendees] = useState<boolean>(false);
+  const [attendeeLocationFilter, setAttendeeLocationFilter] = useState<string>('ALL');
+  const [attendeeSearchQuery, setAttendeeSearchQuery] = useState<string>('');
+  
+  // Attendee Full Profile Modal state
+  const [selectedAttendeeProfile, setSelectedAttendeeProfile] = useState<any | null>(null);
+
+  // Cancel Attendee Invitation Modal states (Multi-Step Verification)
+  const [cancellingAttendee, setCancellingAttendee] = useState<any | null>(null);
+  const [cancelAttendeeReason, setCancelAttendeeReason] = useState<string>('');
+  const [cancelAttendeeVerification, setCancelAttendeeVerification] = useState<string>('');
+  const [isCancellingAttendee, setIsCancellingAttendee] = useState<boolean>(false);
+  const [cancelAttendeeFeedback, setCancelAttendeeFeedback] = useState<string | null>(null);
+
+  // Cancel Entire Event Modal states (Multi-Step Verification with Passcode)
+  const [cancellingEventTarget, setCancellingEventTarget] = useState<any | null>(null);
+  const [cancelEventPasscode, setCancelEventPasscode] = useState<string>('');
+  const [cancelEventReason, setCancelEventReason] = useState<string>('');
+  const [cancelEventVerification, setCancelEventVerification] = useState<string>('');
+  const [isCancellingEvent, setIsCancellingEvent] = useState<boolean>(false);
+  const [cancelEventFeedback, setCancelEventFeedback] = useState<string | null>(null);
+  const [revealedPasscode, setRevealedPasscode] = useState<string | null>(null);
+
+  const fetchEventAttendees = (eventId: string, locId: string = 'ALL') => {
+    if (!token || !eventId || eventId === 'ALL') return;
+    setIsLoadingAttendees(true);
+    const url = `${API_URL}/invitations/admin/events/${eventId}/attendees${locId !== 'ALL' ? `?locationId=${locId}` : ''}`;
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setEventAttendees(data);
+      })
+      .catch(err => console.error('Error fetching attendees:', err))
+      .finally(() => setIsLoadingAttendees(false));
+  };
+
+  useEffect(() => {
+    if (activeTab === 'EVENTS' && selectedEventId && selectedEventId !== 'ALL') {
+      fetchEventAttendees(selectedEventId, attendeeLocationFilter);
+    }
+  }, [activeTab, selectedEventId, attendeeLocationFilter, token]);
+
+  const handleOpenCancelAttendee = (att: any) => {
+    setCancellingAttendee(att);
+    setCancelAttendeeReason('');
+    setCancelAttendeeVerification('');
+    setCancelAttendeeFeedback(null);
+  };
+
+  const handleConfirmCancelAttendee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !cancellingAttendee) return;
+
+    if (!cancelAttendeeReason.trim()) {
+      setCancelAttendeeFeedback(isAr ? 'يرجى كتابة سبب الإلغاء ليتم إرساله للمستخدم.' : 'Please provide cancellation reason.');
+      return;
+    }
+
+    const typed = cancelAttendeeVerification.trim().toLowerCase();
+    if (typed !== 'cancel' && typed !== 'إلغاء') {
+      setCancelAttendeeFeedback(isAr ? 'يرجى كتابة كلمة "Cancel" أو "إلغاء" في المربع للتأكيد.' : 'Please type "Cancel" to confirm.');
+      return;
+    }
+
+    setIsCancellingAttendee(true);
+    setCancelAttendeeFeedback(null);
+
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/invitations/${cancellingAttendee.id}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ reason: cancelAttendeeReason.trim() })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setActionMsg(isAr ? '✓ تم إلغاء دعوة المستخدم بنجاح وإرسال إيميل بالسبب وتحديث السعات!' : '✓ Invitation cancelled successfully!');
+        setCancellingAttendee(null);
+        if (selectedAttendeeProfile?.id === cancellingAttendee.id) {
+          setSelectedAttendeeProfile(null);
+        }
+        if (selectedEventId) {
+          fetchEventAttendees(selectedEventId, attendeeLocationFilter);
+        }
+        refreshAdminEvents(true);
+      } else {
+        setCancelAttendeeFeedback(data.errorAr || data.error || 'Failed to cancel invitation.');
+      }
+    } catch (err) {
+      setCancelAttendeeFeedback(isAr ? 'خطأ في الاتصال بالخادم.' : 'Connection error.');
+    } finally {
+      setIsCancellingAttendee(false);
+    }
+  };
+
+  const handleRevealPasscode = async (eventId: string) => {
+    if (!token || !eventId) return;
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/events/${eventId}/cancellation-passcode`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.passcode) {
+        setRevealedPasscode(data.passcode);
+      } else {
+        alert(data.error || 'Unauthorized to view passcode.');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleConfirmCancelEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !cancellingEventTarget) return;
+
+    if (!cancelEventPasscode.trim() || !cancelEventReason.trim()) {
+      setCancelEventFeedback(isAr ? 'يرجى إدخال كود الإلغاء وسبب الإلغاء.' : 'Passcode and reason required.');
+      return;
+    }
+
+    const typed = cancelEventVerification.trim().toUpperCase();
+    if (typed !== 'CANCEL' && typed !== 'إلغاء') {
+      setCancelEventFeedback(isAr ? 'يرجى كتابة كلمة "CANCEL" للتأكيد النهائي.' : 'Type CANCEL to confirm.');
+      return;
+    }
+
+    setIsCancellingEvent(true);
+    setCancelEventFeedback(null);
+
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/events/${cancellingEventTarget.id}/cancel-event`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          passcode: cancelEventPasscode.trim(),
+          reason: cancelEventReason.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setActionMsg(isAr ? '✓ تم إلغاء الفعالية رسمياً وإبطال جميع البطاقات وإرسال إيميلات الاعتذار للمشاركين!' : '✓ Event cancelled officially!');
+        setCancellingEventTarget(null);
+        refreshAdminEvents(true);
+      } else {
+        setCancelEventFeedback(data.errorAr || data.error || 'Failed to cancel event.');
+      }
+    } catch (err) {
+      setCancelEventFeedback(isAr ? 'خطأ في الاتصال بالخادم.' : 'Connection error.');
+    } finally {
+      setIsCancellingEvent(false);
+    }
+  };
 
   const isEventExpired = (ev: any) => {
     if (!ev || !ev.date) return false;
@@ -436,7 +701,11 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
         })
         .catch(err => console.error(err));
     }
-  }, [token, activeTab, selectedEventId]);
+
+    if (activeTab === 'EVENTS' && selectedEventId && selectedEventId !== 'ALL') {
+      fetchEventAttendees(selectedEventId, attendeeLocationFilter);
+    }
+  }, [token, activeTab, selectedEventId, attendeeLocationFilter]);
 
   // Recipient search autocomplete
   useEffect(() => {
@@ -1301,6 +1570,76 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                           </button>
 
                           <button
+                            onClick={() => handleOpenEditModal(ev)}
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: '6px',
+                              border: '1px solid rgba(226, 183, 20, 0.4)',
+                              background: 'rgba(226, 183, 20, 0.12)',
+                              color: 'var(--accent-gold)',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              fontSize: '0.8rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            title={isAr ? 'تعديل بيانات الفعالية والقواعد والسعات' : 'Edit Event'}
+                          >
+                            <Edit3 size={13} />
+                            <span>{isAr ? 'تعديل' : 'Edit'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setCancellingEventTarget(ev);
+                              setCancelEventPasscode('');
+                              setCancelEventReason('');
+                              setCancelEventVerification('');
+                              setCancelEventFeedback(null);
+                            }}
+                            style={{
+                              padding: '8px 10px',
+                              borderRadius: '6px',
+                              border: '1px solid rgba(231, 76, 60, 0.35)',
+                              background: 'rgba(231, 76, 60, 0.1)',
+                              color: '#ff7675',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              fontSize: '0.8rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            title={isAr ? 'إلغاء الفعالية بالكامل رسمياً وإرسال اعتذار للمشاركين' : 'Cancel entire event'}
+                          >
+                            <span>{isAr ? 'إلغاء الفعالية' : 'Cancel'}</span>
+                          </button>
+
+                          {isSuperAdminOrDev && (
+                            <button
+                              onClick={() => handleRevealPasscode(ev.id)}
+                              style={{
+                                padding: '8px 10px',
+                                borderRadius: '6px',
+                                border: '1px solid rgba(226, 183, 20, 0.3)',
+                                background: 'rgba(0,0,0,0.3)',
+                                color: 'var(--accent-gold)',
+                                fontSize: '0.78rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                              title={isAr ? 'عرض كود الإلغاء السري (SuperAdmin فقط)' : 'View Secret Passcode'}
+                            >
+                              <Key size={12} />
+                              <span>{isAr ? 'الكود السري' : 'Passcode'}</span>
+                            </button>
+                          )}
+
+                          <button
                             onClick={() => handleDeleteEvent(ev.id, isAr ? ev.titleAr : ev.titleEn)}
                             style={{
                               padding: '8px 12px',
@@ -1745,15 +2084,15 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                         : (isAr ? 'زر التقديم مقفل برمادي (لم يفتح بعد) 🔒' : 'Apply Button Locked 🔒')}
                     </button>
 
-                    {/* Delete Event Button */}
+                    {/* Edit Event Button */}
                     <button
-                      onClick={() => handleDeleteEvent(currentEvent.id, isAr ? currentEvent.titleAr : currentEvent.titleEn)}
+                      onClick={() => handleOpenEditModal(currentEvent)}
                       style={{
                         padding: '8px 14px',
                         borderRadius: '8px',
-                        border: '1px solid rgba(231, 76, 60, 0.4)',
-                        background: 'rgba(231, 76, 60, 0.15)',
-                        color: '#e74c3c',
+                        border: '1px solid rgba(226, 183, 20, 0.4)',
+                        background: 'rgba(226, 183, 20, 0.15)',
+                        color: 'var(--accent-gold)',
                         fontWeight: 700,
                         fontSize: '0.82rem',
                         cursor: 'pointer',
@@ -1761,10 +2100,10 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                         alignItems: 'center',
                         gap: '6px'
                       }}
-                      title={isAr ? 'حذف هذه الفعالية نهائياً' : 'Delete event permanently'}
+                      title={isAr ? 'تعديل بيانات الفعالية والقواعد والسعات' : 'Edit Event'}
                     >
-                      <Trash2 size={15} />
-                      <span>{isAr ? 'حذف الفعالية' : 'Delete Event'}</span>
+                      <Edit3 size={15} />
+                      <span>{isAr ? 'تعديل الفعالية' : 'Edit Event'}</span>
                     </button>
 
                     {/* Add Location */}
@@ -1784,19 +2123,73 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                       + {isAr ? 'إضافة قاعة/مقر' : 'Add Venue'}
                     </button>
 
-                    {/* Delete Event */}
+                    {/* Cancel Event Button */}
                     <button
-                      onClick={() => handleDeleteEvent(currentEvent.id, currentEvent.titleAr)}
+                      onClick={() => {
+                        setCancellingEventTarget(currentEvent);
+                        setCancelEventPasscode('');
+                        setCancelEventReason('');
+                        setCancelEventVerification('');
+                        setCancelEventFeedback(null);
+                      }}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(231, 76, 60, 0.4)',
+                        background: 'rgba(231, 76, 60, 0.12)',
+                        color: '#ff7675',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                      title={isAr ? 'إلغاء الفعالية بالكامل رسمياً وإرسال اعتذار لجميع المسجلين' : 'Cancel entire event'}
+                    >
+                      <AlertTriangle size={15} />
+                      <span>{isAr ? 'إلغاء الفعالية' : 'Cancel Event'}</span>
+                    </button>
+
+                    {/* Passcode for SuperAdmin/Dev */}
+                    {isSuperAdminOrDev && (
+                      <button
+                        onClick={() => handleRevealPasscode(currentEvent.id)}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(226, 183, 20, 0.4)',
+                          background: 'rgba(0,0,0,0.4)',
+                          color: 'var(--accent-gold)',
+                          fontWeight: 700,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                        title={isAr ? 'عرض كود الإلغاء السري (SuperAdmin فقط)' : 'View Passcode'}
+                      >
+                        <Key size={14} />
+                        <span>{isAr ? 'كود الإلغاء السري' : 'Passcode'}</span>
+                      </button>
+                    )}
+
+                    {/* Delete Event Button */}
+                    <button
+                      onClick={() => handleDeleteEvent(currentEvent.id, isAr ? currentEvent.titleAr : currentEvent.titleEn)}
                       style={{
                         padding: '8px 12px',
                         borderRadius: '8px',
-                        border: 'none',
-                        background: 'rgba(231, 76, 60, 0.15)',
+                        border: '1px solid rgba(231, 76, 60, 0.3)',
+                        background: 'transparent',
                         color: '#e74c3c',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        fontSize: '0.82rem'
                       }}
+                      title={isAr ? 'حذف الفعالية نهائياً' : 'Delete permanently'}
                     >
-                      ✕ {isAr ? 'حذف الفعالية' : 'Delete'}
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -1881,6 +2274,323 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Attendees and Registered Users Section */}
+                <div style={{ marginTop: '2.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '1.2rem' }}>
+                    <div>
+                      <h4 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Users size={20} />
+                        <span>{isAr ? 'قائمة الحضور والمسجلين بالقاعات (VIP في المقدمة)' : 'Event Attendees & Registrations (VIP on Top)'}</span>
+                      </h4>
+                      <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                        {isAr 
+                          ? 'ترتيب تلقائي: كبار الزوار (VIP) أولاً في القمة بإطار ذهبي ثم الحضور العادي. اضغط على أي شخص لعرض بياناته بالكامل أو إلغاء دعوته.' 
+                          : 'Sorted VIP on top, then standard attendees. Click any user to view full profile & membership data or cancel their pass.'}
+                      </p>
+                    </div>
+
+                    {/* Search and Refresh */}
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <div style={{ position: 'relative', width: '240px' }}>
+                        <input
+                          type="text"
+                          placeholder={isAr ? 'بحث بالاسم، الإيميل، الهاتف...' : 'Search attendees...'}
+                          value={attendeeSearchQuery}
+                          onChange={(e) => setAttendeeSearchQuery(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            paddingRight: isAr ? '32px' : '12px',
+                            paddingLeft: !isAr ? '32px' : '12px',
+                            borderRadius: '8px',
+                            background: 'rgba(255,255,255,0.06)',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            color: '#ffffff',
+                            fontSize: '0.82rem',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                        <Search size={14} style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', [isAr ? 'right' : 'left']: '10px', color: 'var(--text-secondary)' }} />
+                      </div>
+                      <button
+                        onClick={() => fetchEventAttendees(currentEvent.id, attendeeLocationFilter)}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          background: 'rgba(255,255,255,0.08)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          color: '#ffffff',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '0.8rem'
+                        }}
+                        title={isAr ? 'تحديث القائمة' : 'Refresh'}
+                      >
+                        <RefreshCw size={14} className={isLoadingAttendees ? 'animate-spin' : ''} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Location Filter Tabs for Attendees */}
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '1.2rem' }}>
+                    <button
+                      onClick={() => { setAttendeeLocationFilter('ALL'); fetchEventAttendees(currentEvent.id, 'ALL'); }}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        border: attendeeLocationFilter === 'ALL' ? '1px solid var(--accent-gold)' : '1px solid rgba(255,255,255,0.1)',
+                        background: attendeeLocationFilter === 'ALL' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.04)',
+                        color: attendeeLocationFilter === 'ALL' ? '#000000' : 'var(--text-secondary)'
+                      }}
+                    >
+                      {isAr ? 'جميع الأماكن والقاعات' : 'All Venues'} ({eventAttendees.length})
+                    </button>
+                    {currentEvent.locations?.map((loc: any) => {
+                      const count = eventAttendees.filter(a => a.locationId === loc.id).length;
+                      const isSelected = attendeeLocationFilter === loc.id;
+                      return (
+                        <button
+                          key={loc.id}
+                          onClick={() => { setAttendeeLocationFilter(loc.id); fetchEventAttendees(currentEvent.id, loc.id); }}
+                          style={{
+                            padding: '6px 14px',
+                            borderRadius: '20px',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            border: isSelected ? '1px solid var(--accent-gold)' : '1px solid rgba(255,255,255,0.1)',
+                            background: isSelected ? 'var(--accent-gold)' : 'rgba(255,255,255,0.04)',
+                            color: isSelected ? '#000000' : 'var(--text-secondary)'
+                          }}
+                        >
+                          {loc.nameAr} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Attendees Grid / List */}
+                  {isLoadingAttendees ? (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+                      <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px', display: 'block', color: 'var(--accent-gold)' }} />
+                      <span>{isAr ? 'جاري تحميل قائمة المسجلين والحضور...' : 'Loading attendees...'}</span>
+                    </div>
+                  ) : (() => {
+                    const filteredAttendees = [...eventAttendees]
+                      .filter((att: any) => {
+                        if (attendeeLocationFilter !== 'ALL' && att.locationId !== attendeeLocationFilter) {
+                          return false;
+                        }
+                        if (!attendeeSearchQuery.trim()) return true;
+                        const q = attendeeSearchQuery.toLowerCase().trim();
+                        const name = (att.recipientName || att.user?.name || '').toLowerCase();
+                        const email = (att.recipientEmail || att.user?.email || '').toLowerCase();
+                        const phone = (att.recipientPhone || att.user?.phone || '').toLowerCase();
+                        const locAr = (att.location?.nameAr || '').toLowerCase();
+                        return name.includes(q) || email.includes(q) || phone.includes(q) || locAr.includes(q);
+                      })
+                      .sort((a: any, b: any) => {
+                        const aVip = a.isVip || a.type === 'VIP' ? 1 : 0;
+                        const bVip = b.isVip || b.type === 'VIP' ? 1 : 0;
+                        if (aVip !== bVip) return bVip - aVip;
+                        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                      });
+
+                    if (filteredAttendees.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '2.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+                            {isAr ? 'لا يوجد حضور أو مسجلين مطابقين في هذا المكان حالياً.' : 'No attendees found for this selection.'}
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
+                        {filteredAttendees.map((att: any) => {
+                          const isAttVip = att.isVip || att.type === 'VIP';
+                          const isCancelled = att.status === 'CANCELLED';
+                          const name = att.recipientName || att.user?.name || (isAr ? 'مشارك غير محدد' : 'Unnamed Attendee');
+                          const email = att.recipientEmail || att.user?.email || '—';
+                          const phone = att.recipientPhone || att.user?.phone || '—';
+                          const locName = att.location?.nameAr || '—';
+                          const hasMembership = att.user?.isVerified || att.user?.familyProfile?.status === 'APPROVED';
+
+                          return (
+                            <div
+                              key={att.id}
+                              style={{
+                                background: isCancelled
+                                  ? 'linear-gradient(135deg, rgba(231, 76, 60, 0.12) 0%, rgba(20, 10, 10, 0.85) 100%)'
+                                  : isAttVip 
+                                    ? 'linear-gradient(135deg, rgba(226, 183, 20, 0.12) 0%, rgba(25, 20, 8, 0.9) 100%)' 
+                                    : 'rgba(0,0,0,0.35)',
+                                border: isCancelled 
+                                  ? '1.5px solid rgba(231, 76, 60, 0.5)' 
+                                  : isAttVip 
+                                    ? '1.5px solid var(--accent-gold)' 
+                                    : '1px solid rgba(255,255,255,0.09)',
+                                borderRadius: '12px',
+                                padding: '14px',
+                                boxShadow: isAttVip && !isCancelled ? '0 4px 18px rgba(226, 183, 20, 0.15)' : 'none',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'space-between',
+                                gap: '12px',
+                                position: 'relative'
+                              }}
+                            >
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    {isAttVip ? (
+                                      <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        padding: '3px 8px',
+                                        borderRadius: '6px',
+                                        background: 'rgba(226, 183, 20, 0.25)',
+                                        border: '1px solid var(--accent-gold)',
+                                        color: 'var(--accent-gold)',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 800
+                                      }}>
+                                        <Crown size={12} />
+                                        <span>VIP</span>
+                                      </span>
+                                    ) : (
+                                      <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        padding: '3px 8px',
+                                        borderRadius: '6px',
+                                        background: 'rgba(255, 255, 255, 0.08)',
+                                        color: 'var(--text-secondary)',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 700
+                                      }}>
+                                        {isAr ? 'عادي' : 'Standard'}
+                                      </span>
+                                    )}
+
+                                    {hasMembership && (
+                                      <span style={{
+                                        padding: '3px 7px',
+                                        borderRadius: '6px',
+                                        background: 'rgba(46, 204, 113, 0.15)',
+                                        color: '#2ecc71',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 700
+                                      }}>
+                                        {isAr ? 'عضوية معتمدة ✓' : 'Member ✓'}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <span style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    background: isCancelled 
+                                      ? 'rgba(231, 76, 60, 0.2)' 
+                                      : att.status === 'REDEEMED' 
+                                        ? 'rgba(46, 204, 113, 0.2)' 
+                                        : 'rgba(52, 152, 219, 0.2)',
+                                    color: isCancelled 
+                                      ? '#ff7675' 
+                                      : att.status === 'REDEEMED' 
+                                        ? '#2ecc71' 
+                                        : '#74b9ff'
+                                  }}>
+                                    {isCancelled ? (isAr ? 'ملغاة' : 'Cancelled') : att.status === 'REDEEMED' ? (isAr ? 'حضر بالفعل ✓' : 'Redeemed') : (isAr ? 'نشطة وصالحة' : 'Active')}
+                                  </span>
+                                </div>
+
+                                <h4 style={{ fontSize: '1rem', fontWeight: 800, margin: '0 0 4px', color: '#ffffff' }}>
+                                  {name}
+                                </h4>
+
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Phone size={12} style={{ color: 'var(--accent-gold)' }} />
+                                    <span>{phone}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Mail size={12} style={{ color: 'var(--accent-gold)' }} />
+                                    <span style={{ wordBreak: 'break-all' }}>{email}</span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <MapPin size={12} style={{ color: 'var(--accent-gold)' }} />
+                                    <span style={{ color: '#ffffff' }}>{locName}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div style={{ display: 'flex', gap: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedAttendeeProfile(att)}
+                                  style={{
+                                    flex: 1,
+                                    padding: '7px 10px',
+                                    borderRadius: '6px',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    border: '1px solid rgba(255,255,255,0.15)',
+                                    color: '#ffffff',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  <Eye size={13} />
+                                  <span>{isAr ? 'عرض البيانات والعضوية' : 'Full Data & Membership'}</span>
+                                </button>
+
+                                {!isCancelled && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenCancelAttendee(att)}
+                                    style={{
+                                      padding: '7px 10px',
+                                      borderRadius: '6px',
+                                      background: 'rgba(231, 76, 60, 0.12)',
+                                      border: '1px solid rgba(231, 76, 60, 0.35)',
+                                      color: '#ff7675',
+                                      fontSize: '0.78rem',
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '4px'
+                                    }}
+                                    title={isAr ? 'إلغاء دعوة هذا الحاضر واسترجاع المقعد' : 'Cancel invite'}
+                                  >
+                                    <Trash2 size={13} />
+                                    <span>{isAr ? 'إلغاء الدعوة' : 'Cancel'}</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             );
@@ -3104,6 +3814,869 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 1. EDIT EVENT MODAL */}
+      {showEditEventModal && editingEvent && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1.5rem'
+        }}>
+          <div style={{
+            background: 'var(--card-bg, #1a1a1a)',
+            border: '1px solid var(--accent-gold)',
+            borderRadius: '16px',
+            padding: '2rem',
+            width: '100%',
+            maxWidth: '650px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.8)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Edit3 size={20} />
+                <span>{isAr ? 'تعديل بيانات وقواعد وسعات الفعالية' : 'Edit Event & Venues'}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowEditEventModal(false)}
+                style={{ background: 'transparent', border: 'none', color: '#ffffff', fontSize: '1.2rem', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditEvent}>
+              {/* Titles */}
+              <div style={{ marginBottom: '1.2rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 700 }}>
+                  {isAr ? 'اسم الفعالية (عربي) *' : 'Event Title (Arabic) *'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTitleAr}
+                  onChange={(e) => setEditTitleAr(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '1.2rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  {isAr ? 'اسم الفعالية (إنجليزي - اختياري)' : 'Event Title (English)'}
+                </label>
+                <input
+                  type="text"
+                  value={editTitleEn}
+                  onChange={(e) => setEditTitleEn(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom: '1.2rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  {isAr ? 'وصف الفعالية' : 'Description'}
+                </label>
+                <textarea
+                  rows={3}
+                  value={editDescAr}
+                  onChange={(e) => setEditDescAr(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.9rem', boxSizing: 'border-box', resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Date & Times */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px', marginBottom: '1.2rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    {isAr ? 'تاريخ الفعالية' : 'Date'}
+                  </label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    {isAr ? 'وقت البدء' : 'Start Time'}
+                  </label>
+                  <input
+                    type="time"
+                    value={editStartTime}
+                    onChange={(e) => setEditStartTime(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    {isAr ? 'وقت الانتهاء' : 'End Time'}
+                  </label>
+                  <input
+                    type="time"
+                    value={editEndTime}
+                    onChange={(e) => setEditEndTime(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              {/* Toggles & Rules */}
+              <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '14px', marginBottom: '1.5rem' }}>
+                <h5 style={{ margin: '0 0 10px', fontSize: '0.9rem', color: 'var(--accent-gold)' }}>
+                  {isAr ? 'قواعد الأهلية والتسجيل:' : 'Eligibility Rules & Controls:'}
+                </h5>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#ffffff', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={editIsPublicVisible}
+                      onChange={(e) => setEditIsPublicVisible(e.target.checked)}
+                      style={{ accentColor: 'var(--accent-gold)', width: '16px', height: '16px' }}
+                    />
+                    <span>{isAr ? 'ظاهرة بالصفحة العامة للفعاليات' : 'Publicly Visible'}</span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#ffffff', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={editIsApplicationActive}
+                      onChange={(e) => setEditIsApplicationActive(e.target.checked)}
+                      style={{ accentColor: 'var(--accent-gold)', width: '16px', height: '16px' }}
+                    />
+                    <span>{isAr ? 'زر التقديم مفعل ومتاح للمستخدمين' : 'Application Active'}</span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: '#ffffff', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={editRequireMember}
+                      onChange={(e) => setEditRequireMember(e.target.checked)}
+                      style={{ accentColor: 'var(--accent-gold)', width: '16px', height: '16px' }}
+                    />
+                    <span>{isAr ? 'يشترط وجود عضوية كنسية معتمدة للتقديم' : 'Require Verified Church Membership'}</span>
+                  </label>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                      {isAr ? 'الحد الأدنى للسن (اختياري):' : 'Min Age (Optional):'}
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="120"
+                      value={editMinAge}
+                      onChange={(e) => setEditMinAge(e.target.value === '' ? '' : parseInt(e.target.value))}
+                      placeholder={isAr ? 'لا يوجد' : 'None'}
+                      style={{ width: '80px', padding: '6px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.85rem' }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Locations & Capacities Manager */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '0.9rem', color: '#ffffff', fontWeight: 700 }}>
+                    {isAr ? 'الأماكن والقاعات المخصصة والسعات:' : 'Venues & Max Capacities:'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditLocations(prev => [
+                        ...prev,
+                        { nameAr: isAr ? `قاعة جديدة ${prev.length + 1}` : `Venue ${prev.length + 1}`, maxCapacity: 100 }
+                      ]);
+                    }}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      background: 'rgba(226, 183, 20, 0.2)',
+                      border: '1px solid var(--accent-gold)',
+                      color: 'var(--accent-gold)',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    + {isAr ? 'إضافة قاعة' : 'Add Venue'}
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {editLocations.map((loc, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        gap: '8px',
+                        alignItems: 'center',
+                        background: 'rgba(0,0,0,0.25)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: '8px',
+                        padding: '8px 10px'
+                      }}
+                    >
+                      <input
+                        type="text"
+                        required
+                        value={loc.nameAr}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditLocations(prev => prev.map((item, i) => i === idx ? { ...item, nameAr: val } : item));
+                        }}
+                        placeholder={isAr ? 'اسم القاعة / المكان' : 'Venue name'}
+                        style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.85rem' }}
+                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{isAr ? 'السعة:' : 'Cap:'}</span>
+                        <input
+                          type="number"
+                          min="1"
+                          required
+                          value={loc.maxCapacity}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            setEditLocations(prev => prev.map((item, i) => i === idx ? { ...item, maxCapacity: val } : item));
+                          }}
+                          style={{ width: '80px', padding: '6px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(226, 183, 20, 0.3)', color: 'var(--accent-gold)', fontWeight: 700, fontSize: '0.85rem', textAlign: 'center' }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const targetId = loc.id;
+                          if (targetId) {
+                            setDeletedLocationIds(prev => [...prev, targetId]);
+                          }
+                          setEditLocations(prev => prev.filter((_, i) => i !== idx));
+                        }}
+                        style={{
+                          padding: '6px 8px',
+                          borderRadius: '6px',
+                          background: 'rgba(231, 76, 60, 0.15)',
+                          border: 'none',
+                          color: '#e74c3c',
+                          cursor: 'pointer'
+                        }}
+                        title={isAr ? 'حذف هذا المكان' : 'Remove venue'}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowEditEventModal(false)}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingEdit}
+                  style={{
+                    padding: '10px 22px',
+                    borderRadius: '8px',
+                    background: 'var(--accent-gold)',
+                    border: 'none',
+                    color: '#000000',
+                    fontWeight: 800,
+                    cursor: isSavingEdit ? 'wait' : 'pointer'
+                  }}
+                >
+                  {isSavingEdit 
+                    ? (isAr ? 'جاري الحفظ...' : 'Saving...') 
+                    : (isAr ? 'حفظ جميع التعديلات' : 'Save Changes')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. ATTENDEE FULL PROFILE & MEMBERSHIP MODAL */}
+      {selectedAttendeeProfile && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1.5rem'
+        }}>
+          <div style={{
+            background: 'var(--card-bg, #1a1a1a)',
+            border: selectedAttendeeProfile.isVip || selectedAttendeeProfile.type === 'VIP' ? '2px solid var(--accent-gold)' : '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '2rem',
+            width: '100%',
+            maxWidth: '600px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.8)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <User size={22} style={{ color: 'var(--accent-gold)' }} />
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                  {isAr ? 'تفاصيل الحاضر والعضوية الكنسية' : 'Attendee Profile & Membership'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedAttendeeProfile(null)}
+                style={{ background: 'transparent', border: 'none', color: '#ffffff', fontSize: '1.2rem', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Basic Info */}
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '14px', marginBottom: '1.2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--accent-gold)' }}>
+                  {selectedAttendeeProfile.recipientName || selectedAttendeeProfile.user?.name || (isAr ? 'غير محدد' : 'Unknown')}
+                </span>
+                <span style={{
+                  padding: '3px 10px',
+                  borderRadius: '6px',
+                  background: (selectedAttendeeProfile.isVip || selectedAttendeeProfile.type === 'VIP') ? 'rgba(226, 183, 20, 0.25)' : 'rgba(255,255,255,0.08)',
+                  border: (selectedAttendeeProfile.isVip || selectedAttendeeProfile.type === 'VIP') ? '1px solid var(--accent-gold)' : 'none',
+                  color: (selectedAttendeeProfile.isVip || selectedAttendeeProfile.type === 'VIP') ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                  fontWeight: 800,
+                  fontSize: '0.75rem'
+                }}>
+                  {(selectedAttendeeProfile.isVip || selectedAttendeeProfile.type === 'VIP') ? '👑 VIP - كبار الزوار' : '🎟️ تذكرة حضور عادية'}
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.85rem' }}>
+                <div>
+                  <span style={{ color: 'var(--text-secondary)', display: 'block', fontSize: '0.75rem' }}>{isAr ? 'البريد الإلكتروني:' : 'Email:'}</span>
+                  <strong style={{ color: '#ffffff', wordBreak: 'break-all' }}>{selectedAttendeeProfile.recipientEmail || selectedAttendeeProfile.user?.email || '—'}</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-secondary)', display: 'block', fontSize: '0.75rem' }}>{isAr ? 'رقم الهاتف:' : 'Phone:'}</span>
+                  <strong style={{ color: '#ffffff' }}>{selectedAttendeeProfile.recipientPhone || selectedAttendeeProfile.user?.phone || '—'}</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-secondary)', display: 'block', fontSize: '0.75rem' }}>{isAr ? 'القاعة / المكان المخصص:' : 'Allocated Venue:'}</span>
+                  <strong style={{ color: 'var(--accent-gold)' }}>{selectedAttendeeProfile.location?.nameAr || '—'}</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-secondary)', display: 'block', fontSize: '0.75rem' }}>{isAr ? 'حالة التذكرة:' : 'Ticket Status:'}</span>
+                  <strong style={{ color: selectedAttendeeProfile.status === 'CANCELLED' ? '#ff7675' : selectedAttendeeProfile.status === 'REDEEMED' ? '#2ecc71' : '#74b9ff' }}>
+                    {selectedAttendeeProfile.status}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Family Membership Section */}
+            <div style={{ background: 'rgba(226, 183, 20, 0.05)', border: '1px solid rgba(226, 183, 20, 0.25)', borderRadius: '12px', padding: '14px', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <FileText size={16} />
+                  <span>{isAr ? 'ملف العضوية الكنسية للأسرة' : 'Church Family Membership'}</span>
+                </h4>
+                {selectedAttendeeProfile.user?.familyProfile ? (
+                  <span style={{
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    background: selectedAttendeeProfile.user.familyProfile.status === 'APPROVED' ? 'rgba(46, 204, 113, 0.2)' : 'rgba(243, 156, 18, 0.2)',
+                    color: selectedAttendeeProfile.user.familyProfile.status === 'APPROVED' ? '#2ecc71' : '#f39c12',
+                    fontSize: '0.75rem',
+                    fontWeight: 700
+                  }}>
+                    {selectedAttendeeProfile.user.familyProfile.status}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{isAr ? 'غير مسجل' : 'No Profile'}</span>
+                )}
+              </div>
+
+              {selectedAttendeeProfile.user?.familyProfile ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.85rem' }}>
+                  <div>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', display: 'block' }}>{isAr ? 'رب الأسرة:' : 'Head of Family:'}</span>
+                    <strong style={{ color: '#ffffff' }}>{selectedAttendeeProfile.user.familyProfile.fullName || '—'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', display: 'block' }}>{isAr ? 'الرقم القومي:' : 'National ID:'}</span>
+                    <strong style={{ color: '#ffffff' }}>{selectedAttendeeProfile.user.familyProfile.nationalId || '—'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', display: 'block' }}>{isAr ? 'المهنة:' : 'Job:'}</span>
+                    <strong style={{ color: '#ffffff' }}>{selectedAttendeeProfile.user.familyProfile.job || '—'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', display: 'block' }}>{isAr ? 'أب الاعتراف:' : 'Confession Priest:'}</span>
+                    <strong style={{ color: '#ffffff' }}>{selectedAttendeeProfile.user.familyProfile.confessionFather || '—'}</strong>
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', display: 'block' }}>{isAr ? 'العنوان بالتفصيل:' : 'Address:'}</span>
+                    <strong style={{ color: '#ffffff' }}>{selectedAttendeeProfile.user.familyProfile.address || '—'}</strong>
+                  </div>
+                  {selectedAttendeeProfile.user.familyProfile.wifeName && (
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', display: 'block' }}>{isAr ? 'اسم الزوجة:' : 'Wife Name:'}</span>
+                      <strong style={{ color: '#ffffff' }}>{selectedAttendeeProfile.user.familyProfile.wifeName} {selectedAttendeeProfile.user.familyProfile.wifeJob ? `(${selectedAttendeeProfile.user.familyProfile.wifeJob})` : ''}</strong>
+                    </div>
+                  )}
+                  {selectedAttendeeProfile.user.familyProfile.childrenCount > 0 && (
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', display: 'block' }}>{isAr ? 'عدد الأبناء:' : 'Children Count:'}</span>
+                      <strong style={{ color: '#ffffff' }}>{selectedAttendeeProfile.user.familyProfile.childrenCount}</strong>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  {isAr ? 'لم يقم هذا المستخدم بربط أو تسجيل استمارة عضوية كنسية عائلية بعد.' : 'User has not registered family church membership profile yet.'}
+                </p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedAttendeeProfile(null)}
+                style={{
+                  padding: '10px 18px',
+                  borderRadius: '8px',
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                {isAr ? 'إغلاق' : 'Close'}
+              </button>
+
+              {selectedAttendeeProfile.status !== 'CANCELLED' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleOpenCancelAttendee(selectedAttendeeProfile);
+                  }}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '8px',
+                    background: 'rgba(231, 76, 60, 0.15)',
+                    border: '1px solid rgba(231, 76, 60, 0.4)',
+                    color: '#ff7675',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Trash2 size={15} />
+                  <span>{isAr ? 'إلغاء دعوة هذا المستخدم' : 'Cancel Invitation'}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. MULTI-STEP VERIFICATION MODAL TO CANCEL ATTENDEE INVITATION */}
+      {cancellingAttendee && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.88)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: '1.5rem'
+        }}>
+          <div style={{
+            background: 'var(--card-bg, #1a1a1a)',
+            border: '2px solid rgba(231, 76, 60, 0.6)',
+            borderRadius: '16px',
+            padding: '2rem',
+            width: '100%',
+            maxWidth: '540px',
+            boxShadow: '0 10px 40px rgba(231, 76, 60, 0.25)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.2rem', color: '#ff7675' }}>
+              <ShieldAlert size={28} />
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
+                {isAr ? 'تأكيد إلغاء دعوة الحاضر (تحقق متعدد الخطوات)' : 'Multi-Step Verification: Cancel Pass'}
+              </h3>
+            </div>
+
+            {/* Apology Notice Box */}
+            <div style={{
+              background: 'rgba(231, 76, 60, 0.1)',
+              border: '1px solid rgba(231, 76, 60, 0.3)',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              fontSize: '0.85rem',
+              color: '#ffffff',
+              lineHeight: 1.6,
+              marginBottom: '1.5rem'
+            }}>
+              <strong>{isAr ? '⚠️ تنبيه إداري وإجرائي:' : 'Administrative Notice:'}</strong>
+              <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)' }}>
+                {isAr 
+                  ? 'سيتم إبطال تذكرة الحاضر فوراً، وسيصله إيميل رسمي بالاعتذار، كما سيظهر له إشعار في حسابه على الموقع لمدة 24 ساعة. وسيتم استرجاع مقعده إلى سعة الفعالية.' 
+                  : 'Pass will be invalidated, an apology email will be sent with your reason, and an alert will be displayed in their account for 24h. The seat will be returned to the venue.'}
+              </p>
+            </div>
+
+            {/* Recipient Card */}
+            <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '10px 12px', marginBottom: '1.2rem', fontSize: '0.85rem' }}>
+              <div><strong>{isAr ? 'الحاضر:' : 'Attendee:'}</strong> {cancellingAttendee.recipientName || cancellingAttendee.user?.name}</div>
+              <div><strong>{isAr ? 'الإيميل:' : 'Email:'}</strong> {cancellingAttendee.recipientEmail || cancellingAttendee.user?.email}</div>
+              <div><strong>{isAr ? 'القاعة:' : 'Venue:'}</strong> {cancellingAttendee.location?.nameAr}</div>
+            </div>
+
+            <form onSubmit={handleConfirmCancelAttendee}>
+              {/* Step 1: Reason */}
+              <div style={{ marginBottom: '1.2rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: '#ffffff', fontWeight: 700, marginBottom: '6px' }}>
+                  {isAr ? '1. سبب إلغاء الدعوة (سيصل للمستخدم في الإيميل) *' : '1. Cancellation Reason (sent to user) *'}
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={cancelAttendeeReason}
+                  onChange={(e) => setCancelAttendeeReason(e.target.value)}
+                  placeholder={isAr ? 'مثال: نعتذر، تم إلغاء الحجز لظروف تنظيمية خاصة بالمقاعد...' : 'e.g., Apologies, pass cancelled due to seating rearrangements...'}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* Step 2: Verification Input */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: '#ffffff', fontWeight: 700, marginBottom: '6px' }}>
+                  {isAr ? '2. لتأكيد العملية، يرجى كتابة كلمة "Cancel" أو "إلغاء":' : '2. Type "Cancel" to confirm:'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={cancelAttendeeVerification}
+                  onChange={(e) => setCancelAttendeeVerification(e.target.value)}
+                  placeholder="Cancel"
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(231, 76, 60, 0.4)', color: '#ff7675', fontWeight: 800, fontSize: '0.95rem', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {cancelAttendeeFeedback && (
+                <div style={{ color: '#ff7675', fontSize: '0.82rem', marginBottom: '1rem', fontWeight: 700 }}>
+                  ✕ {cancelAttendeeFeedback}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setCancellingAttendee(null)}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isAr ? 'تراجع' : 'Back'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCancellingAttendee}
+                  style={{
+                    padding: '10px 22px',
+                    borderRadius: '8px',
+                    background: '#e74c3c',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    cursor: isCancellingAttendee ? 'wait' : 'pointer'
+                  }}
+                >
+                  {isCancellingAttendee 
+                    ? (isAr ? 'جاري الإلغاء والإرسال...' : 'Cancelling...') 
+                    : (isAr ? 'تأكيد إلغاء الدعوة' : 'Confirm Cancel')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 4. MULTI-STEP VERIFICATION WITH PASSCODE TO CANCEL ENTIRE EVENT */}
+      {cancellingEventTarget && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.92)',
+          backdropFilter: 'blur(10px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: '1.5rem'
+        }}>
+          <div style={{
+            background: 'var(--card-bg, #1a1a1a)',
+            border: '2px solid #e74c3c',
+            borderRadius: '16px',
+            padding: '2rem',
+            width: '100%',
+            maxWidth: '560px',
+            boxShadow: '0 12px 50px rgba(231, 76, 60, 0.35)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.2rem', color: '#ff7675' }}>
+              <AlertTriangle size={32} />
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
+                  {isAr ? '🚨 إلغاء الفعالية بالكامل رسمياً' : '🚨 Cancel Entire Event'}
+                </h3>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  {cancellingEventTarget.titleAr}
+                </span>
+              </div>
+            </div>
+
+            <div style={{
+              background: 'rgba(231, 76, 60, 0.12)',
+              border: '1px solid rgba(231, 76, 60, 0.4)',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              fontSize: '0.85rem',
+              color: '#ffffff',
+              lineHeight: 1.6,
+              marginBottom: '1.5rem'
+            }}>
+              <strong>{isAr ? '⚠️ تحذير فائق الخطورة:' : 'Critical Warning:'}</strong>
+              <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)' }}>
+                {isAr 
+                  ? 'أنت على وشك إلغاء الفعالية بالكامل! سيتم إبطال جميع بطاقات الدخول (QR) لجميع المشاركين وستظهر في حساباتهم بالثيم الملغي والمنتهي، وسيتم إرسال إيميل اعتذار لجميع المسجلين.' 
+                  : 'All issued passes will become INVALID and render in expired/cancelled theme. An apology email will be dispatched to all registered attendees.'}
+              </p>
+            </div>
+
+            <form onSubmit={handleConfirmCancelEvent}>
+              {/* Step 1: Secret Passcode */}
+              <div style={{ marginBottom: '1.2rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--accent-gold)', fontWeight: 800, marginBottom: '6px' }}>
+                  {isAr ? '1. كود الإلغاء السري للفعالية (متاح للـ SuperAdmin والمطور فقط) *' : '1. SuperAdmin Event Cancellation Passcode *'}
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    required
+                    value={cancelEventPasscode}
+                    onChange={(e) => setCancelEventPasscode(e.target.value)}
+                    placeholder="EVT-CANCEL-XXXXXX"
+                    style={{ width: '100%', padding: '10px 12px', paddingLeft: '36px', borderRadius: '8px', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', fontWeight: 800, letterSpacing: '1px', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                  />
+                  <Key size={16} style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '12px', color: 'var(--accent-gold)' }} />
+                </div>
+              </div>
+
+              {/* Step 2: Reason */}
+              <div style={{ marginBottom: '1.2rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: '#ffffff', fontWeight: 700, marginBottom: '6px' }}>
+                  {isAr ? '2. سبب إلغاء الفعالية (سيصل في إيميل الاعتذار لجميع المشاركين) *' : '2. Cancellation Reason (emailed to everyone) *'}
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={cancelEventReason}
+                  onChange={(e) => setCancelEventReason(e.target.value)}
+                  placeholder={isAr ? 'نعتذر بشدة عن إلغاء الفعالية نظراً لظروف طارئة...' : 'We sincerely apologize, the event is cancelled due to unforeseen circumstances...'}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#ffffff', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* Step 3: Type CANCEL */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: '#ffffff', fontWeight: 700, marginBottom: '6px' }}>
+                  {isAr ? '3. لتأكيد الإلغاء النهائي، اكتب كلمة "CANCEL" بالإنجليزية:' : '3. Type "CANCEL" to confirm:'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={cancelEventVerification}
+                  onChange={(e) => setCancelEventVerification(e.target.value)}
+                  placeholder="CANCEL"
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(231, 76, 60, 0.4)', color: '#ff7675', fontWeight: 800, fontSize: '0.95rem', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {cancelEventFeedback && (
+                <div style={{ color: '#ff7675', fontSize: '0.85rem', marginBottom: '1rem', fontWeight: 700 }}>
+                  ✕ {cancelEventFeedback}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setCancellingEventTarget(null)}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {isAr ? 'تراجع' : 'Back'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCancellingEvent}
+                  style={{
+                    padding: '10px 22px',
+                    borderRadius: '8px',
+                    background: '#e74c3c',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    cursor: isCancellingEvent ? 'wait' : 'pointer'
+                  }}
+                >
+                  {isCancellingEvent 
+                    ? (isAr ? 'جاري إلغاء الفعالية وإرسال الاعتذار...' : 'Cancelling...') 
+                    : (isAr ? 'تأكيد إلغاء الفعالية نهائياً' : 'Cancel Event Officially')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 5. REVEALED PASSCODE MODAL FOR SUPERADMIN/DEV */}
+      {revealedPasscode && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10001,
+          padding: '1.5rem'
+        }}>
+          <div style={{
+            background: 'var(--card-bg, #1a1a1a)',
+            border: '2px solid var(--accent-gold)',
+            borderRadius: '16px',
+            padding: '2rem',
+            width: '100%',
+            maxWidth: '480px',
+            boxShadow: '0 10px 40px rgba(226, 183, 20, 0.25)',
+            textAlign: 'center'
+          }}>
+            <Key size={36} style={{ color: 'var(--accent-gold)', margin: '0 auto 10px' }} />
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 8px', color: '#ffffff' }}>
+              {isAr ? 'كود الإلغاء السري للفعالية' : 'Event Cancellation Passcode'}
+            </h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+              {isAr 
+                ? 'هذا الكود سري للغاية وخاص بهذه الفعالية فقط ولا يمكن إلغاء الفعالية بدونه:' 
+                : 'This passcode is strictly confidential and required to cancel this event:'}
+            </p>
+
+            <div style={{
+              background: 'rgba(0,0,0,0.5)',
+              border: '1px dashed var(--accent-gold)',
+              borderRadius: '10px',
+              padding: '14px',
+              marginBottom: '1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '10px'
+            }}>
+              <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-gold)', letterSpacing: '2px', fontFamily: 'monospace' }}>
+                {revealedPasscode}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(revealedPasscode);
+                  setActionMsg(isAr ? '✓ تم نسخ كود الإلغاء السري!' : '✓ Passcode copied!');
+                }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  background: 'rgba(226, 183, 20, 0.2)',
+                  border: '1px solid var(--accent-gold)',
+                  color: 'var(--accent-gold)',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <Copy size={13} />
+                <span>{isAr ? 'نسخ' : 'Copy'}</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setRevealedPasscode(null)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '8px',
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#ffffff',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              {isAr ? 'إغلاق' : 'Close'}
+            </button>
           </div>
         </div>
       )}

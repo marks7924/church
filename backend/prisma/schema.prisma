@@ -519,6 +519,7 @@ model EventInvitation {
   redeemedAt          DateTime?
   redeemedById        String?
   emailDeliveryStatus String             @default("QUEUED")   // QUEUED, SENT, DELIVERED, FAILED
+  notes               String?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 

@@ -28,9 +28,10 @@ interface VipInvitationCardProps {
   };
   language?: 'ar' | 'en';
   isAr?: boolean;
+  onCancel?: (invitation: any) => void;
 }
 
-export default function VipInvitationCard({ invitation, language = 'ar', isAr: isArProp }: VipInvitationCardProps) {
+export default function VipInvitationCard({ invitation, language = 'ar', isAr: isArProp, onCancel }: VipInvitationCardProps) {
   const isAr = isArProp !== undefined ? isArProp : language === 'ar';
   const qrToken = invitation.qrToken || invitation.token || '';
   const isVip = invitation.type === 'VIP' || invitation.isVip || false;
@@ -67,29 +68,60 @@ export default function VipInvitationCard({ invitation, language = 'ar', isAr: i
     };
   }, [qrToken]);
 
+  const isCancelled = invitation.status === 'CANCELLED' || invitation.isEventCancelled;
+  const isRedeemed = invitation.status === 'REDEEMED';
+  const cancelReason = invitation.adminCancelReason || invitation.eventCancelReason || (invitation.notes?.startsWith('ADMIN_CANCELLED:') ? invitation.notes.replace('ADMIN_CANCELLED:', '').trim() : null);
+
   return (
     <div style={{
       maxWidth: '420px',
       width: '100%',
       margin: '0 auto',
       borderRadius: '20px',
-      background: isVip 
-        ? 'linear-gradient(145deg, #1f1a0e 0%, #0d0c08 50%, #231d0e 100%)' 
-        : 'linear-gradient(145deg, #181822 0%, #101016 100%)',
-      border: isVip 
-        ? '3.5px double #e2b714' 
-        : '1px solid rgba(255, 255, 255, 0.12)',
-      boxShadow: isVip 
-        ? '0 0 20px rgba(226, 183, 20, 0.4), 0 12px 40px rgba(0, 0, 0, 0.6), inset 0 0 25px rgba(226, 183, 20, 0.18)' 
-        : '0 8px 30px rgba(0,0,0,0.3)',
+      background: isCancelled
+        ? 'linear-gradient(145deg, #241315 0%, #150d0e 50%, #201113 100%)'
+        : (isVip 
+          ? 'linear-gradient(145deg, #1f1a0e 0%, #0d0c08 50%, #231d0e 100%)' 
+          : 'linear-gradient(145deg, #181822 0%, #101016 100%)'),
+      border: isCancelled
+        ? '2px solid rgba(231, 76, 60, 0.6)'
+        : (isVip 
+          ? '3.5px double #e2b714' 
+          : '1px solid rgba(255, 255, 255, 0.12)'),
+      boxShadow: isCancelled
+        ? '0 0 25px rgba(231, 76, 60, 0.25), inset 0 0 20px rgba(231, 76, 60, 0.1)'
+        : (isVip 
+          ? '0 0 20px rgba(226, 183, 20, 0.4), 0 12px 40px rgba(0, 0, 0, 0.6), inset 0 0 25px rgba(226, 183, 20, 0.18)' 
+          : '0 8px 30px rgba(0,0,0,0.3)'),
       padding: '24px',
       position: 'relative',
       overflow: 'hidden',
       direction: isAr ? 'rtl' : 'ltr',
       color: '#ffffff'
     }}>
-      {/* Decorative Gold Accent Borders and Glowing Header for VIP */}
-      {isVip ? (
+      {/* Decorative Header */}
+      {isCancelled ? (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          background: 'rgba(231, 76, 60, 0.25)',
+          border: '1px solid #e74c3c',
+          color: '#ff6b6b',
+          fontWeight: 800,
+          fontSize: '0.82rem',
+          padding: '6px 14px',
+          borderRadius: '20px',
+          margin: '0 auto 1rem auto',
+          width: 'fit-content',
+          letterSpacing: '1px'
+        }}>
+          <ShieldAlert size={16} />
+          <span>{isAr ? 'دعوة ملغاة رسمياً • CANCELLED PASS' : 'CANCELLED PASS • EXPIRED'}</span>
+          <ShieldAlert size={16} />
+        </div>
+      ) : isVip ? (
         <>
           <div style={{
             position: 'absolute',
@@ -145,7 +177,7 @@ export default function VipInvitationCard({ invitation, language = 'ar', isAr: i
       <div style={{ textAlign: 'center', marginBottom: '1.2rem' }}>
         <div style={{
           fontSize: '0.82rem',
-          color: isVip ? 'var(--accent-gold)' : 'var(--text-secondary)',
+          color: isCancelled ? '#ff6b6b' : (isVip ? 'var(--accent-gold)' : 'var(--text-secondary)'),
           fontWeight: 700,
           textTransform: 'uppercase',
           letterSpacing: '1px',
@@ -158,8 +190,9 @@ export default function VipInvitationCard({ invitation, language = 'ar', isAr: i
           fontSize: '1.35rem',
           fontWeight: 800,
           margin: '0 0 6px 0',
-          color: '#ffffff',
-          lineHeight: 1.3
+          color: isCancelled ? '#ff9999' : '#ffffff',
+          lineHeight: 1.3,
+          textDecoration: isCancelled ? 'line-through' : 'none'
         }}>
           {isAr ? invitation.event?.titleAr : (invitation.event?.titleEn || invitation.event?.titleAr)}
         </h3>
@@ -171,10 +204,29 @@ export default function VipInvitationCard({ invitation, language = 'ar', isAr: i
           fontSize: '0.85rem',
           color: 'var(--text-secondary)'
         }}>
-          <MapPin size={14} style={{ color: 'var(--accent-gold)' }} />
+          <MapPin size={14} style={{ color: isCancelled ? '#ff6b6b' : 'var(--accent-gold)' }} />
           <span>{isAr ? invitation.location?.nameAr : (invitation.location?.nameEn || invitation.location?.nameAr)}</span>
         </div>
       </div>
+
+      {/* Cancellation Reason Alert Box */}
+      {isCancelled && (
+        <div style={{
+          background: 'rgba(231, 76, 60, 0.15)',
+          border: '1px solid rgba(231, 76, 60, 0.4)',
+          borderRadius: '10px',
+          padding: '10px 14px',
+          marginBottom: '1rem',
+          fontSize: '0.82rem',
+          color: '#ffc9c9',
+          textAlign: 'center'
+        }}>
+          <b>{isAr ? '🚫 تم إلغاء هذه الدعوة:' : '🚫 This invitation was cancelled:'}</b>
+          <div style={{ marginTop: '3px' }}>
+            {cancelReason || (isAr ? 'تم إلغاء الدعوة من إدارة الكنيسة أو بواسطة صاحب الحجز.' : 'Cancelled officially.')}
+          </div>
+        </div>
+      )}
 
       {/* Recipient Details */}
       <div style={{
@@ -201,12 +253,18 @@ export default function VipInvitationCard({ invitation, language = 'ar', isAr: i
           fontWeight: 700,
           padding: '4px 10px',
           borderRadius: '10px',
-          background: invitation.status === 'REDEEMED' ? 'rgba(46, 204, 113, 0.2)' : 'rgba(226, 183, 20, 0.15)',
-          color: invitation.status === 'REDEEMED' ? '#2ecc71' : 'var(--accent-gold)'
+          background: isCancelled 
+            ? 'rgba(231, 76, 60, 0.25)' 
+            : (isRedeemed ? 'rgba(46, 204, 113, 0.2)' : 'rgba(226, 183, 20, 0.15)'),
+          color: isCancelled 
+            ? '#ff6b6b' 
+            : (isRedeemed ? '#2ecc71' : 'var(--accent-gold)')
         }}>
-          {invitation.status === 'REDEEMED' 
-            ? (isAr ? 'تم الحضور ✓' : 'Checked In ✓')
-            : (isAr ? 'دعوة نشطة' : 'Active Pass')}
+          {isCancelled
+            ? (isAr ? 'ملغاة ✕' : 'Cancelled ✕')
+            : (isRedeemed 
+              ? (isAr ? 'تم الحضور ✓' : 'Checked In ✓')
+              : (isAr ? 'دعوة نشطة' : 'Active Pass'))}
         </span>
       </div>
 
@@ -219,7 +277,9 @@ export default function VipInvitationCard({ invitation, language = 'ar', isAr: i
         margin: '0 auto 1.2rem auto',
         maxWidth: '200px',
         boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-        border: isVip ? '2px solid var(--accent-gold)' : 'none'
+        border: isCancelled ? '2px solid #e74c3c' : (isVip ? '2px solid var(--accent-gold)' : 'none'),
+        position: 'relative',
+        opacity: isCancelled ? 0.35 : 1
       }}>
         {qrDataUrl ? (
           <img
@@ -232,14 +292,62 @@ export default function VipInvitationCard({ invitation, language = 'ar', isAr: i
             <span>Generating QR...</span>
           </div>
         )}
+
+        {isCancelled && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%) rotate(-25deg)',
+            background: 'rgba(231, 76, 60, 0.95)',
+            color: '#ffffff',
+            padding: '6px 14px',
+            borderRadius: '6px',
+            fontWeight: 800,
+            fontSize: '0.85rem',
+            whiteSpace: 'nowrap',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            border: '2px solid #ffffff'
+          }}>
+            {isAr ? 'ملغاة وغير صالحة' : 'CANCELLED / INVALID'}
+          </div>
+        )}
       </div>
 
+      {/* Cancel Pass Action for Active Unredeemed Invitations */}
+      {onCancel && !isCancelled && !isRedeemed && (
+        <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+          <button
+            type="button"
+            onClick={() => onCancel(invitation)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 16px',
+              borderRadius: '8px',
+              background: 'rgba(231, 76, 60, 0.1)',
+              border: '1px solid rgba(231, 76, 60, 0.4)',
+              color: '#e74c3c',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            ✕ {isAr ? 'إلغاء حجز هذه الدعوة' : 'Cancel this invitation'}
+          </button>
+        </div>
+      )}
+
       {/* Footer Instructions */}
-      <div style={{ textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+      <div style={{ textAlign: 'center', fontSize: '0.78rem', color: isCancelled ? '#ff9999' : 'var(--text-secondary)', lineHeight: 1.5 }}>
         <p style={{ margin: 0 }}>
-          {isAr
-            ? 'يرجى إبراز هذا الرمز عند بوابة الدخول للتحقق الفوري لمرة واحدة فقط.'
-            : 'Please present this single-use verified QR code at the check-in entrance.'}
+          {isCancelled
+            ? (isAr ? 'هذه البطاقة ملغاة رسمياً ولن تُقبل في مسح البوابة.' : 'This pass has been officially cancelled and cannot be scanned.')
+            : (isAr
+              ? 'يرجى إبراز هذا الرمز عند بوابة الدخول للتحقق الفوري لمرة واحدة فقط.'
+              : 'Please present this single-use verified QR code at the check-in entrance.')}
         </p>
       </div>
     </div>

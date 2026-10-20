@@ -9,7 +9,7 @@ import { formatTimeSlot, formatDateTime } from '../../utils/format';
 import { 
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
   Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown, Scissors, Clock, Sparkles, MessageSquare,
-  Facebook, Mail, QrCode
+  Facebook, Mail, QrCode, Search, UserPlus, Edit3, Trash2, ChevronUp, AlertTriangle
 } from 'lucide-react';
 import PriestScheduleManager from '../../components/PriestScheduleManager';
 import ImageCropModal from '../../components/ImageCropModal';
@@ -63,6 +63,8 @@ interface PendingProfile {
   servants: string[];
   notes?: string;
   status: string;
+  childrenJson?: string;
+  relativesJson?: string;
 }
 
 const defaultMinistries = [
@@ -132,6 +134,57 @@ export default function DashboardPage() {
   const [contactMessages, setContactMessages] = useState<any[]>([]);
   const [myInvitations, setMyInvitations] = useState<any[]>([]);
   
+  // Cancellation Modal states
+  const [cancellingInv, setCancellingInv] = useState<any | null>(null);
+  const [cancelChoice, setCancelChoice] = useState<'single' | 'all'>('single');
+  const [cancelVerificationText, setCancelVerificationText] = useState<string>('');
+  const [isCancellingPass, setIsCancellingPass] = useState<boolean>(false);
+  const [cancelModalFeedback, setCancelModalFeedback] = useState<string | null>(null);
+
+  // Smart Search & Memberships Database Management states
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [memberStatusFilter, setMemberStatusFilter] = useState<'ALL' | 'APPROVED' | 'PENDING' | 'REJECTED'>('ALL');
+  const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
+
+  // Admin Create Membership Modal states
+  const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
+  const [addMemberForm, setAddMemberForm] = useState({
+    userEmail: '',
+    fullName: '',
+    nationalId: '',
+    phoneNumbers: '',
+    street: '',
+    buildingNumber: '',
+    floor: '',
+    apartment: '',
+    job: '',
+    socialStatus: 'SINGLE',
+    wifeName: '',
+    wifeNationalId: '',
+    wifeJob: '',
+    wifePhone: '',
+    wifeEmail: '',
+    wifeConfessionFather: '',
+    childrenJson: '[]',
+    notes: '',
+    status: 'APPROVED'
+  });
+  const [addMemberLoading, setAddMemberLoading] = useState(false);
+  const [addMemberFeedback, setAddMemberFeedback] = useState<string | null>(null);
+
+  // Admin Edit Membership Modal states
+  const [editingMember, setEditingMember] = useState<any | null>(null);
+  const [isEditMemberModalOpen, setIsEditMemberModalOpen] = useState(false);
+  const [editMemberLoading, setEditMemberLoading] = useState(false);
+  const [editMemberFeedback, setEditMemberFeedback] = useState<string | null>(null);
+
+  // Admin Delete Membership Confirmation states
+  const [deletingMember, setDeletingMember] = useState<any | null>(null);
+  const [isDeletingMember, setIsDeletingMember] = useState(false);
+
+  // Capacity Reopening Alerts for Admins
+  const [reopenAlerts, setReopenAlerts] = useState<any[]>([]);
+
   // Live Config State
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [youtubeLiveId, setYoutubeLiveId] = useState('');
@@ -469,6 +522,33 @@ export default function DashboardPage() {
       const parsedUser = JSON.parse(userStr);
       setUser(parsedUser);
 
+      // Immediately fetch fresh profile to reflect membership status changes (Pending/Approved/Rejected)
+      fetch(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${savedToken}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data && (data.user || data.id)) {
+            const fresh = data.user || data;
+            setUser(fresh);
+            localStorage.setItem('church-user', JSON.stringify(fresh));
+          }
+        })
+        .catch(err => console.error('Error fetching fresh user profile:', err));
+
+      fetchMyInvitations(savedToken);
+
+      if (['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(parsedUser.role)) {
+        fetch(`${API_URL}/invitations/admin/reopen-alerts`, {
+          headers: { Authorization: `Bearer ${savedToken}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (Array.isArray(data)) setReopenAlerts(data);
+          })
+          .catch(() => {});
+      }
+
       const urlParams = new URLSearchParams(window.location.search);
       const tabParam = urlParams.get('tab');
 
@@ -487,6 +567,83 @@ export default function DashboardPage() {
       setLoading(false);
     }
   }, []);
+
+  const refreshUser = (authToken?: string) => {
+    const t = authToken || token;
+    if (!t) return;
+    fetch(`${API_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${t}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data && (data.user || data.id)) {
+          const fresh = data.user || data;
+          setUser(fresh);
+          localStorage.setItem('church-user', JSON.stringify(fresh));
+        }
+      })
+      .catch(err => console.error('Error refreshing profile:', err));
+  };
+
+  const fetchMyInvitations = (authToken?: string) => {
+    const t = authToken || token;
+    if (!t) return;
+    fetch(`${API_URL}/invitations/my-invitations`, {
+      headers: { Authorization: `Bearer ${t}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setMyInvitations(data);
+      })
+      .catch(err => console.error('Error fetching invitations:', err));
+  };
+
+  const handleOpenCancelModal = (inv: any) => {
+    setCancellingInv(inv);
+    setCancelChoice('single');
+    setCancelVerificationText('');
+    setCancelModalFeedback(null);
+  };
+
+  const handleConfirmCancel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !cancellingInv) return;
+
+    const typed = cancelVerificationText.trim().toLowerCase();
+    if (typed !== 'cancel' && typed !== 'إلغاء') {
+      setCancelModalFeedback(language === 'ar' ? 'يرجى كتابة كلمة Cancel أو إلغاء في المربع للتأكيد.' : 'Please type "Cancel" to confirm.');
+      return;
+    }
+
+    setIsCancellingPass(true);
+    setCancelModalFeedback(null);
+
+    try {
+      const res = await fetch(`${API_URL}/invitations/my-invitations/${cancellingInv.id}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          cancelAllForEvent: cancelChoice === 'all'
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setCancellingInv(null);
+        fetchMyInvitations();
+        refreshUser();
+      } else {
+        setCancelModalFeedback(data.errorAr || data.error || (language === 'ar' ? 'فشل إلغاء الدعوة.' : 'Failed to cancel invitation.'));
+      }
+    } catch (err) {
+      setCancelModalFeedback(language === 'ar' ? 'خطأ في الاتصال بالخادم.' : 'Connection error.');
+    } finally {
+      setIsCancellingPass(false);
+    }
+  };
 
   // Fetch tab details when activeTab shifts
   useEffect(() => {
@@ -808,6 +965,185 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.log('Error updating member status:', err);
+    }
+  };
+
+  const fetchAllMembersList = () => {
+    if (!token) return;
+    fetch(`${API_URL}/members/all`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setAllMembers(data);
+      })
+      .catch(err => console.error(err));
+
+    fetch(`${API_URL}/members/pending`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setPendingMembers(data);
+      })
+      .catch(err => console.error(err));
+  };
+
+  const fetchReopenAlerts = () => {
+    if (!token) return;
+    fetch(`${API_URL}/invitations/admin/reopen-alerts`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setReopenAlerts(data);
+      })
+      .catch(err => console.error(err));
+  };
+
+  const handleResolveReopenAlert = async (locationId: string, action: 'reopen' | 'keep_closed') => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/reopen-alerts/${locationId}/resolve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ action })
+      });
+      if (res.ok) {
+        setReopenAlerts(prev => prev.filter(a => a.locationId !== locationId));
+      }
+    } catch (err) {
+      console.error('Error resolving reopen alert:', err);
+    }
+  };
+
+  const handleCreateMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setAddMemberLoading(true);
+    setAddMemberFeedback(null);
+
+    try {
+      let parsedChildren = [];
+      try {
+        parsedChildren = typeof addMemberForm.childrenJson === 'string' ? JSON.parse(addMemberForm.childrenJson) : addMemberForm.childrenJson;
+      } catch {
+        parsedChildren = [];
+      }
+
+      const res = await fetch(`${API_URL}/members/admin/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ...addMemberForm,
+          children: parsedChildren
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setIsAddMemberModalOpen(false);
+        setAddMemberForm({
+          userEmail: '',
+          fullName: '',
+          nationalId: '',
+          phoneNumbers: '',
+          street: '',
+          buildingNumber: '',
+          floor: '',
+          apartment: '',
+          job: '',
+          socialStatus: 'SINGLE',
+          wifeName: '',
+          wifeNationalId: '',
+          wifeJob: '',
+          wifePhone: '',
+          wifeEmail: '',
+          wifeConfessionFather: '',
+          childrenJson: '[]',
+          notes: '',
+          status: 'APPROVED'
+        });
+        fetchAllMembersList();
+      } else {
+        setAddMemberFeedback(data.errorAr || data.error || (language === 'ar' ? 'فشل إضافة العضوية.' : 'Failed to add membership.'));
+      }
+    } catch (err) {
+      setAddMemberFeedback(language === 'ar' ? 'خطأ في الاتصال بالخادم.' : 'Connection error.');
+    } finally {
+      setAddMemberLoading(false);
+    }
+  };
+
+  const handleSaveEditMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !editingMember) return;
+    setEditMemberLoading(true);
+    setEditMemberFeedback(null);
+
+    try {
+      let parsedChildren = [];
+      try {
+        parsedChildren = typeof editingMember.childrenJson === 'string' ? JSON.parse(editingMember.childrenJson) : (editingMember.children || []);
+      } catch {
+        parsedChildren = editingMember.children || [];
+      }
+
+      const res = await fetch(`${API_URL}/members/${editingMember.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ...editingMember,
+          children: parsedChildren
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setIsEditMemberModalOpen(false);
+        setEditingMember(null);
+        fetchAllMembersList();
+      } else {
+        setEditMemberFeedback(data.errorAr || data.error || (language === 'ar' ? 'فشل تحديث العضوية.' : 'Failed to update membership.'));
+      }
+    } catch (err) {
+      setEditMemberFeedback(language === 'ar' ? 'خطأ في الاتصال بالخادم.' : 'Connection error.');
+    } finally {
+      setEditMemberLoading(false);
+    }
+  };
+
+  const handleDeleteMember = async () => {
+    if (!token || !deletingMember) return;
+    setIsDeletingMember(true);
+
+    try {
+      const res = await fetch(`${API_URL}/members/${deletingMember.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (res.ok) {
+        setDeletingMember(null);
+        fetchAllMembersList();
+      } else {
+        alert(language === 'ar' ? 'فشل حذف ملف العضوية.' : 'Failed to delete membership.');
+      }
+    } catch (err) {
+      alert(language === 'ar' ? 'خطأ في الاتصال.' : 'Connection error.');
+    } finally {
+      setIsDeletingMember(false);
     }
   };
 
@@ -1586,6 +1922,118 @@ export default function DashboardPage() {
         )}
       </div>
 
+      {/* Admin Capacity Reopening Alerts for Full Events */}
+      {reopenAlerts && reopenAlerts.length > 0 && (
+        <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {reopenAlerts.map(alert => (
+            <div
+              key={alert.locationId}
+              style={{
+                background: 'linear-gradient(135deg, rgba(231, 76, 60, 0.22) 0%, rgba(180, 20, 20, 0.12) 100%)',
+                border: '1.5px solid #e74c3c',
+                borderRadius: '12px',
+                padding: '16px 20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '14px',
+                boxShadow: '0 4px 20px rgba(231, 76, 60, 0.35)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <ShieldAlert size={28} style={{ color: '#ff6b6b', flexShrink: 0 }} />
+                <div>
+                  <b style={{ color: '#ff6b6b', fontSize: '1rem', display: 'block' }}>
+                    {language === 'ar' ? '⚠️ تنبيه إداري: شغور مقاعد بعد اكتمال العدد' : '⚠️ Admin Notice: Freed Seats in Full Event'}
+                  </b>
+                  <p style={{ margin: '4px 0 0', color: '#ffffff', fontSize: '0.88rem' }}>
+                    {language === 'ar'
+                      ? `تم إلغاء حجز في الفعالية (${alert.eventTitleAr}) - الموقع (${alert.locationNameAr}) بعد اكتمال العدد! هل ترغب في إعادة فتح التقديم للمقاعد الشاغرة المتبقية (${alert.availableSeats} مقعد)؟`
+                      : `A booking was cancelled in (${alert.eventTitleAr}) after reaching full capacity! Reopen application for remaining seats (${alert.availableSeats})?`}
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => handleResolveReopenAlert(alert.locationId, 'reopen')}
+                  style={{
+                    background: 'var(--accent-green)',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    fontWeight: 800,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {language === 'ar' ? `نعم، إعادة فتح التقديم لـ ${alert.availableSeats} مقعد` : `Yes, Reopen for ${alert.availableSeats} seats`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleResolveReopenAlert(alert.locationId, 'keep_closed')}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.12)',
+                    color: '#ffffff',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {language === 'ar' ? 'لا، إبقاء التقديم مغلقاً' : 'No, Keep Closed'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Member 24h Admin Cancellation Alert Banner */}
+      {myInvitations && myInvitations.filter(i => i.showAdminAlert24h).length > 0 && (
+        <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {myInvitations.filter(i => i.showAdminAlert24h).map(inv => (
+            <div
+              key={inv.id}
+              style={{
+                background: 'linear-gradient(135deg, rgba(231, 76, 60, 0.2) 0%, rgba(180, 20, 20, 0.1) 100%)',
+                border: '1.5px solid #e74c3c',
+                borderRadius: '12px',
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '14px',
+                boxShadow: '0 4px 20px rgba(231, 76, 60, 0.25)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <AlertTriangle size={30} style={{ color: '#ff6b6b', flexShrink: 0 }} />
+                <div>
+                  <b style={{ color: '#ff6b6b', fontSize: '1.05rem', display: 'block' }}>
+                    {language === 'ar' ? '⚠️ تنبيه من إدارة الكنيسة: تم إلغاء حجز دعوتك' : '⚠️ Church Notice: Your Invitation Has Been Cancelled'}
+                  </b>
+                  <p style={{ margin: '4px 0 0', color: '#f5f5f5', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                    {language === 'ar'
+                      ? `تم إلغاء دعوتك لفعالية (${inv.event?.titleAr || 'فعالية كنسية'}) من قِبل إدارة الكنيسة. السبب: ${inv.adminCancelReason || 'إجراءات تنظيمية'}.`
+                      : `Your pass for (${inv.event?.titleEn || 'Church Event'}) was cancelled by church administration. Reason: ${inv.adminCancelReason || 'Administrative procedures'}.`}
+                  </p>
+                </div>
+              </div>
+              <span style={{ fontSize: '0.78rem', color: '#ff9999', background: 'rgba(231,76,60,0.3)', padding: '4px 10px', borderRadius: '8px', whiteSpace: 'nowrap' }}>
+                {language === 'ar' ? 'إشعار نشط لـ 24 ساعة' : 'Active 24h Notice'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Unified Phone & Desktop Navigation Container */}
       <div className="dashboard-mobile-nav-container">
         {/* Mobile Tab Dropdown Button */}
@@ -1759,17 +2207,127 @@ export default function DashboardPage() {
               🎖️ {language === 'ar' ? 'حالة ملف العضوية الكنسية للأسرة' : 'Family Membership status'}
             </h3>
             
-            {user?.familyProfileStatus ? (
-              <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                {t('member_status')}{' '}
-                <span style={{ 
-                  color: user.familyProfileStatus === 'APPROVED' ? 'var(--accent-green)' : user.familyProfileStatus === 'REJECTED' ? '#ff4d4d' : 'var(--accent-gold)'
-                }}>
-                  {user.familyProfileStatus === 'APPROVED' && t('status_approved')}
-                  {user.familyProfileStatus === 'PENDING' && t('status_pending')}
-                  {user.familyProfileStatus === 'REJECTED' && t('status_rejected')}
-                </span>
+            {user?.familyProfileStatus === 'PENDING' ? (
+              <div style={{
+                background: 'rgba(226, 183, 20, 0.08)',
+                border: '1px solid rgba(226, 183, 20, 0.35)',
+                borderRadius: '12px',
+                padding: '1.25rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <Clock size={22} style={{ color: 'var(--accent-gold)' }} />
+                  <div>
+                    <strong style={{ color: 'var(--accent-gold)', fontSize: '1.05rem', display: 'block' }}>
+                      {language === 'ar' ? 'طلب العضوية قيد المراجعة والتدقيق الكنسي ⏳' : 'Membership Application Pending Review ⏳'}
+                    </strong>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ar' ? 'الحالة: قيد الفحص والاعتماد (Pending Review)' : 'Status: Under Administrative Verification'}
+                    </span>
+                  </div>
+                </div>
+                <p style={{ color: '#ffffff', fontSize: '0.88rem', lineHeight: '1.6', margin: '8px 0 0 0' }}>
+                  {language === 'ar'
+                    ? 'تم استلام استمارة العضوية الخاصة بأسرتكم بنجاح، ويجري حاليًا فحص ومطابقة البيانات من قِبل أمانة الكنيسة للاعتماد الرسمي. ستصلكم رسالة فور اعتماد الملف.'
+                    : 'Your family membership registry has been received and is being verified by the church administration. You will be notified once officially approved.'}
+                </p>
               </div>
+            ) : user?.familyProfileStatus === 'APPROVED' ? (
+              <div style={{
+                background: 'rgba(46, 204, 113, 0.08)',
+                border: '1.5px solid #2ecc71',
+                borderRadius: '12px',
+                padding: '1.25rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <CheckCircle size={24} style={{ color: '#2ecc71' }} />
+                  <div>
+                    <strong style={{ color: '#2ecc71', fontSize: '1.05rem', display: 'block' }}>
+                      {language === 'ar' ? 'عضوية كنسية معتمدة ورسمية للأسرة 🎖️' : 'Officially Approved Family Church Member 🎖️'}
+                    </strong>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ar' ? 'الحالة: عضو معتمد وموثق بالسجلات الكنسية (Approved)' : 'Status: Officially Verified & Registered'}
+                    </span>
+                  </div>
+                </div>
+                <p style={{ color: '#ffffff', fontSize: '0.88rem', lineHeight: '1.6', margin: '8px 0 0 0' }}>
+                  {language === 'ar'
+                    ? 'أنت وعائلتك مسجلون رسميًا في سجلات كنيسة الشهيد العظيم أبي سيفين، وتتمتعون بكامل حقوق الحضور وحجز فعاليات أعضاء الكنيسة والتواصل الرعوي.'
+                    : 'Your family profile is officially registered in church pastoral records, granting full access to member events and services.'}
+                </p>
+              </div>
+            ) : user?.familyProfileStatus === 'REJECTED' ? (
+              (() => {
+                const updatedAt = user.familyProfileUpdatedAt ? new Date(user.familyProfileUpdatedAt).getTime() : 0;
+                const hoursSince = updatedAt ? (Date.now() - updatedAt) / (1000 * 60 * 60) : 24;
+                const canReapply = hoursSince >= 24;
+                const remainingHours = Math.ceil(24 - hoursSince);
+
+                return (
+                  <div style={{
+                    background: 'rgba(231, 76, 60, 0.08)',
+                    border: '1.5px solid #e74c3c',
+                    borderRadius: '12px',
+                    padding: '1.25rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                      <X size={24} style={{ color: '#e74c3c' }} />
+                      <div>
+                        <strong style={{ color: '#e74c3c', fontSize: '1.05rem', display: 'block' }}>
+                          {language === 'ar' ? 'حالة الطلب: لم يتم الاعتماد / يتطلب تصحيح البيانات ⚠️' : 'Membership Application Deferred / Needs Correction ⚠️'}
+                        </strong>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          {language === 'ar' ? 'الحالة: مرفوض / مؤجل للتعديل (Rejected)' : 'Status: Rejected / Needs Correction'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: 'rgba(0, 0, 0, 0.3)',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(231, 76, 60, 0.3)',
+                      margin: '10px 0'
+                    }}>
+                      <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                        {language === 'ar' ? 'سبب عدم الاعتماد وملاحظات الأمانة:' : 'Rejection Reason / Feedback:'}
+                      </span>
+                      <strong style={{ color: 'var(--accent-gold)', fontSize: '0.92rem' }}>
+                        {user.familyProfileNotes || (language === 'ar' ? 'يرجى مراجعة وتدقيق بيانات الأسرة والأرقام القومية وإعادة إرسال الاستمارة.' : 'Please verify details and resubmit.')}
+                      </strong>
+                    </div>
+
+                    {!canReapply ? (
+                      <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px dashed rgba(255, 255, 255, 0.2)',
+                        color: 'var(--text-secondary)',
+                        fontSize: '0.82rem',
+                        marginTop: '4px'
+                      }}>
+                        <Clock size={16} style={{ color: 'var(--accent-gold)' }} />
+                        <span>
+                          {language === 'ar'
+                            ? `يمكنك إعادة التقديم وتعديل الاستمارة بعد ${remainingHours} ساعة (متاح بعد مرور 24 ساعة من المراجعة)`
+                            : `You can reapply after ${remainingHours} hour(s) (24h cooldown after review).`}
+                        </span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => router.push('/register-member')}
+                        className={styles.bookBtn}
+                        style={{ maxWidth: '280px', marginTop: '8px' }}
+                      >
+                        {language === 'ar' ? 'إعادة ملء وتصحيح استمارة العضوية' : 'Resubmit Membership Form'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()
             ) : (
               <div>
                 <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.6' }}>
@@ -1873,7 +2431,7 @@ export default function DashboardPage() {
                   {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).length > 0 ? (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
                       {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).map(inv => (
-                        <VipInvitationCard key={inv.id} invitation={inv} language={language} />
+                        <VipInvitationCard key={inv.id} invitation={inv} language={language} onCancel={handleOpenCancelModal} />
                       ))}
                     </div>
                   ) : (
@@ -1909,7 +2467,7 @@ export default function DashboardPage() {
                   {myInvitations.filter(inv => inv.type !== 'VIP' && !inv.isVip).length > 0 ? (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
                       {myInvitations.filter(inv => inv.type !== 'VIP' && !inv.isVip).map(inv => (
-                        <VipInvitationCard key={inv.id} invitation={inv} language={language} />
+                        <VipInvitationCard key={inv.id} invitation={inv} language={language} onCancel={handleOpenCancelModal} />
                       ))}
                     </div>
                   ) : (
@@ -1965,7 +2523,7 @@ export default function DashboardPage() {
                   {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).length > 0 ? (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
                       {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).map(inv => (
-                        <VipInvitationCard key={inv.id} invitation={inv} language={language} />
+                        <VipInvitationCard key={inv.id} invitation={inv} language={language} onCancel={handleOpenCancelModal} />
                       ))}
                     </div>
                   ) : (
@@ -2001,7 +2559,7 @@ export default function DashboardPage() {
                   {myInvitations.filter(inv => inv.type !== 'VIP' && !inv.isVip).length > 0 ? (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
                       {myInvitations.filter(inv => inv.type !== 'VIP' && !inv.isVip).map(inv => (
-                        <VipInvitationCard key={inv.id} invitation={inv} language={language} />
+                        <VipInvitationCard key={inv.id} invitation={inv} language={language} onCancel={handleOpenCancelModal} />
                       ))}
                     </div>
                   ) : (
@@ -2019,6 +2577,180 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* User Pass Cancellation Modal */}
+      {cancellingInv && (() => {
+        const eventActiveTickets = myInvitations.filter(
+          i => i.eventId === cancellingInv.eventId && (i.status === 'ACTIVE' || !i.status)
+        );
+        const hasMultiple = eventActiveTickets.length >= 2;
+        const isVerifiedText = cancelVerificationText.trim().toLowerCase() === 'cancel' || cancelVerificationText.trim() === 'إلغاء';
+
+        return (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '1rem'
+          }}>
+            <div style={{
+              background: '#16161f',
+              border: '1.5px solid #e74c3c',
+              borderRadius: '16px',
+              padding: '2rem',
+              maxWidth: '520px',
+              width: '100%',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
+              direction: language === 'ar' ? 'rtl' : 'ltr'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.2rem', color: '#e74c3c' }}>
+                <ShieldAlert size={26} />
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#ffffff' }}>
+                  {language === 'ar' ? 'تأكيد إلغاء حجز الدعوة والتنازل عن المقعد' : 'Confirm Invitation Cancellation'}
+                </h3>
+              </div>
+
+              <p style={{ color: '#ffffff', fontSize: '0.92rem', lineHeight: '1.6', marginBottom: '1.2rem' }}>
+                {language === 'ar'
+                  ? `هل أنت متأكد من رغبتك في إلغاء حجز الفعالية "${cancellingInv.event?.titleAr || ''}" وإعادة المقعد المتاح للجمهور؟`
+                  : `Are you sure you want to cancel your pass for "${cancellingInv.event?.titleEn || cancellingInv.event?.titleAr || 'Event'}"?`}
+              </p>
+
+              {/* If user has 2 tickets for this event: ask whether to give up 1 or all */}
+              {hasMultiple && (
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '10px',
+                  padding: '12px 16px',
+                  marginBottom: '1.2rem'
+                }}>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--accent-gold)', marginBottom: '8px' }}>
+                    {language === 'ar'
+                      ? '⚠️ لديك تذكرتان (2) لهذه الفعالية. يرجى اختيار الإجراء المطلوب:'
+                      : '⚠️ You have 2 tickets for this event. Please select your preference:'}
+                  </div>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: '8px', fontSize: '0.88rem', color: '#ffffff' }}>
+                    <input
+                      type="radio"
+                      name="cancelChoice"
+                      value="single"
+                      checked={cancelChoice === 'single'}
+                      onChange={() => setCancelChoice('single')}
+                      style={{ accentColor: 'var(--accent-gold)' }}
+                    />
+                    <span>
+                      {language === 'ar'
+                        ? 'إلغاء هذا المقعد فقط (تذكرة 1) والاحتفاظ بالمقعد الآخر'
+                        : 'Give up this ticket only (keep the other pass)'}
+                    </span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.88rem', color: '#ffffff' }}>
+                    <input
+                      type="radio"
+                      name="cancelChoice"
+                      value="all"
+                      checked={cancelChoice === 'all'}
+                      onChange={() => setCancelChoice('all')}
+                      style={{ accentColor: 'var(--accent-gold)' }}
+                    />
+                    <span>
+                      {language === 'ar'
+                        ? 'إلغاء جميع التذاكر الخاصة بهذه الفعالية (تذكرتان - 2)'
+                        : 'Give up all tickets for this event (2 tickets)'}
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {/* Verification Text Requirement */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  {language === 'ar'
+                    ? 'لإتمام العملية، يرجى كتابة كلمة "Cancel" أو "إلغاء" في المربع أدناه:'
+                    : 'To confirm cancellation, please type "Cancel" in the box below:'}
+                </label>
+                <input
+                  type="text"
+                  placeholder={language === 'ar' ? 'اكتب Cancel للتأكيد...' : 'Type Cancel to confirm...'}
+                  value={cancelVerificationText}
+                  onChange={(e) => setCancelVerificationText(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: 'rgba(0, 0, 0, 0.4)',
+                    border: `1.5px solid ${isVerifiedText ? '#2ecc71' : 'rgba(231, 76, 60, 0.4)'}`,
+                    color: '#ffffff',
+                    fontSize: '0.95rem',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              {cancelModalFeedback && (
+                <div style={{
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  background: 'rgba(231, 76, 60, 0.15)',
+                  border: '1px solid #e74c3c',
+                  color: '#e74c3c',
+                  fontSize: '0.85rem',
+                  marginBottom: '1rem'
+                }}>
+                  {cancelModalFeedback}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setCancellingInv(null)}
+                  disabled={isCancellingPass}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#ffffff',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {language === 'ar' ? 'تراجع' : 'Keep Pass'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmCancel}
+                  disabled={!isVerifiedText || isCancellingPass}
+                  style={{
+                    padding: '10px 22px',
+                    borderRadius: '8px',
+                    background: isVerifiedText ? '#e74c3c' : 'rgba(231, 76, 60, 0.3)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontWeight: 700,
+                    cursor: isVerifiedText && !isCancellingPass ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  {isCancellingPass
+                    ? (language === 'ar' ? 'جاري الإلغاء...' : 'Cancelling...')
+                    : (language === 'ar' ? 'تأكيد إلغاء الحجز' : 'Confirm Cancel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Tab: Priest Confession Schedule & Status Self-Management */}
       {activeTab === 'my-schedule' && (
@@ -2462,36 +3194,658 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* All Registered Families list */}
+          {/* All Registered Families list with Smart Search & Management */}
           <div className="dashboard-panel">
-            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
-              🗂️ {language === 'ar' ? 'جميع العائلات المسجلة بقاعدة البيانات' : 'All Registered Families Database'}
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {allMembers.map(m => (
-                <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid var(--border-color)', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <b style={{ fontSize: '0.95rem' }}>{m.fullName}</b>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                      <span>🪪 {m.nationalId}</span>
-                      <span>•</span>
-                      <span>📞 {m.phoneNumbers.split(',')[0]}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '12px' }}>
+              <h3 style={{ margin: 0, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>🗂️ {language === 'ar' ? 'جميع العائلات المسجلة بقاعدة البيانات' : 'All Registered Families Database'}</span>
+                <span style={{ fontSize: '0.8rem', background: 'rgba(226, 183, 20, 0.15)', color: 'var(--accent-gold)', padding: '2px 8px', borderRadius: '12px' }}>
+                  {allMembers.length}
+                </span>
+              </h3>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAddMemberFeedback(null);
+                  setIsAddMemberModalOpen(true);
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, var(--accent-gold) 0%, #b8860b 100%)',
+                  color: '#000000',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  fontWeight: 800,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 4px 15px rgba(226, 183, 20, 0.3)'
+                }}
+              >
+                <UserPlus size={16} />
+                <span>{language === 'ar' ? '+ تسجيل عضوية عائلية جديدة' : '+ Add New Family Membership'}</span>
+              </button>
+            </div>
+
+            {/* Smart Search Bar & Filter Controls */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '1.5rem' }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={18} style={{ position: 'absolute', right: language === 'ar' ? '12px' : 'auto', left: language === 'ar' ? 'auto' : '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                <input
+                  type="text"
+                  placeholder={language === 'ar' ? 'بحث ذكي: بالاسم، الرقم القومي، الهاتف، العنوان، المهنة، اسم الزوجة...' : 'Smart search: name, national ID, phone, address, job...'}
+                  value={memberSearchQuery}
+                  onChange={(e) => setMemberSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 38px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    color: '#ffffff',
+                    fontSize: '0.9rem',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {memberSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setMemberSearchQuery('')}
+                    style={{ position: 'absolute', left: language === 'ar' ? '12px' : 'auto', right: language === 'ar' ? 'auto' : '12px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.1rem' }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter Tabs */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {(['ALL', 'APPROVED', 'PENDING', 'REJECTED'] as const).map(st => {
+                  const count = st === 'ALL' ? allMembers.length : allMembers.filter(m => m.status === st).length;
+                  const isActive = memberStatusFilter === st;
+                  const labels = {
+                    ALL: language === 'ar' ? 'الكل' : 'All',
+                    APPROVED: language === 'ar' ? 'معتمدة وموثقة ✓' : 'Approved',
+                    PENDING: language === 'ar' ? 'قيد المراجعة ⏳' : 'Pending',
+                    REJECTED: language === 'ar' ? 'مرفوضة ✕' : 'Rejected'
+                  };
+                  return (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setMemberStatusFilter(st)}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        border: isActive ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                        background: isActive ? 'rgba(226, 183, 20, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                        color: isActive ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                        fontSize: '0.8rem',
+                        fontWeight: isActive ? 700 : 500,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {labels[st]} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Filtered Families List */}
+            {(() => {
+              const q = memberSearchQuery.toLowerCase().trim();
+              const filtered = allMembers.filter(m => {
+                if (memberStatusFilter !== 'ALL' && m.status !== memberStatusFilter) return false;
+                if (!q) return true;
+                const fullText = [
+                  m.fullName,
+                  m.nationalId,
+                  m.phoneNumbers,
+                  m.email,
+                  m.street,
+                  m.buildingNumber,
+                  m.floor,
+                  m.apartment,
+                  m.job,
+                  m.wifeName,
+                  m.wifeJob,
+                  m.wifePhone,
+                  m.wifeConfessionFather,
+                  m.notes,
+                  m.childrenJson,
+                  m.relativesJson,
+                  JSON.stringify(m.children || ''),
+                  JSON.stringify(m.relatives || '')
+                ].filter(Boolean).join(' ').toLowerCase();
+                return fullText.includes(q);
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-secondary)' }}>
+                    <p style={{ margin: 0, fontSize: '0.9rem' }}>
+                      {language === 'ar' ? 'لم يتم العثور على أي عائلات تطابق معايير البحث الحالية.' : 'No families matched your search filter.'}
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {filtered.map(m => {
+                    const isExpanded = expandedMemberId === m.id;
+                    const phoneMain = (m.phoneNumbers || '').split(',')[0] || '';
+                    const childrenList = Array.isArray(m.children) 
+                      ? m.children 
+                      : (() => { try { return JSON.parse(m.childrenJson || '[]'); } catch { return []; } })();
+
+                    return (
+                      <div
+                        key={m.id}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '10px',
+                          padding: '14px 18px',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <b style={{ fontSize: '1.05rem', color: '#ffffff' }}>{m.fullName}</b>
+                              <span style={{
+                                fontSize: '0.72rem',
+                                fontWeight: 800,
+                                padding: '3px 9px',
+                                borderRadius: '12px',
+                                backgroundColor: m.status === 'APPROVED' ? 'rgba(46, 204, 113, 0.15)' : (m.status === 'PENDING' ? 'rgba(243, 156, 18, 0.15)' : 'rgba(231, 76, 60, 0.15)'),
+                                color: m.status === 'APPROVED' ? '#2ecc71' : (m.status === 'PENDING' ? '#f39c12' : '#ff4d4d'),
+                                border: `1px solid ${m.status === 'APPROVED' ? 'rgba(46, 204, 113, 0.3)' : (m.status === 'PENDING' ? 'rgba(243, 156, 18, 0.3)' : 'rgba(231, 76, 60, 0.3)')}`
+                              }}>
+                                {m.status === 'APPROVED' ? (language === 'ar' ? 'معتمدة ✓' : 'APPROVED') : (m.status === 'PENDING' ? (language === 'ar' ? 'قيد المراجعة ⏳' : 'PENDING') : (language === 'ar' ? 'مرفوضة ✕' : 'REJECTED'))}
+                              </span>
+                            </div>
+
+                            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                              <span>🪪 {m.nationalId}</span>
+                              <span>•</span>
+                              <span>📞 {phoneMain}</span>
+                              {m.email && (
+                                <>
+                                  <span>•</span>
+                                  <span>✉️ {m.email}</span>
+                                </>
+                              )}
+                              {m.job && (
+                                <>
+                                  <span>•</span>
+                                  <span>💼 {m.job}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Quick Action Toolbar */}
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedMemberId(isExpanded ? null : m.id)}
+                              style={{
+                                background: 'rgba(255, 255, 255, 0.06)',
+                                border: '1px solid rgba(255, 255, 255, 0.12)',
+                                color: '#ffffff',
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <span>{isExpanded ? (language === 'ar' ? 'إخفاء التفاصيل' : 'Hide') : (language === 'ar' ? 'عرض التفاصيل' : 'Details')}</span>
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMember({
+                                  ...m,
+                                  children: childrenList,
+                                  childrenJson: JSON.stringify(childrenList)
+                                });
+                                setEditMemberFeedback(null);
+                                setIsEditMemberModalOpen(true);
+                              }}
+                              style={{
+                                background: 'rgba(226, 183, 20, 0.15)',
+                                border: '1px solid var(--accent-gold)',
+                                color: 'var(--accent-gold)',
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                              title={language === 'ar' ? 'تعديل بيانات هذه العضوية' : 'Edit membership'}
+                            >
+                              <Edit3 size={14} />
+                              <span>{language === 'ar' ? 'تعديل' : 'Edit'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setDeletingMember(m)}
+                              style={{
+                                background: 'rgba(231, 76, 60, 0.12)',
+                                border: '1px solid rgba(231, 76, 60, 0.4)',
+                                color: '#ff6b6b',
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                              title={language === 'ar' ? 'حذف هذه العضوية' : 'Delete membership'}
+                            >
+                              <Trash2 size={14} />
+                              <span>{language === 'ar' ? 'حذف' : 'Delete'}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expanded Full Family Details */}
+                        {isExpanded && (
+                          <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px dashed var(--border-color)', fontSize: '0.85rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+                              <div>
+                                <b style={{ color: 'var(--accent-gold)' }}>📍 العنوان:</b>
+                                <div style={{ color: 'var(--text-secondary)' }}>
+                                  {m.street ? `شارع ${m.street}، عمارة ${m.buildingNumber || '-'}، دور ${m.floor || '-'}، شقة ${m.apartment || '-'}` : 'غير محدد'}
+                                </div>
+                              </div>
+                              <div>
+                                <b style={{ color: 'var(--accent-gold)' }}>💍 الحالة الاجتماعية:</b>
+                                <div style={{ color: 'var(--text-secondary)' }}>{m.socialStatus || 'SINGLE'}</div>
+                              </div>
+                              {m.wifeName && (
+                                <div>
+                                  <b style={{ color: 'var(--accent-gold)' }}>👰 الزوجة:</b>
+                                  <div style={{ color: 'var(--text-secondary)' }}>
+                                    {m.wifeName} {m.wifePhone ? `(${m.wifePhone})` : ''}
+                                    {m.wifeConfessionFather ? ` • أب الاعتراف: ${m.wifeConfessionFather}` : ''}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Children */}
+                            {childrenList && childrenList.length > 0 && (
+                              <div style={{ marginTop: '8px' }}>
+                                <b style={{ color: 'var(--accent-gold)' }}>👶 الأبناء ({childrenList.length}):</b>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+                                  {childrenList.map((ch: any, idx: number) => (
+                                    <div key={idx} style={{ background: 'rgba(255,255,255,0.04)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                      <b>{ch.name}</b> {ch.nationalId ? `(${ch.nationalId})` : ''} {ch.educationOrJob ? `• ${ch.educationOrJob}` : ''}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {m.notes && (
+                              <div style={{ marginTop: '10px', padding: '8px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '6px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                                <b>ملاحظات الإدارة:</b> {m.notes}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Admin Create Family Membership Modal */}
+          {isAddMemberModalOpen && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
+              <div style={{ background: '#16161f', border: '1.5px solid var(--accent-gold)', borderRadius: '16px', padding: '2rem', maxWidth: '640px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}>
+                <h3 style={{ color: 'var(--accent-gold)', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <UserPlus size={20} />
+                  <span>{language === 'ar' ? 'تسجيل استمارة عضوية عائلية جديدة لمستخدم' : 'Create Family Membership for User'}</span>
+                </h3>
+
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+                  {language === 'ar' 
+                    ? '💡 اكتب البريد الإلكتروني للمستخدم: إذا كان لديه حساب سيتم ربط العضوية به فوراً واعتماده، وإذا لم يكن مسجلاً سيتم إنشاء حساب له بهذا البريد لتسجيل الدخول به.'
+                    : '💡 Enter the user email: if they have an account it links directly, otherwise an account is automatically created.'}
+                </p>
+
+                <form onSubmit={handleCreateMember} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--accent-gold)', marginBottom: '4px' }}>
+                      {language === 'ar' ? 'البريد الإلكتروني للمستخدم (User Email) *' : 'User Email *'}
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="user@example.com"
+                      value={addMemberForm.userEmail}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, userEmail: e.target.value })}
+                      style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'اسم رب الأسرة (ثلاثي) *' : 'Full Name *'}</label>
+                      <input
+                        type="text"
+                        required
+                        value={addMemberForm.fullName}
+                        onChange={(e) => setAddMemberForm({ ...addMemberForm, fullName: e.target.value })}
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'الرقم القومي (14 رقم) *' : 'National ID *'}</label>
+                      <input
+                        type="text"
+                        required
+                        value={addMemberForm.nationalId}
+                        onChange={(e) => setAddMemberForm({ ...addMemberForm, nationalId: e.target.value })}
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                      />
                     </div>
                   </div>
-                  <span style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 'bold',
-                    padding: '2px 8px',
-                    borderRadius: '2px',
-                    backgroundColor: m.status === 'APPROVED' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(229, 9, 20, 0.1)',
-                    color: m.status === 'APPROVED' ? '#2ecc71' : '#ff4d4d'
-                  }}>
-                    {m.status}
-                  </span>
-                </div>
-              ))}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'رقم الهاتف *' : 'Phone *'}</label>
+                      <input
+                        type="tel"
+                        required
+                        value={addMemberForm.phoneNumbers}
+                        onChange={(e) => setAddMemberForm({ ...addMemberForm, phoneNumbers: e.target.value })}
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'المهنة' : 'Job'}</label>
+                      <input
+                        type="text"
+                        value={addMemberForm.job}
+                        onChange={(e) => setAddMemberForm({ ...addMemberForm, job: e.target.value })}
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Address Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الشارع</label>
+                      <input type="text" value={addMemberForm.street} onChange={(e) => setAddMemberForm({ ...addMemberForm, street: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>رقم العقار</label>
+                      <input type="text" value={addMemberForm.buildingNumber} onChange={(e) => setAddMemberForm({ ...addMemberForm, buildingNumber: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الدور</label>
+                      <input type="text" value={addMemberForm.floor} onChange={(e) => setAddMemberForm({ ...addMemberForm, floor: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الشقة</label>
+                      <input type="text" value={addMemberForm.apartment} onChange={(e) => setAddMemberForm({ ...addMemberForm, apartment: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
+
+                  {/* Wife & Status */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'اسم الزوجة (إن وجد)' : 'Wife Name'}</label>
+                      <input type="text" value={addMemberForm.wifeName} onChange={(e) => setAddMemberForm({ ...addMemberForm, wifeName: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'أب اعتراف الزوجة' : 'Wife Confession Father'}</label>
+                      <input type="text" value={addMemberForm.wifeConfessionFather} onChange={(e) => setAddMemberForm({ ...addMemberForm, wifeConfessionFather: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
+
+                  {/* Membership Status Selection */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--accent-gold)', marginBottom: '4px' }}>
+                      {language === 'ar' ? 'اعتماد العضوية فورياً' : 'Approval Status'}
+                    </label>
+                    <select
+                      value={addMemberForm.status}
+                      onChange={(e) => setAddMemberForm({ ...addMemberForm, status: e.target.value })}
+                      style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                    >
+                      <option value="APPROVED">{language === 'ar' ? 'موافقة معتمدة ورسمية (APPROVED) - يتيح له دخول فعاليات الأعضاء فوراً' : 'Approved'}</option>
+                      <option value="PENDING">{language === 'ar' ? 'قيد المراجعة (PENDING)' : 'Pending'}</option>
+                    </select>
+                  </div>
+
+                  {addMemberFeedback && (
+                    <div style={{ padding: '8px 12px', borderRadius: '6px', background: 'rgba(231, 76, 60, 0.15)', border: '1px solid #e74c3c', color: '#e74c3c', fontSize: '0.85rem' }}>
+                      {addMemberFeedback}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddMemberModalOpen(false)}
+                      disabled={addMemberLoading}
+                      style={{ padding: '10px 18px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer' }}
+                    >
+                      {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={addMemberLoading}
+                      style={{ padding: '10px 22px', borderRadius: '8px', background: 'var(--accent-gold)', border: 'none', color: '#000', fontWeight: 800, cursor: addMemberLoading ? 'wait' : 'pointer' }}
+                    >
+                      {addMemberLoading ? (language === 'ar' ? 'جاري التسجيل...' : 'Creating...') : (language === 'ar' ? 'حفظ وتسجيل العضوية' : 'Create Membership')}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Admin Edit Family Membership Modal */}
+          {isEditMemberModalOpen && editingMember && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
+              <div style={{ background: '#16161f', border: '1.5px solid var(--accent-gold)', borderRadius: '16px', padding: '2rem', maxWidth: '640px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}>
+                <h3 style={{ color: 'var(--accent-gold)', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Edit3 size={20} />
+                  <span>{language === 'ar' ? 'تعديل بيانات العضوية العائلية' : 'Edit Family Membership'}</span>
+                </h3>
+
+                <form onSubmit={handleSaveEditMember} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'اسم رب الأسرة *' : 'Full Name *'}</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingMember.fullName || ''}
+                        onChange={(e) => setEditingMember({ ...editingMember, fullName: e.target.value })}
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'الرقم القومي *' : 'National ID *'}</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingMember.nationalId || ''}
+                        onChange={(e) => setEditingMember({ ...editingMember, nationalId: e.target.value })}
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'رقم الهاتف *' : 'Phone *'}</label>
+                      <input
+                        type="tel"
+                        required
+                        value={editingMember.phoneNumbers || ''}
+                        onChange={(e) => setEditingMember({ ...editingMember, phoneNumbers: e.target.value })}
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'المهنة' : 'Job'}</label>
+                      <input
+                        type="text"
+                        value={editingMember.job || ''}
+                        onChange={(e) => setEditingMember({ ...editingMember, job: e.target.value })}
+                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الشارع</label>
+                      <input type="text" value={editingMember.street || ''} onChange={(e) => setEditingMember({ ...editingMember, street: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>رقم العقار</label>
+                      <input type="text" value={editingMember.buildingNumber || ''} onChange={(e) => setEditingMember({ ...editingMember, buildingNumber: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الدور</label>
+                      <input type="text" value={editingMember.floor || ''} onChange={(e) => setEditingMember({ ...editingMember, floor: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الشقة</label>
+                      <input type="text" value={editingMember.apartment || ''} onChange={(e) => setEditingMember({ ...editingMember, apartment: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'اسم الزوجة' : 'Wife Name'}</label>
+                      <input type="text" value={editingMember.wifeName || ''} onChange={(e) => setEditingMember({ ...editingMember, wifeName: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'أب اعتراف الزوجة' : 'Wife Confession Father'}</label>
+                      <input type="text" value={editingMember.wifeConfessionFather || ''} onChange={(e) => setEditingMember({ ...editingMember, wifeConfessionFather: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--accent-gold)', marginBottom: '4px' }}>
+                      {language === 'ar' ? 'حالة العضوية' : 'Membership Status'}
+                    </label>
+                    <select
+                      value={editingMember.status || 'APPROVED'}
+                      onChange={(e) => setEditingMember({ ...editingMember, status: e.target.value })}
+                      style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                    >
+                      <option value="APPROVED">{language === 'ar' ? 'معتمدة وموثقة (APPROVED)' : 'APPROVED'}</option>
+                      <option value="PENDING">{language === 'ar' ? 'قيد المراجعة (PENDING)' : 'PENDING'}</option>
+                      <option value="REJECTED">{language === 'ar' ? 'مرفوضة (REJECTED)' : 'REJECTED'}</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>
+                      {language === 'ar' ? 'ملاحظات إدارية' : 'Admin Notes'}
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={editingMember.notes || ''}
+                      onChange={(e) => setEditingMember({ ...editingMember, notes: e.target.value })}
+                      style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  {editMemberFeedback && (
+                    <div style={{ padding: '8px 12px', borderRadius: '6px', background: 'rgba(231, 76, 60, 0.15)', border: '1px solid #e74c3c', color: '#e74c3c', fontSize: '0.85rem' }}>
+                      {editMemberFeedback}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditMemberModalOpen(false)}
+                      disabled={editMemberLoading}
+                      style={{ padding: '10px 18px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer' }}
+                    >
+                      {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={editMemberLoading}
+                      style={{ padding: '10px 22px', borderRadius: '8px', background: 'var(--accent-gold)', border: 'none', color: '#000', fontWeight: 800, cursor: editMemberLoading ? 'wait' : 'pointer' }}
+                    >
+                      {editMemberLoading ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...') : (language === 'ar' ? 'تحديث البيانات' : 'Save Changes')}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Admin Delete Member Confirmation Modal */}
+          {deletingMember && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
+              <div style={{ background: '#16161f', border: '1.5px solid #e74c3c', borderRadius: '16px', padding: '2rem', maxWidth: '480px', width: '100%', boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}>
+                <h3 style={{ color: '#ff6b6b', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Trash2 size={20} />
+                  <span>{language === 'ar' ? 'تأكيد حذف ملف العضوية الكنسية' : 'Confirm Membership Deletion'}</span>
+                </h3>
+
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
+                  {language === 'ar' 
+                    ? `هل أنت متأكد تماماً من رغبتك في حذف ملف العضوية الخاص بـ (${deletingMember.fullName})؟ سيتم إلغاء ربط الحساب وصفة العضوية.`
+                    : `Are you sure you want to permanently delete the membership profile for (${deletingMember.fullName})?`}
+                </p>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setDeletingMember(null)}
+                    disabled={isDeletingMember}
+                    style={{ padding: '10px 18px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer' }}
+                  >
+                    {language === 'ar' ? 'تراجع' : 'Cancel'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteMember}
+                    disabled={isDeletingMember}
+                    style={{ padding: '10px 22px', borderRadius: '8px', background: '#e74c3c', border: 'none', color: '#fff', fontWeight: 800, cursor: isDeletingMember ? 'wait' : 'pointer' }}
+                  >
+                    {isDeletingMember ? (language === 'ar' ? 'جاري الحذف...' : 'Deleting...') : (language === 'ar' ? 'تأكيد الحذف نهائياً' : 'Confirm Delete')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
         </div>
       )}
