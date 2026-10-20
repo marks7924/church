@@ -42,18 +42,26 @@ function BibleReaderContent() {
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setBooks(data);
+          const normalized = data.map((b: any) => {
+            const chapters = b.totalChapters || b.chapterCount || 1;
+            return {
+              ...b,
+              totalChapters: chapters,
+              chapterCount: chapters
+            };
+          });
+          setBooks(normalized);
           // Check URL query parameters
           const bookParam = searchParams.get('book');
           const chapParam = searchParams.get('chapter');
           
           let initialBook = null;
           if (bookParam) {
-            initialBook = data.find(b => b.slug === bookParam || b.code === bookParam);
+            initialBook = normalized.find((b: any) => b.slug === bookParam || b.code === bookParam);
           }
           if (!initialBook) {
-            // Default to John (New Testament)
-            initialBook = data.find(b => b.slug === 'john') || data[0];
+            // Default to Matthew or John
+            initialBook = normalized.find((b: any) => b.slug === 'mat' || b.slug === 'john' || b.slug === 'jhn') || normalized[0];
           }
           
           if (initialBook) {
@@ -323,7 +331,7 @@ function BibleReaderContent() {
             >
               {filteredBooks.map(b => (
                 <option key={b.slug} value={b.slug}>
-                  {isAr ? b.nameAr : b.nameEn} ({b.totalChapters} {isAr ? 'إصحاح' : 'ch.'})
+                  {isAr ? b.nameAr : b.nameEn} ({b.totalChapters || b.chapterCount || 1} {isAr ? 'إصحاح' : 'ch.'})
                 </option>
               ))}
             </select>
@@ -365,7 +373,7 @@ function BibleReaderContent() {
                   textAlign: 'center'
                 }}
               >
-                {Array.from({ length: selectedBook?.totalChapters || 1 }, (_, i) => i + 1).map(num => (
+                {Array.from({ length: selectedBook?.totalChapters || selectedBook?.chapterCount || 1 }, (_, i) => i + 1).map(num => (
                   <option key={num} value={num}>
                     {isAr ? `الإصحاح ${num}` : `Chapter ${num}`}
                   </option>

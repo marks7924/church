@@ -189,46 +189,9 @@ export async function getOrLoadBibleChapter(
     return { error: 'BOOK_NOT_FOUND', status: 404, messageAr: 'السفر غير موجود.', messageEn: 'Book not found.' };
   }
 
-  const bookId = meta.id;
   const chapNum = Math.max(1, chapterNumber);
 
-  // 1. Check Postgres DB Cache
-  const cached = await prisma.bibleChapter.findUnique({
-    where: {
-      translationId_bookId_chapterNumber: {
-        translationId: normTranslation,
-        bookId,
-        chapterNumber: chapNum
-      }
-    },
-    include: {
-      book: true,
-      translation: true
-    }
-  });
-
-  if (cached) {
-    let verses: { verseNumber: number; text: string }[] = [];
-    try {
-      verses = JSON.parse(cached.versesJson);
-    } catch {}
-
-    const payload = {
-      translation: cached.translation,
-      book: {
-        ...cached.book,
-        slug: meta.slug,
-        code: meta.id
-      },
-      chapterNumber: cached.chapterNumber,
-      verseCount: cached.verseCount,
-      verses
-    };
-
-    return { success: true, status: 200, chapter: payload };
-  }
-
-  // 2. Resolve from local datasets
+  // 1. Memory-First Strategy: Retrieve from loaded JSON dataset in <1ms
   let verses: { verseNumber: number; text: string }[] = [];
 
   if (normTranslation === 'van-dyck') {
@@ -256,7 +219,27 @@ export async function getOrLoadBibleChapter(
     }
   }
 
-  // 3. Fallback to bible-api.com for KJV if not found in local file
+  // 2. Fallback to DB Cache if not found in JSON
+  if (verses.length === 0) {
+    try {
+      const cached = await prisma.bibleChapter.findUnique({
+        where: {
+          translationId_bookId_chapterNumber: {
+            translationId: normTranslation,
+            bookId: meta.id,
+            chapterNumber: chapNum
+          }
+        }
+      });
+      if (cached) {
+        try {
+          verses = JSON.parse(cached.versesJson);
+        } catch {}
+      }
+    } catch {}
+  }
+
+  // 3. Fallback to bible-api.com for KJV if still not found
   if (verses.length === 0 && normTranslation === 'kjv') {
     const liveVerses = await fetchFromBibleApi(meta.nameEn, chapNum);
     if (liveVerses && liveVerses.length > 0) {
@@ -273,66 +256,7 @@ export async function getOrLoadBibleChapter(
     };
   }
 
-  // 4. Ensure Book and Translation records exist in DB
-  await Promise.all([
-    prisma.bibleTranslation.upsert({
-      where: { id: normTranslation },
-      update: {},
-      create: {
-        id: normTranslation,
-        nameAr: normTranslation === 'van-dyck' ? 'ترجمة فاندايك والسميث (1865)' : 'نسخة الملك جيمس (KJV)',
-        nameEn: normTranslation === 'van-dyck' ? 'Smith & Van Dyck Arabic Bible' : 'King James Version (KJV)',
-        language: normTranslation === 'van-dyck' ? 'ar' : 'en',
-        isPublicDomain: true,
-        licenseInfo: 'Public Domain'
-      }
-    }),
-    prisma.bibleBook.upsert({
-      where: { id: meta.id },
-      update: {
-        nameAr: meta.nameAr,
-        nameEn: meta.nameEn,
-        chapterCount: meta.chapterCount,
-        orderIndex: meta.orderIndex,
-        testament: meta.testament
-      },
-      create: {
-        id: meta.id,
-        nameAr: meta.nameAr,
-        nameEn: meta.nameEn,
-        chapterCount: meta.chapterCount,
-        orderIndex: meta.orderIndex,
-        testament: meta.testament
-      }
-    })
-  ]);
-
-  // 5. Cache Chapter into Postgres for future instantaneous queries
-  try {
-    await prisma.bibleChapter.upsert({
-      where: {
-        translationId_bookId_chapterNumber: {
-          translationId: normTranslation,
-          bookId: meta.id,
-          chapterNumber: chapNum
-        }
-      },
-      update: {
-        versesJson: JSON.stringify(verses),
-        verseCount: verses.length
-      },
-      create: {
-        translationId: normTranslation,
-        bookId: meta.id,
-        chapterNumber: chapNum,
-        verseCount: verses.length,
-        versesJson: JSON.stringify(verses)
-      }
-    });
-  } catch (err) {
-    console.warn('Warning: Could not save chapter to DB cache (returning in-memory result):', err);
-  }
-
+  // Prepare full response payload immediately
   const payload = {
     translation: {
       id: normTranslation,
@@ -346,6 +270,7 @@ export async function getOrLoadBibleChapter(
       nameEn: meta.nameEn,
       testament: meta.testament,
       chapterCount: meta.chapterCount,
+      totalChapters: meta.chapterCount,
       orderIndex: meta.orderIndex,
       slug: meta.slug,
       code: meta.id
@@ -355,50 +280,70 @@ export async function getOrLoadBibleChapter(
     verses
   };
 
+  // 4. Asynchronous non-blocking background caching to Postgres
+  setImmediate(async () => {
+    try {
+      await prisma.bibleChapter.upsert({
+        where: {
+          translationId_bookId_chapterNumber: {
+            translationId: normTranslation,
+            bookId: meta.id,
+            chapterNumber: chapNum
+          }
+        },
+        update: {
+          versesJson: JSON.stringify(verses),
+          verseCount: verses.length
+        },
+        create: {
+          translationId: normTranslation,
+          bookId: meta.id,
+          chapterNumber: chapNum,
+          verseCount: verses.length,
+          versesJson: JSON.stringify(verses)
+        }
+      });
+    } catch {}
+  });
+
   return { success: true, status: 200, chapter: payload };
 }
 
 /**
- * Return all 66 books and auto-sync into Postgres
+ * Return all 66 books with totalChapters and non-blocking background DB sync
  */
 export async function getAllBooksEnriched() {
-  // Sync all 66 canonical books if database count is below 66
-  try {
-    const count = await prisma.bibleBook.count();
-    if (count < 66) {
-      for (const b of CANONICAL_BOOKS) {
-        await prisma.bibleBook.upsert({
-          where: { id: b.id },
-          update: {
-            nameAr: b.nameAr,
-            nameEn: b.nameEn,
-            chapterCount: b.chapterCount,
-            orderIndex: b.orderIndex,
-            testament: b.testament
-          },
-          create: {
+  const books = CANONICAL_BOOKS.map(b => ({
+    id: b.id,
+    nameAr: b.nameAr,
+    nameEn: b.nameEn,
+    testament: b.testament,
+    chapterCount: b.chapterCount,
+    totalChapters: b.chapterCount,
+    orderIndex: b.orderIndex,
+    slug: b.slug,
+    code: b.id
+  }));
+
+  // Non-blocking background sync of books into DB (single query with skipDuplicates)
+  setImmediate(async () => {
+    try {
+      const count = await prisma.bibleBook.count();
+      if (count < 66) {
+        await prisma.bibleBook.createMany({
+          data: CANONICAL_BOOKS.map(b => ({
             id: b.id,
             nameAr: b.nameAr,
             nameEn: b.nameEn,
             chapterCount: b.chapterCount,
             orderIndex: b.orderIndex,
             testament: b.testament
-          }
+          })),
+          skipDuplicates: true
         });
       }
-    }
-  } catch (err) {
-    console.warn('Warning syncing books to DB:', err);
-  }
+    } catch {}
+  });
 
-  return CANONICAL_BOOKS.map(b => ({
-    id: b.id,
-    nameAr: b.nameAr,
-    nameEn: b.nameEn,
-    testament: b.testament,
-    chapterCount: b.chapterCount,
-    orderIndex: b.orderIndex,
-    slug: b.slug,
-    code: b.id
-  }));
+  return books;
 }
