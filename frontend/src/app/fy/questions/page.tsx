@@ -392,12 +392,15 @@ export default function QuestionsLibraryPage() {
     <div style={{
       minHeight: '85vh',
       padding: 'clamp(1rem, 3vw, 2.5rem) clamp(0.75rem, 2vw, 1.5rem)',
+      width: '100%',
       maxWidth: '1200px',
       margin: '0 auto',
-      direction: isAr ? 'rtl' : 'ltr'
+      direction: isAr ? 'rtl' : 'ltr',
+      boxSizing: 'border-box',
+      overflowX: 'hidden'
     }}>
       {/* Top Header & Breadcrumb */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '12px', width: '100%', boxSizing: 'border-box' }}>
         <Link
           href="/fy"
           style={{
@@ -437,16 +440,32 @@ export default function QuestionsLibraryPage() {
         </button>
       </div>
 
-      {/* Main Title Area */}
-      <div style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#3498db', fontSize: '0.88rem', fontWeight: 700, marginBottom: '6px' }}>
+      {/* Main Title Area - Guaranteed Responsive Wrapping */}
+      <div style={{ marginBottom: '1.8rem', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#3498db', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
           <ShieldCheck size={18} />
           <span>{isAr ? 'مكتبة الأسئلة المعتمدة للأعضاء' : 'Verified Member Question Library'}</span>
         </div>
-        <h1 style={{ fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', fontWeight: 900, margin: '0 0 0.5rem 0', color: '#ffffff' }}>
+        <h1 style={{ 
+          fontSize: 'clamp(1.25rem, 5vw, 2.3rem)', 
+          fontWeight: 900, 
+          margin: '0 0 0.5rem 0', 
+          color: '#ffffff',
+          lineHeight: 1.35,
+          wordBreak: 'break-word',
+          overflowWrap: 'break-word',
+          maxWidth: '100%'
+        }}>
           {isAr ? 'أسئلة حول الله والإيمان والعقيدة' : 'Questions About God & Orthodox Faith'}
         </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', maxWidth: '700px', margin: 0 }}>
+        <p style={{ 
+          color: 'var(--text-secondary)', 
+          fontSize: 'clamp(0.82rem, 3.2vw, 0.95rem)', 
+          maxWidth: '700px', 
+          margin: 0,
+          lineHeight: 1.6,
+          wordBreak: 'break-word'
+        }}>
           {isAr
             ? 'تصفح الإجابات الرعوية الرسمية، أو اطرح استفسارك الروحي بسرية وخصوصية كاملة ليجيب عنه آباء الكنيسة.'
             : 'Browse pastoral answers or submit your questions named or anonymously to receive guidance from church clergy.'}
@@ -495,36 +514,53 @@ export default function QuestionsLibraryPage() {
           />
         </div>
 
-        {/* Categories Pills - Smooth Swipeable Reel */}
-        <div style={{
-          display: 'flex',
-          gap: '8px',
-          overflowX: 'auto',
-          paddingBottom: '6px',
-          paddingTop: '2px',
-          scrollbarWidth: 'none',
-          WebkitOverflowScrolling: 'touch',
-          maxWidth: '100%',
-          boxSizing: 'border-box'
-        }}>
+        {/* Categories Pills - Responsive Wrap on Phone */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          .questions-categories-track {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding-bottom: 4px;
+            padding-top: 2px;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+          }
+          .questions-category-btn {
+            padding: 7px 14px;
+            border-radius: 20px;
+            border: none;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: clamp(0.74rem, 2.4vw, 0.82rem);
+            min-height: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+            box-sizing: border-box;
+            max-width: 100%;
+            text-align: center;
+          }
+          @media (max-width: 640px) {
+            .questions-categories-track {
+              gap: 6px;
+            }
+            .questions-category-btn {
+              padding: 6px 11px;
+              min-height: 34px;
+              line-height: 1.25;
+            }
+          }
+        `}} />
+        <div className="questions-categories-track">
           <button
             onClick={() => setSelectedCategory('ALL')}
+            type="button"
+            className="questions-category-btn"
             style={{
-              padding: '8px 16px',
-              borderRadius: '20px',
-              border: 'none',
               background: selectedCategory === 'ALL' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.06)',
-              color: selectedCategory === 'ALL' ? '#000000' : 'var(--text-secondary)',
-              fontWeight: 700,
-              cursor: 'pointer',
-              fontSize: '0.82rem',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-              minHeight: '38px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s ease'
+              color: selectedCategory === 'ALL' ? '#000000' : 'var(--text-secondary)'
             }}
           >
             {isAr ? 'الكل' : 'All Topics'}
@@ -533,22 +569,11 @@ export default function QuestionsLibraryPage() {
             <button
               key={c.slug}
               onClick={() => setSelectedCategory(c.slug)}
+              type="button"
+              className="questions-category-btn"
               style={{
-                padding: '8px 16px',
-                borderRadius: '20px',
-                border: 'none',
                 background: selectedCategory === c.slug ? 'var(--accent-gold)' : 'rgba(255,255,255,0.06)',
-                color: selectedCategory === c.slug ? '#000000' : 'var(--text-secondary)',
-                fontWeight: 700,
-                cursor: 'pointer',
-                fontSize: '0.82rem',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-                minHeight: '38px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.15s ease'
+                color: selectedCategory === c.slug ? '#000000' : 'var(--text-secondary)'
               }}
             >
               {isAr ? c.nameAr : c.nameEn}

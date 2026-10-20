@@ -354,42 +354,66 @@ export default function FacebookNewsModerator({ token }: FacebookNewsModeratorPr
       )}
 
       {/* Moderation Status Tabs - Fully Phone Responsive */}
-      <div 
-        className="facebook-moderator-tabs"
-        style={{
-          display: 'flex',
-          gap: '8px',
-          marginBottom: '1.5rem',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          paddingBottom: '10px',
-          overflowX: 'auto',
-          WebkitOverflowScrolling: 'touch',
-          scrollbarWidth: 'none',
-          width: '100%',
-          maxWidth: '100%',
-          boxSizing: 'border-box'
-        }}
-      >
+      <style dangerouslySetInnerHTML={{ __html: `
+        .facebook-moderator-tabs {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 1.5rem;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          padding-bottom: 10px;
+          overflow-x: auto;
+          scrollbar-width: none;
+          width: 100%;
+          max-width: 100%;
+          box-sizing: border-box;
+        }
+        .facebook-moderator-tab-btn {
+          padding: 8px 16px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 700;
+          font-size: clamp(0.78rem, 2.5vw, 0.85rem);
+          white-space: nowrap;
+          flex-shrink: 0;
+          min-height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.15s ease;
+          box-sizing: border-box;
+        }
+        @media (max-width: 640px) {
+          .facebook-moderator-tabs {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+            overflow-x: visible !important;
+            padding-bottom: 12px;
+          }
+          .facebook-moderator-tab-btn {
+            width: 100% !important;
+            min-width: 0 !important;
+            padding: 8px 6px !important;
+            font-size: 0.76rem !important;
+            text-align: center !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            line-height: 1.25 !important;
+            min-height: 44px !important;
+          }
+        }
+      `}} />
+      <div className="facebook-moderator-tabs">
         {(['PENDING', 'PUBLISHED', 'ARCHIVED', 'FAILED'] as const).map(tab => (
           <button
             key={tab}
+            type="button"
+            className="facebook-moderator-tab-btn"
             onClick={() => setStatusFilter(tab)}
             style={{
-              padding: '8px 16px',
-              borderRadius: '8px',
               border: statusFilter === tab ? '1px solid var(--accent-gold)' : '1px solid rgba(255,255,255,0.08)',
               background: statusFilter === tab ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
-              color: statusFilter === tab ? '#000000' : 'var(--text-secondary)',
-              fontWeight: 700,
-              cursor: 'pointer',
-              fontSize: 'clamp(0.78rem, 2.5vw, 0.85rem)',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-              minHeight: '38px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s ease'
+              color: statusFilter === tab ? '#000000' : 'var(--text-secondary)'
             }}
           >
             {tab === 'PENDING' && (isAr ? 'بانتظار المراجعة (Pending)' : 'Pending Review')}

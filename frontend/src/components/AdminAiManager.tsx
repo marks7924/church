@@ -863,13 +863,33 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
         }
         @media (max-width: 768px) {
           .admin-ai-subtabs {
-            gap: 6px;
-            padding-bottom: 10px;
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            overflow-x: visible !important;
+            white-space: normal !important;
+            padding-bottom: 6px;
           }
           .admin-ai-subtab-btn {
-            padding: 8px 12px;
-            font-size: 0.78rem;
-            min-height: 38px;
+            width: 100% !important;
+            min-width: 0 !important;
+            padding: 8px 6px !important;
+            font-size: 0.74rem !important;
+            text-align: center !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            line-height: 1.25 !important;
+            min-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+            justifyContent: center !important;
+            box-sizing: border-box !important;
+            flex-shrink: 1 !important;
+          }
+          .admin-ai-subtab-btn:last-child {
+            grid-column: span 2 !important;
           }
           .admin-chat-grid-container {
             grid-template-columns: 1fr !important;

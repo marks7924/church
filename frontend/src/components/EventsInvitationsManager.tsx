@@ -1374,34 +1374,114 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
       )}
 
       {/* Tabs Switcher - Phone Responsive */}
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        marginBottom: '1.5rem',
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
-        paddingBottom: '10px',
-        overflowX: 'auto',
-        WebkitOverflowScrolling: 'touch',
-        scrollbarWidth: 'none',
-        maxWidth: '100%',
-        flexWrap: 'nowrap'
-      }}>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .events-manager-main-tabs {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 1.5rem;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
+          padding-bottom: 10px;
+          overflow-x: auto;
+          scrollbar-width: none;
+          max-width: 100%;
+          box-sizing: border-box;
+        }
+        .events-main-tab-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 16px;
+          border-radius: 8px;
+          border: none;
+          cursor: pointer;
+          font-weight: 700;
+          font-size: 0.85rem;
+          white-space: nowrap;
+          flex-shrink: 0;
+          min-height: 40px;
+          box-sizing: border-box;
+        }
+        @media (max-width: 768px) {
+          .events-manager-main-tabs {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+            overflow-x: visible !important;
+            padding-bottom: 12px;
+          }
+          .events-main-tab-btn {
+            width: 100% !important;
+            min-width: 0 !important;
+            padding: 8px 6px !important;
+            font-size: clamp(0.72rem, 2.4vw, 0.8rem) !important;
+            text-align: center !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            line-height: 1.25 !important;
+            min-height: 44px !important;
+            justify-content: center !important;
+          }
+          .events-main-tab-btn:first-child {
+            grid-column: span 2 !important;
+            min-height: 42px !important;
+          }
+        }
+
+        .events-filter-pills-track {
+          display: flex;
+          gap: 8px;
+          overflow-x: auto;
+          scrollbar-width: none;
+          width: 100%;
+          max-width: 100%;
+          padding-bottom: 6px;
+          padding-top: 2px;
+          box-sizing: border-box;
+        }
+        .events-filter-pill-btn {
+          padding: 8px 14px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 700;
+          font-size: 0.82rem;
+          white-space: nowrap;
+          flex-shrink: 0;
+          min-height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-sizing: border-box;
+        }
+        @media (max-width: 768px) {
+          .events-filter-pills-track {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 6px !important;
+            overflow-x: visible !important;
+          }
+          .events-filter-pill-btn {
+            flex: 1 1 calc(50% - 6px) !important;
+            min-width: 0 !important;
+            padding: 8px 6px !important;
+            font-size: 0.76rem !important;
+            text-align: center !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            line-height: 1.2 !important;
+            min-height: 38px !important;
+          }
+          .events-filter-pill-btn:first-child {
+            flex: 1 1 100% !important;
+          }
+        }
+      `}} />
+      <div className="events-manager-main-tabs">
         <button
           onClick={() => { setActiveTab('ALL_EVENTS'); stopScanner(); }}
+          className="events-main-tab-btn"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            border: 'none',
             background: activeTab === 'ALL_EVENTS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'ALL_EVENTS' ? '#000000' : 'var(--text-secondary)',
-            fontWeight: 700,
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            whiteSpace: 'nowrap',
-            flexShrink: 0
+            color: activeTab === 'ALL_EVENTS' ? '#000000' : 'var(--text-secondary)'
           }}
         >
           <Calendar size={16} />
@@ -1410,20 +1490,10 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
 
         <button
           onClick={() => { setActiveTab('SCANNER'); stopScanner(); }}
+          className="events-main-tab-btn"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            border: 'none',
             background: activeTab === 'SCANNER' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'SCANNER' ? '#000000' : 'var(--text-secondary)',
-            fontWeight: 700,
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            whiteSpace: 'nowrap',
-            flexShrink: 0
+            color: activeTab === 'SCANNER' ? '#000000' : 'var(--text-secondary)'
           }}
         >
           <Camera size={16} />
@@ -1432,20 +1502,10 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
 
         <button
           onClick={() => { setActiveTab('EVENTS'); stopScanner(); }}
+          className="events-main-tab-btn"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            border: 'none',
             background: activeTab === 'EVENTS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'EVENTS' ? '#000000' : 'var(--text-secondary)',
-            fontWeight: 700,
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            whiteSpace: 'nowrap',
-            flexShrink: 0
+            color: activeTab === 'EVENTS' ? '#000000' : 'var(--text-secondary)'
           }}
         >
           <MapPin size={16} />
@@ -1454,20 +1514,10 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
 
         <button
           onClick={() => { setActiveTab('INVITATIONS'); stopScanner(); }}
+          className="events-main-tab-btn"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            border: 'none',
             background: activeTab === 'INVITATIONS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'INVITATIONS' ? '#000000' : 'var(--text-secondary)',
-            fontWeight: 700,
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            whiteSpace: 'nowrap',
-            flexShrink: 0
+            color: activeTab === 'INVITATIONS' ? '#000000' : 'var(--text-secondary)'
           }}
         >
           <Users size={16} />
@@ -1476,20 +1526,10 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
 
         <button
           onClick={() => { setActiveTab('CHECKINS'); stopScanner(); }}
+          className="events-main-tab-btn"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            border: 'none',
             background: activeTab === 'CHECKINS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'CHECKINS' ? '#000000' : 'var(--text-secondary)',
-            fontWeight: 700,
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            whiteSpace: 'nowrap',
-            flexShrink: 0
+            color: activeTab === 'CHECKINS' ? '#000000' : 'var(--text-secondary)'
           }}
         >
           <CheckCircle2 size={16} />
@@ -1525,121 +1565,78 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
               width: '100%',
               boxSizing: 'border-box'
             }}>
-              {/* Row 1: Filter Pills Track - Swipeable on Phone */}
-              <div style={{
-                display: 'flex',
-                gap: '8px',
-                overflowX: 'auto',
-                WebkitOverflowScrolling: 'touch',
-                scrollbarWidth: 'none',
-                width: '100%',
-                maxWidth: '100%',
-                paddingBottom: '6px',
-                paddingTop: '2px',
-                boxSizing: 'border-box',
-                touchAction: 'pan-x'
-              }}>
+              {/* Row 1: Filter Pills Track - Fully Phone Responsive */}
+              <div 
+                className="events-filter-pills-track"
+                style={{
+                  display: 'flex',
+                  gap: '8px',
+                  overflowX: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                  scrollbarWidth: 'none',
+                  width: '100%',
+                  maxWidth: '100%',
+                  paddingBottom: '6px',
+                  paddingTop: '2px',
+                  boxSizing: 'border-box'
+                }}
+              >
                 <button
                   onClick={() => setAllEventsFilter('ALL')}
+                  type="button"
+                  className="events-filter-pill-btn"
                   style={{
-                    padding: '8px 14px',
-                    borderRadius: '8px',
                     border: allEventsFilter === 'ALL' ? '1px solid var(--accent-gold)' : '1px solid rgba(255,255,255,0.08)',
                     background: allEventsFilter === 'ALL' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
-                    color: allEventsFilter === 'ALL' ? '#000' : 'var(--text-secondary)',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    fontSize: '0.82rem',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    minHeight: '38px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
+                    color: allEventsFilter === 'ALL' ? '#000' : 'var(--text-secondary)'
                   }}
                 >
                   {isAr ? `الكل (${nonCancelledEvents.length})` : `All (${nonCancelledEvents.length})`}
                 </button>
                 <button
                   onClick={() => setAllEventsFilter('ACTIVE')}
+                  type="button"
+                  className="events-filter-pill-btn"
                   style={{
-                    padding: '8px 14px',
-                    borderRadius: '8px',
                     border: allEventsFilter === 'ACTIVE' ? '1px solid #2ecc71' : '1px solid rgba(255,255,255,0.08)',
                     background: allEventsFilter === 'ACTIVE' ? 'rgba(46, 204, 113, 0.25)' : 'rgba(255,255,255,0.05)',
-                    color: allEventsFilter === 'ACTIVE' ? '#2ecc71' : 'var(--text-secondary)',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    fontSize: '0.82rem',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    minHeight: '38px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
+                    color: allEventsFilter === 'ACTIVE' ? '#2ecc71' : 'var(--text-secondary)'
                   }}
                 >
                   {isAr ? `منشورة ومتاحة (${activeEvents.length})` : `Live & Posted (${activeEvents.length})`}
                 </button>
                 <button
                   onClick={() => setAllEventsFilter('DRAFT')}
+                  type="button"
+                  className="events-filter-pill-btn"
                   style={{
-                    padding: '8px 14px',
-                    borderRadius: '8px',
                     border: allEventsFilter === 'DRAFT' ? '1px solid #3498db' : '1px solid rgba(255,255,255,0.08)',
                     background: allEventsFilter === 'DRAFT' ? 'rgba(52, 152, 219, 0.25)' : 'rgba(255,255,255,0.05)',
-                    color: allEventsFilter === 'DRAFT' ? '#3498db' : 'var(--text-secondary)',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    fontSize: '0.82rem',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    minHeight: '38px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
+                    color: allEventsFilter === 'DRAFT' ? '#3498db' : 'var(--text-secondary)'
                   }}
                 >
                   {isAr ? `جديدة لم تُنشر (${draftEvents.length})` : `Draft / Not Public (${draftEvents.length})`}
                 </button>
                 <button
                   onClick={() => setAllEventsFilter('EXPIRED')}
+                  type="button"
+                  className="events-filter-pill-btn"
                   style={{
-                    padding: '8px 14px',
-                    borderRadius: '8px',
                     border: allEventsFilter === 'EXPIRED' ? '1px solid #e74c3c' : '1px solid rgba(255,255,255,0.08)',
                     background: allEventsFilter === 'EXPIRED' ? 'rgba(231, 76, 60, 0.25)' : 'rgba(255,255,255,0.05)',
-                    color: allEventsFilter === 'EXPIRED' ? '#e74c3c' : 'var(--text-secondary)',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    fontSize: '0.82rem',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    minHeight: '38px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
+                    color: allEventsFilter === 'EXPIRED' ? '#e74c3c' : 'var(--text-secondary)'
                   }}
                 >
                   {isAr ? `منتهية الصلاحية (${expiredEvents.length})` : `Expired (${expiredEvents.length})`}
                 </button>
                 <button
                   onClick={() => setAllEventsFilter('CANCELLED')}
+                  type="button"
+                  className="events-filter-pill-btn"
                   style={{
-                    padding: '8px 14px',
-                    borderRadius: '8px',
                     border: allEventsFilter === 'CANCELLED' ? '1px solid #ff6b6b' : '1px solid rgba(255,255,255,0.08)',
                     background: allEventsFilter === 'CANCELLED' ? 'rgba(231, 76, 60, 0.25)' : 'rgba(255,255,255,0.05)',
-                    color: allEventsFilter === 'CANCELLED' ? '#ff6b6b' : 'var(--text-secondary)',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    fontSize: '0.82rem',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    minHeight: '38px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
+                    color: allEventsFilter === 'CANCELLED' ? '#ff6b6b' : 'var(--text-secondary)'
                   }}
                 >
                   {isAr ? `ملغاة (Canceled) (${cancelledEvents.length})` : `Canceled (${cancelledEvents.length})`}
