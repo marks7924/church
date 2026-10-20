@@ -92,41 +92,24 @@ router.get('/bible/translations', async (req: Request, res: Response) => {
   }
 });
 
-const BOOK_SLUG_MAP: Record<string, string> = {
-  john: 'JHN',
-  jhn: 'JHN',
-  genesis: 'GEN',
-  gen: 'GEN',
-  matthew: 'MAT',
-  mat: 'MAT',
-  psalms: 'PSA',
-  psa: 'PSA',
-  romans: 'ROM',
-  rom: 'ROM'
-};
+import { getOrLoadBibleChapter, getAllBooksEnriched, findBookMeta } from '../services/bible.service';
 
 function resolveBookId(input: string): string {
-  const clean = String(input || '').trim().toLowerCase();
-  if (BOOK_SLUG_MAP[clean]) return BOOK_SLUG_MAP[clean];
+  const meta = findBookMeta(input);
+  if (meta) return meta.id;
   return String(input || '').trim().toUpperCase();
 }
 
 /**
  * 3. GET /api/fy/bible/books
- * List Bible Books grouped by Testament (Public)
+ * List all 66 Bible Books grouped by Testament (Public)
  */
 router.get('/bible/books', async (req: Request, res: Response) => {
   try {
-    const books = await prisma.bibleBook.findMany({
-      orderBy: { orderIndex: 'asc' }
-    });
-    const enriched = books.map(b => ({
-      ...b,
-      slug: b.id.toLowerCase(),
-      code: b.id
-    }));
-    return res.status(200).json(enriched);
+    const books = await getAllBooksEnriched();
+    return res.status(200).json(books);
   } catch (error: any) {
+    console.error('Error fetching Bible books:', error);
     return res.status(500).json({ error: 'Failed to fetch Bible books.' });
   }
 });
@@ -134,57 +117,26 @@ router.get('/bible/books', async (req: Request, res: Response) => {
 /**
  * 4. GET /api/fy/bible/chapter
  * Retrieve chapter verses with translation & navigation
- * Accepts bookSlug or bookId, chapterNumber or chapter, translationCode or translationId
+ * Loads from DB cache, bundled offline JSON datasets, or live API fallback
  */
 router.get('/bible/chapter', async (req: Request, res: Response) => {
   try {
     const rawTranslation = String(req.query.translationCode || req.query.translationId || 'van-dyck');
-    const rawBook = String(req.query.bookSlug || req.query.bookId || 'JHN');
+    const rawBook = String(req.query.bookSlug || req.query.bookId || 'GEN');
     const chapterNum = Math.max(1, parseInt(String(req.query.chapterNumber || req.query.chapter || '1'), 10) || 1);
 
-    const bookId = resolveBookId(rawBook);
+    const result = await getOrLoadBibleChapter(rawTranslation, rawBook, chapterNum);
 
-    const chapterRecord = await prisma.bibleChapter.findUnique({
-      where: {
-        translationId_bookId_chapterNumber: {
-          translationId: rawTranslation,
-          bookId,
-          chapterNumber: chapterNum
-        }
-      },
-      include: {
-        book: true,
-        translation: true
-      }
-    });
-
-    if (!chapterRecord) {
-      return res.status(404).json({
-        error: 'Chapter text is not yet indexed in this translation.',
-        errorAr: 'هذا الإصحاح غير مفهرس حالياً في هذه الترجمة.'
+    if (result.error || !result.chapter) {
+      return res.status(result.status || 404).json({
+        error: result.messageEn || result.error,
+        errorAr: result.messageAr || result.error
       });
     }
 
-    let verses = [];
-    try {
-      verses = JSON.parse(chapterRecord.versesJson);
-    } catch {}
-
-    const chapterPayload = {
-      translation: chapterRecord.translation,
-      book: {
-        ...chapterRecord.book,
-        slug: chapterRecord.book.id.toLowerCase(),
-        code: chapterRecord.book.id
-      },
-      chapterNumber: chapterRecord.chapterNumber,
-      verseCount: chapterRecord.verseCount,
-      verses
-    };
-
     return res.status(200).json({
-      chapter: chapterPayload,
-      ...chapterPayload
+      chapter: result.chapter,
+      ...result.chapter
     });
   } catch (error: any) {
     console.error('Error fetching chapter:', error);
