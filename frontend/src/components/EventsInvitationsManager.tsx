@@ -79,8 +79,8 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
   const [newIsApplicationActive, setNewIsApplicationActive] = useState<boolean>(true);
   const [isCreatingEvent, setIsCreatingEvent] = useState<boolean>(false);
 
-  // All Events Tab States (Draft / Posted Live / Expired)
-  const [allEventsFilter, setAllEventsFilter] = useState<'ALL' | 'DRAFT' | 'ACTIVE' | 'EXPIRED'>('ALL');
+  // All Events Tab States (Draft / Posted Live / Expired / Cancelled)
+  const [allEventsFilter, setAllEventsFilter] = useState<'ALL' | 'DRAFT' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED'>('ALL');
   const [renewingEvent, setRenewingEvent] = useState<any | null>(null);
   const [renewDate, setRenewDate] = useState<string>('');
   const [renewStartTime, setRenewStartTime] = useState<string>('18:00');
@@ -1241,18 +1241,22 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
         </button>
       </div>
 
-      {/* TAB 0: ALL EVENTS (Draft / Live Posted / Expired) */}
+      {/* TAB 0: ALL EVENTS (Draft / Live Posted / Expired / Canceled) */}
       {activeTab === 'ALL_EVENTS' && (() => {
-        const draftEvents = events.filter(e => !e.isPublicVisible);
-        const activeEvents = events.filter(e => e.isPublicVisible && !isEventExpired(e));
-        const expiredEvents = events.filter(e => isEventExpired(e));
-        const displayedEvents = allEventsFilter === 'DRAFT'
+        const cancelledEvents = events.filter(e => e.status === 'CANCELLED');
+        const nonCancelledEvents = events.filter(e => e.status !== 'CANCELLED');
+        const draftEvents = nonCancelledEvents.filter(e => !e.isPublicVisible);
+        const activeEvents = nonCancelledEvents.filter(e => e.isPublicVisible && !isEventExpired(e));
+        const expiredEvents = nonCancelledEvents.filter(e => isEventExpired(e));
+        const displayedEvents = allEventsFilter === 'CANCELLED'
+          ? cancelledEvents
+          : allEventsFilter === 'DRAFT'
           ? draftEvents
           : allEventsFilter === 'ACTIVE'
           ? activeEvents
           : allEventsFilter === 'EXPIRED'
           ? expiredEvents
-          : events;
+          : nonCancelledEvents;
 
         return (
           <div>
@@ -1279,7 +1283,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                     fontSize: '0.85rem'
                   }}
                 >
-                  {isAr ? `الكل (${events.length})` : `All (${events.length})`}
+                  {isAr ? `الكل (${nonCancelledEvents.length})` : `All (${nonCancelledEvents.length})`}
                 </button>
                 <button
                   onClick={() => setAllEventsFilter('ACTIVE')}
@@ -1325,6 +1329,21 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                   }}
                 >
                   {isAr ? `منتهية الصلاحية (${expiredEvents.length})` : `Expired (${expiredEvents.length})`}
+                </button>
+                <button
+                  onClick={() => setAllEventsFilter('CANCELLED')}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: allEventsFilter === 'CANCELLED' ? 'rgba(231, 76, 60, 0.25)' : 'rgba(255,255,255,0.05)',
+                    color: allEventsFilter === 'CANCELLED' ? '#ff6b6b' : 'var(--text-secondary)',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  {isAr ? `ملغاة (Canceled) (${cancelledEvents.length})` : `Canceled (${cancelledEvents.length})`}
                 </button>
               </div>
 
@@ -1530,11 +1549,11 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
 
                       {/* Action Controls */}
                       <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        {/* Row 1: Select Event and Apply Toggle (Grid 1fr 1fr) */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                           <button
                             onClick={() => setSelectedEventId(ev.id)}
                             style={{
-                              flex: 1,
                               padding: '8px 10px',
                               borderRadius: '6px',
                               border: 'none',
@@ -1542,7 +1561,8 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                               color: selectedEventId === ev.id ? '#000000' : '#ffffff',
                               fontWeight: 700,
                               cursor: 'pointer',
-                              fontSize: '0.8rem'
+                              fontSize: '0.8rem',
+                              textAlign: 'center'
                             }}
                           >
                             {selectedEventId === ev.id 
@@ -1552,26 +1572,33 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
 
                           <button
                             onClick={() => handleToggleApply(ev)}
+                            disabled={ev.status === 'CANCELLED'}
                             style={{
-                              flex: 1,
                               padding: '8px 10px',
                               borderRadius: '6px',
                               border: 'none',
-                              background: ev.isApplicationActive ? 'rgba(226, 183, 20, 0.25)' : 'rgba(255,255,255,0.08)',
-                              color: ev.isApplicationActive ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                              background: ev.isApplicationActive && ev.status !== 'CANCELLED' ? 'rgba(226, 183, 20, 0.25)' : 'rgba(255,255,255,0.08)',
+                              color: ev.isApplicationActive && ev.status !== 'CANCELLED' ? 'var(--accent-gold)' : 'var(--text-secondary)',
                               fontWeight: 700,
-                              cursor: 'pointer',
-                              fontSize: '0.8rem'
+                              cursor: ev.status === 'CANCELLED' ? 'not-allowed' : 'pointer',
+                              fontSize: '0.8rem',
+                              textAlign: 'center'
                             }}
                           >
-                            {ev.isApplicationActive 
+                            {ev.status === 'CANCELLED'
+                              ? (isAr ? 'الفعالية ملغاة' : 'Event Cancelled')
+                              : ev.isApplicationActive 
                               ? (isAr ? 'زر التقديم مفعل ومتاح ✓' : 'Apply Active ✓') 
                               : (isAr ? 'قفل / تعطيل زر التقديم' : 'Lock Apply')}
                           </button>
+                        </div>
 
+                        {/* Row 2: Edit, Cancel, and Secret Passcode (Flex Wrap, fully responsive) */}
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                           <button
                             onClick={() => handleOpenEditModal(ev)}
                             style={{
+                              flex: '1 1 auto',
                               padding: '8px 12px',
                               borderRadius: '6px',
                               border: '1px solid rgba(226, 183, 20, 0.4)',
@@ -1582,6 +1609,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                               fontSize: '0.8rem',
                               display: 'flex',
                               alignItems: 'center',
+                              justifyContent: 'center',
                               gap: '4px'
                             }}
                             title={isAr ? 'تعديل بيانات الفعالية والقواعد والسعات' : 'Edit Event'}
@@ -1590,37 +1618,59 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                             <span>{isAr ? 'تعديل' : 'Edit'}</span>
                           </button>
 
-                          <button
-                            onClick={() => {
-                              setCancellingEventTarget(ev);
-                              setCancelEventPasscode('');
-                              setCancelEventReason('');
-                              setCancelEventVerification('');
-                              setCancelEventFeedback(null);
-                            }}
-                            style={{
-                              padding: '8px 10px',
+                          {ev.status !== 'CANCELLED' ? (
+                            <button
+                              onClick={() => {
+                                setCancellingEventTarget(ev);
+                                setCancelEventPasscode('');
+                                setCancelEventReason('');
+                                setCancelEventVerification('');
+                                setCancelEventFeedback(null);
+                              }}
+                              style={{
+                                flex: '1 1 auto',
+                                padding: '8px 12px',
+                                borderRadius: '6px',
+                                border: '1px solid rgba(231, 76, 60, 0.35)',
+                                background: 'rgba(231, 76, 60, 0.1)',
+                                color: '#ff7675',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                fontSize: '0.8rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '4px'
+                              }}
+                              title={isAr ? 'إلغاء الفعالية بالكامل رسمياً وإرسال اعتذار للمشاركين' : 'Cancel entire event'}
+                            >
+                              <span>{isAr ? 'إلغاء الفعالية' : 'Cancel Event'}</span>
+                            </button>
+                          ) : (
+                            <div style={{
+                              flex: '1 1 auto',
+                              padding: '7px 10px',
                               borderRadius: '6px',
-                              border: '1px solid rgba(231, 76, 60, 0.35)',
-                              background: 'rgba(231, 76, 60, 0.1)',
-                              color: '#ff7675',
+                              border: '1px solid rgba(231, 76, 60, 0.3)',
+                              background: 'rgba(231, 76, 60, 0.08)',
+                              color: '#ff6b6b',
                               fontWeight: 700,
-                              cursor: 'pointer',
-                              fontSize: '0.8rem',
+                              fontSize: '0.78rem',
+                              textAlign: 'center',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '4px'
-                            }}
-                            title={isAr ? 'إلغاء الفعالية بالكامل رسمياً وإرسال اعتذار للمشاركين' : 'Cancel entire event'}
-                          >
-                            <span>{isAr ? 'إلغاء الفعالية' : 'Cancel'}</span>
-                          </button>
+                              justifyContent: 'center'
+                            }}>
+                              🚫 {isAr ? 'الفعالية ملغاة رسمياً' : 'Event Cancelled'}
+                            </div>
+                          )}
 
                           {isSuperAdminOrDev && (
                             <button
                               onClick={() => handleRevealPasscode(ev.id)}
                               style={{
-                                padding: '8px 10px',
+                                flex: '1 1 auto',
+                                padding: '8px 12px',
                                 borderRadius: '6px',
                                 border: '1px solid rgba(226, 183, 20, 0.3)',
                                 background: 'rgba(0,0,0,0.3)',
@@ -1630,6 +1680,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
+                                justifyContent: 'center',
                                 gap: '4px'
                               }}
                               title={isAr ? 'عرض كود الإلغاء السري (SuperAdmin فقط)' : 'View Secret Passcode'}
@@ -1638,27 +1689,6 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                               <span>{isAr ? 'الكود السري' : 'Passcode'}</span>
                             </button>
                           )}
-
-                          <button
-                            onClick={() => handleDeleteEvent(ev.id, isAr ? ev.titleAr : ev.titleEn)}
-                            style={{
-                              padding: '8px 12px',
-                              borderRadius: '6px',
-                              border: '1px solid rgba(231, 76, 60, 0.4)',
-                              background: 'rgba(231, 76, 60, 0.12)',
-                              color: '#e74c3c',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              fontSize: '0.8rem',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                            title={isAr ? 'حذف هذه الفعالية نهائياً' : 'Delete event permanently'}
-                          >
-                            <Trash2 size={13} />
-                            <span>{isAr ? 'حذف' : 'Delete'}</span>
-                          </button>
                         </div>
 
                         {/* Expired Event Renewal CTA */}

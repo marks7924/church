@@ -8,7 +8,7 @@ import { API_URL } from '../../config';
 import { formatTimeSlot, formatDateTime } from '../../utils/format';
 import { 
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
-  Calendar, CheckCircle, HelpCircle, ArrowRight, Video, FileText, ChevronDown, Scissors, Clock, Sparkles, MessageSquare,
+  Calendar, CheckCircle, HelpCircle, ArrowRight, ArrowLeft, Send, Plus, Video, FileText, ChevronDown, Scissors, Clock, Sparkles, MessageSquare,
   Facebook, Mail, QrCode, Search, UserPlus, Edit3, Trash2, ChevronUp, AlertTriangle
 } from 'lucide-react';
 import PriestScheduleManager from '../../components/PriestScheduleManager';
@@ -147,28 +147,46 @@ export default function DashboardPage() {
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
 
   // Admin Create Membership Modal states
+interface MemberChild {
+  name: string;
+  nationalId: string;
+  educationOrJob: string;
+  phone: string;
+}
+
+interface MemberRelative {
+  name: string;
+  nationalId: string;
+  relationshipType: string;
+}
+
+const initialAddMemberFormState = {
+  userEmail: '',
+  fullName: '',
+  nationalId: '',
+  phoneNumbers: '',
+  street: '',
+  buildingNumber: '',
+  floor: '',
+  apartment: '',
+  job: '',
+  socialStatus: 'SINGLE',
+  email: '',
+  wifeName: '',
+  wifeNationalId: '',
+  wifeJob: '',
+  wifePhone: '',
+  wifeEmail: '',
+  wifeConfessionFather: '',
+  children: [] as MemberChild[],
+  relatives: [] as MemberRelative[],
+  servants: [''] as string[],
+  notes: '',
+  status: 'APPROVED'
+};
+
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
-  const [addMemberForm, setAddMemberForm] = useState({
-    userEmail: '',
-    fullName: '',
-    nationalId: '',
-    phoneNumbers: '',
-    street: '',
-    buildingNumber: '',
-    floor: '',
-    apartment: '',
-    job: '',
-    socialStatus: 'SINGLE',
-    wifeName: '',
-    wifeNationalId: '',
-    wifeJob: '',
-    wifePhone: '',
-    wifeEmail: '',
-    wifeConfessionFather: '',
-    childrenJson: '[]',
-    notes: '',
-    status: 'APPROVED'
-  });
+  const [addMemberForm, setAddMemberForm] = useState(initialAddMemberFormState);
   const [addMemberLoading, setAddMemberLoading] = useState(false);
   const [addMemberFeedback, setAddMemberFeedback] = useState<string | null>(null);
 
@@ -177,6 +195,9 @@ export default function DashboardPage() {
   const [isEditMemberModalOpen, setIsEditMemberModalOpen] = useState(false);
   const [editMemberLoading, setEditMemberLoading] = useState(false);
   const [editMemberFeedback, setEditMemberFeedback] = useState<string | null>(null);
+
+  // Admin View Full Family Membership Modal states
+  const [viewingMember, setViewingMember] = useState<any | null>(null);
 
   // Admin Delete Membership Confirmation states
   const [deletingMember, setDeletingMember] = useState<any | null>(null);
@@ -1020,6 +1041,63 @@ export default function DashboardPage() {
     }
   };
 
+  const openEditMemberModal = (m: any) => {
+    let ch: MemberChild[] = [];
+    try {
+      ch = Array.isArray(m.children) ? m.children : (typeof m.childrenJson === 'string' ? JSON.parse(m.childrenJson || '[]') : []);
+    } catch {}
+
+    let rel: MemberRelative[] = [];
+    try {
+      rel = Array.isArray(m.relatives) ? m.relatives : (typeof m.relativesJson === 'string' ? JSON.parse(m.relativesJson || '[]') : []);
+    } catch {}
+
+    let srv: string[] = [''];
+    try {
+      srv = Array.isArray(m.servants) && m.servants.length > 0 
+        ? m.servants 
+        : (typeof m.servantsJson === 'string' && m.servantsJson ? JSON.parse(m.servantsJson) : ['']);
+      if (!srv || srv.length === 0) srv = [''];
+    } catch {}
+
+    setEditingMember({
+      ...m,
+      socialStatus: m.socialStatus || 'SINGLE',
+      children: ch,
+      relatives: rel,
+      servants: srv,
+      status: m.status || 'APPROVED'
+    });
+    setEditMemberFeedback(null);
+    setIsEditMemberModalOpen(true);
+  };
+
+  const openViewMemberModal = (m: any) => {
+    let ch: MemberChild[] = [];
+    try {
+      ch = Array.isArray(m.children) ? m.children : (typeof m.childrenJson === 'string' ? JSON.parse(m.childrenJson || '[]') : []);
+    } catch {}
+
+    let rel: MemberRelative[] = [];
+    try {
+      rel = Array.isArray(m.relatives) ? m.relatives : (typeof m.relativesJson === 'string' ? JSON.parse(m.relativesJson || '[]') : []);
+    } catch {}
+
+    let srv: string[] = [];
+    try {
+      srv = Array.isArray(m.servants) 
+        ? m.servants 
+        : (typeof m.servantsJson === 'string' && m.servantsJson ? JSON.parse(m.servantsJson) : []);
+    } catch {}
+
+    setViewingMember({
+      ...m,
+      children: ch,
+      relatives: rel,
+      servants: srv
+    });
+  };
+
   const handleCreateMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
@@ -1027,12 +1105,9 @@ export default function DashboardPage() {
     setAddMemberFeedback(null);
 
     try {
-      let parsedChildren = [];
-      try {
-        parsedChildren = typeof addMemberForm.childrenJson === 'string' ? JSON.parse(addMemberForm.childrenJson) : addMemberForm.childrenJson;
-      } catch {
-        parsedChildren = [];
-      }
+      const filteredChildren = (addMemberForm.children || []).filter(c => c.name && c.name.trim() !== '');
+      const filteredRelatives = (addMemberForm.relatives || []).filter(r => r.name && r.name.trim() !== '');
+      const filteredServants = (addMemberForm.servants || []).filter(s => s && s.trim() !== '');
 
       const res = await fetch(`${API_URL}/members/admin/create`, {
         method: 'POST',
@@ -1042,34 +1117,16 @@ export default function DashboardPage() {
         },
         body: JSON.stringify({
           ...addMemberForm,
-          children: parsedChildren
+          children: filteredChildren,
+          relatives: filteredRelatives,
+          servants: filteredServants
         })
       });
 
       const data = await res.json();
       if (res.ok) {
         setIsAddMemberModalOpen(false);
-        setAddMemberForm({
-          userEmail: '',
-          fullName: '',
-          nationalId: '',
-          phoneNumbers: '',
-          street: '',
-          buildingNumber: '',
-          floor: '',
-          apartment: '',
-          job: '',
-          socialStatus: 'SINGLE',
-          wifeName: '',
-          wifeNationalId: '',
-          wifeJob: '',
-          wifePhone: '',
-          wifeEmail: '',
-          wifeConfessionFather: '',
-          childrenJson: '[]',
-          notes: '',
-          status: 'APPROVED'
-        });
+        setAddMemberForm(initialAddMemberFormState);
         fetchAllMembersList();
       } else {
         setAddMemberFeedback(data.errorAr || data.error || (language === 'ar' ? 'فشل إضافة العضوية.' : 'Failed to add membership.'));
@@ -1088,12 +1145,9 @@ export default function DashboardPage() {
     setEditMemberFeedback(null);
 
     try {
-      let parsedChildren = [];
-      try {
-        parsedChildren = typeof editingMember.childrenJson === 'string' ? JSON.parse(editingMember.childrenJson) : (editingMember.children || []);
-      } catch {
-        parsedChildren = editingMember.children || [];
-      }
+      const filteredChildren = (editingMember.children || []).filter((c: any) => c.name && c.name.trim() !== '');
+      const filteredRelatives = (editingMember.relatives || []).filter((r: any) => r.name && r.name.trim() !== '');
+      const filteredServants = (editingMember.servants || []).filter((s: any) => s && s.trim() !== '');
 
       const res = await fetch(`${API_URL}/members/${editingMember.id}`, {
         method: 'PUT',
@@ -1103,7 +1157,9 @@ export default function DashboardPage() {
         },
         body: JSON.stringify({
           ...editingMember,
-          children: parsedChildren
+          children: filteredChildren,
+          relatives: filteredRelatives,
+          servants: filteredServants
         })
       });
 
@@ -1636,8 +1692,8 @@ export default function DashboardPage() {
         setSavedTrip(true);
         setTimeout(() => setSavedTrip(false), 2000);
         setTripMsg(editingTripId 
-          ? (language === 'ar' ? '✓ تم تعديل الفعالية بنجاح!' : '✓ Event updated successfully!')
-          : (language === 'ar' ? '✓ تمت إضافة الفعالية بنجاح!' : '✓ Event created successfully!')
+          ? (language === 'ar' ? '✓ تم تعديل الرحلة / المؤتمر بنجاح!' : '✓ Trip / Conference updated successfully!')
+          : (language === 'ar' ? '✓ تمت إضافة الرحلة / المؤتمر بنجاح!' : '✓ Trip / Conference created successfully!')
         );
         setEditingTripId(null);
         setTripTitleAr('');
@@ -3414,15 +3470,28 @@ export default function DashboardPage() {
 
                             <button
                               type="button"
-                              onClick={() => {
-                                setEditingMember({
-                                  ...m,
-                                  children: childrenList,
-                                  childrenJson: JSON.stringify(childrenList)
-                                });
-                                setEditMemberFeedback(null);
-                                setIsEditMemberModalOpen(true);
+                              onClick={() => openViewMemberModal(m)}
+                              style={{
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                border: '1px solid rgba(226, 183, 20, 0.4)',
+                                color: 'var(--accent-gold)',
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
                               }}
+                              title={language === 'ar' ? 'عرض استمارة العضوية كاملة' : 'View Full Membership Form'}
+                            >
+                              <span>{language === 'ar' ? 'عرض الاستمارة 📋' : 'View Form 📋'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => openEditMemberModal(m)}
                               style={{
                                 background: 'rgba(226, 183, 20, 0.15)',
                                 border: '1px solid var(--accent-gold)',
@@ -3520,149 +3589,614 @@ export default function DashboardPage() {
             })()}
           </div>
 
-          {/* Admin Create Family Membership Modal */}
+          {/* ======================================================== */}
+          {/* 1. ADMIN CREATE FAMILY MEMBERSHIP MODAL (IDENTICAL FORM) */}
+          {/* ======================================================== */}
           {isAddMemberModalOpen && (
             <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
-              <div style={{ background: '#16161f', border: '1.5px solid var(--accent-gold)', borderRadius: '16px', padding: '2rem', maxWidth: '640px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}>
-                <h3 style={{ color: 'var(--accent-gold)', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <UserPlus size={20} />
-                  <span>{language === 'ar' ? 'تسجيل استمارة عضوية عائلية جديدة لمستخدم' : 'Create Family Membership for User'}</span>
-                </h3>
+              <div style={{ background: 'var(--bg-primary, #0f1015)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: 'clamp(1.2rem, 3.5vw, 2.5rem)', maxWidth: '850px', width: '100%', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 16px 50px rgba(0,0,0,0.7)', direction: language === 'ar' ? 'rtl' : 'ltr' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsAddMemberModalOpen(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '0.9rem',
+                    marginBottom: '1.2rem'
+                  }}
+                >
+                  <ArrowLeft size={16} />
+                  <span>{language === 'ar' ? 'رجوع' : 'Back'}</span>
+                </button>
 
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
-                  {language === 'ar' 
-                    ? '💡 اكتب البريد الإلكتروني للمستخدم: إذا كان لديه حساب سيتم ربط العضوية به فوراً واعتماده، وإذا لم يكن مسجلاً سيتم إنشاء حساب له بهذا البريد لتسجيل الدخول به.'
-                    : '💡 Enter the user email: if they have an account it links directly, otherwise an account is automatically created.'}
-                </p>
+                <h1 style={{ fontSize: 'clamp(1.25rem, 5.5vw, 2rem)', lineHeight: 1.3, color: 'var(--accent-gold)', marginBottom: '1.2rem', fontWeight: 800 }}>
+                  {language === 'ar' ? 'تسجيل استمارة العضوية الكنسية للأسرة' : 'Church Family Membership Registration Form'}
+                </h1>
 
-                <form onSubmit={handleCreateMember} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--accent-gold)', marginBottom: '4px' }}>
-                      {language === 'ar' ? 'البريد الإلكتروني للمستخدم (User Email) *' : 'User Email *'}
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="user@example.com"
-                      value={addMemberForm.userEmail}
-                      onChange={(e) => setAddMemberForm({ ...addMemberForm, userEmail: e.target.value })}
-                      style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
-                    />
-                  </div>
+                {/* Account Connection Info Notice */}
+                <div style={{ background: 'rgba(226, 183, 20, 0.08)', border: '1px solid var(--accent-gold)', borderRadius: '8px', padding: '12px 16px', marginBottom: '1.5rem', fontSize: '0.84rem', color: 'var(--accent-gold)', lineHeight: 1.5 }}>
+                  💡 {language === 'ar' 
+                    ? 'اكتب البريد الإلكتروني للمستخدم: إذا كان لديه حساب سيتم ربط استمارة العضوية بحسابه فوراً وتفعيله، وإذا لم يكن مسجلاً فسيتم إنشاء حساب له بهذا البريد تلقائياً لتسجيل الدخول.' 
+                    : 'Enter user email: if an account exists it will link immediately; otherwise a new account is automatically provisioned.'}
+                </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'اسم رب الأسرة (ثلاثي) *' : 'Full Name *'}</label>
+                <form onSubmit={handleCreateMember} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                  
+                  {/* User Account Email Field */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '0.85rem', color: 'var(--accent-gold)', fontWeight: 'bold' }}>
+                        {language === 'ar' ? 'البريد الإلكتروني لحساب المستخدم (User Email) *' : 'User Account Email *'}
+                      </label>
                       <input
-                        type="text"
+                        type="email"
                         required
-                        value={addMemberForm.fullName}
-                        onChange={(e) => setAddMemberForm({ ...addMemberForm, fullName: e.target.value })}
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'الرقم القومي (14 رقم) *' : 'National ID *'}</label>
-                      <input
-                        type="text"
-                        required
-                        value={addMemberForm.nationalId}
-                        onChange={(e) => setAddMemberForm({ ...addMemberForm, nationalId: e.target.value })}
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
+                        placeholder="user@example.com"
+                        value={addMemberForm.userEmail}
+                        onChange={(e) => setAddMemberForm({ ...addMemberForm, userEmail: e.target.value })}
+                        style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
                       />
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'رقم الهاتف *' : 'Phone *'}</label>
-                      <input
-                        type="tel"
-                        required
-                        value={addMemberForm.phoneNumbers}
-                        onChange={(e) => setAddMemberForm({ ...addMemberForm, phoneNumbers: e.target.value })}
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
-                      />
+                  {/* Section 1: بيانات رب الأسرة */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                      1. {language === 'ar' ? 'بيانات رب الأسرة' : 'Head of Family Information'}
+                    </h3>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1.2rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم الكامل ثلاثي *' : 'Full Name *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={addMemberForm.fullName}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, fullName: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرقم القومي (14 رقم) *' : 'National ID (14 digits) *'}</label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={14}
+                          pattern="\d{14}"
+                          value={addMemberForm.nationalId}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, nationalId: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الحالة الاجتماعية *' : 'Social Status *'}</label>
+                        <select
+                          value={addMemberForm.socialStatus}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, socialStatus: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        >
+                          <option value="SINGLE">{language === 'ar' ? 'أعزب' : 'Single'}</option>
+                          <option value="MARRIED">{language === 'ar' ? 'متزوج' : 'Married'}</option>
+                          <option value="DIVORCED">{language === 'ar' ? 'مطلق' : 'Divorced'}</option>
+                          <option value="WIDOWED">{language === 'ar' ? 'أرمل' : 'Widowed'}</option>
+                        </select>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الوظيفة/العمل *' : 'Job / Occupation *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={addMemberForm.job}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, job: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رقم الهاتف *' : 'Phone Number *'}</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="01222222222, 0225748839"
+                          value={addMemberForm.phoneNumbers}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, phoneNumbers: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'البريد الإلكتروني' : 'Email'}</label>
+                        <input
+                          type="email"
+                          value={addMemberForm.email}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, email: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'المهنة' : 'Job'}</label>
-                      <input
-                        type="text"
-                        value={addMemberForm.job}
-                        onChange={(e) => setAddMemberForm({ ...addMemberForm, job: e.target.value })}
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
-                      />
+
+                    <h4 style={{ color: 'var(--text-primary)', fontSize: '0.95rem', margin: '1.5rem 0 1rem 0' }}>
+                      📍 {language === 'ar' ? 'العنوان وتفاصيل السكن' : 'Address and Residence Coordinates'}
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1.2rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'اسم الشارع *' : 'Street *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={addMemberForm.street}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, street: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رقم المبنى *' : 'Building No *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={addMemberForm.buildingNumber}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, buildingNumber: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الطابق *' : 'Floor *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={addMemberForm.floor}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, floor: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رقم الشقة *' : 'Apartment *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={addMemberForm.apartment}
+                          onChange={(e) => setAddMemberForm({ ...addMemberForm, apartment: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Address Grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '8px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الشارع</label>
-                      <input type="text" value={addMemberForm.street} onChange={(e) => setAddMemberForm({ ...addMemberForm, street: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>رقم العقار</label>
-                      <input type="text" value={addMemberForm.buildingNumber} onChange={(e) => setAddMemberForm({ ...addMemberForm, buildingNumber: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الدور</label>
-                      <input type="text" value={addMemberForm.floor} onChange={(e) => setAddMemberForm({ ...addMemberForm, floor: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الشقة</label>
-                      <input type="text" value={addMemberForm.apartment} onChange={(e) => setAddMemberForm({ ...addMemberForm, apartment: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
-                    </div>
-                  </div>
+                  {/* Section 2: بيانات الزوجة (Only if married) */}
+                  {addMemberForm.socialStatus === 'MARRIED' && (
+                    <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                      <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                        2. {language === 'ar' ? 'بيانات الزوجة' : 'Wife Details'}
+                      </h3>
 
-                  {/* Wife & Status */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'اسم الزوجة (إن وجد)' : 'Wife Name'}</label>
-                      <input type="text" value={addMemberForm.wifeName} onChange={(e) => setAddMemberForm({ ...addMemberForm, wifeName: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'أب اعتراف الزوجة' : 'Wife Confession Father'}</label>
-                      <input type="text" value={addMemberForm.wifeConfessionFather} onChange={(e) => setAddMemberForm({ ...addMemberForm, wifeConfessionFather: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
-                    </div>
-                  </div>
-
-                  {/* Membership Status Selection */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--accent-gold)', marginBottom: '4px' }}>
-                      {language === 'ar' ? 'اعتماد العضوية فورياً' : 'Approval Status'}
-                    </label>
-                    <select
-                      value={addMemberForm.status}
-                      onChange={(e) => setAddMemberForm({ ...addMemberForm, status: e.target.value })}
-                      style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
-                    >
-                      <option value="APPROVED">{language === 'ar' ? 'موافقة معتمدة ورسمية (APPROVED) - يتيح له دخول فعاليات الأعضاء فوراً' : 'Approved'}</option>
-                      <option value="PENDING">{language === 'ar' ? 'قيد المراجعة (PENDING)' : 'Pending'}</option>
-                    </select>
-                  </div>
-
-                  {addMemberFeedback && (
-                    <div style={{ padding: '8px 12px', borderRadius: '6px', background: 'rgba(231, 76, 60, 0.15)', border: '1px solid #e74c3c', color: '#e74c3c', fontSize: '0.85rem' }}>
-                      {addMemberFeedback}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1.2rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم الكامل للزوجة *' : 'Wife Full Name *'}</label>
+                          <input
+                            type="text"
+                            required
+                            value={addMemberForm.wifeName}
+                            onChange={(e) => setAddMemberForm({ ...addMemberForm, wifeName: e.target.value })}
+                            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرقم القومي للزوجة *' : 'Wife National ID *'}</label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={14}
+                            pattern="\d{14}"
+                            value={addMemberForm.wifeNationalId}
+                            onChange={(e) => setAddMemberForm({ ...addMemberForm, wifeNationalId: e.target.value })}
+                            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'وظيفة الزوجة *' : 'Wife Job *'}</label>
+                          <input
+                            type="text"
+                            required
+                            value={addMemberForm.wifeJob}
+                            onChange={(e) => setAddMemberForm({ ...addMemberForm, wifeJob: e.target.value })}
+                            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'هاتف الزوجة *' : 'Wife Phone *'}</label>
+                          <input
+                            type="text"
+                            required
+                            value={addMemberForm.wifePhone}
+                            onChange={(e) => setAddMemberForm({ ...addMemberForm, wifePhone: e.target.value })}
+                            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'بريد الزوجة الإلكتروني' : 'Wife Email'}</label>
+                          <input
+                            type="email"
+                            value={addMemberForm.wifeEmail}
+                            onChange={(e) => setAddMemberForm({ ...addMemberForm, wifeEmail: e.target.value })}
+                            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'أب اعتراف الزوجة' : 'Wife Confession Father'}</label>
+                          <input
+                            type="text"
+                            placeholder="القمص يوحنا كمال"
+                            value={addMemberForm.wifeConfessionFather}
+                            onChange={(e) => setAddMemberForm({ ...addMemberForm, wifeConfessionFather: e.target.value })}
+                            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddMemberModalOpen(false)}
-                      disabled={addMemberLoading}
-                      style={{ padding: '10px 18px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer' }}
-                    >
-                      {language === 'ar' ? 'إلغاء' : 'Cancel'}
-                    </button>
+                  {/* Section 3: بيانات الأبناء */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
+                      <h3 style={{ color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                        3. {language === 'ar' ? 'بيانات الأبناء' : 'Children'}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setAddMemberForm(prev => ({
+                          ...prev,
+                          children: [...prev.children, { name: '', nationalId: '', educationOrJob: '', phone: '' }]
+                        }))}
+                        style={{
+                          backgroundColor: 'rgba(226, 183, 20, 0.1)',
+                          color: 'var(--accent-gold)',
+                          border: '1px solid var(--accent-gold)',
+                          padding: '6px 12px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        {language === 'ar' ? 'إضافة ابن/ابنة +' : 'Add Child +'}
+                      </button>
+                    </div>
+
+                    {(!addMemberForm.children || addMemberForm.children.length === 0) ? (
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+                        {language === 'ar' ? 'لا يوجد أبناء مضافين حالياً.' : 'No children added yet.'}
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        {addMemberForm.children.map((child, index) => (
+                          <div key={index} style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr)) auto',
+                            gap: '1rem',
+                            alignItems: 'end',
+                            backgroundColor: 'var(--bg-card)',
+                            padding: '1rem',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)'
+                          }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'اسم الابن/الابنة *' : 'Name *'}</label>
+                              <input
+                                type="text"
+                                required
+                                value={child.name}
+                                onChange={(e) => {
+                                  const updated = [...addMemberForm.children];
+                                  updated[index].name = e.target.value;
+                                  setAddMemberForm({ ...addMemberForm, children: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرقم القومي للابن *' : 'National ID *'}</label>
+                              <input
+                                type="text"
+                                required
+                                maxLength={14}
+                                pattern="\d{14}"
+                                value={child.nationalId}
+                                onChange={(e) => {
+                                  const updated = [...addMemberForm.children];
+                                  updated[index].nationalId = e.target.value;
+                                  setAddMemberForm({ ...addMemberForm, children: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'المرحلة الدراسية / الوظيفة *' : 'Education/Job *'}</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder={language === 'ar' ? 'مثال: ثالثة إعدادي' : 'e.g. Grade 9'}
+                                value={child.educationOrJob}
+                                onChange={(e) => {
+                                  const updated = [...addMemberForm.children];
+                                  updated[index].educationOrJob = e.target.value;
+                                  setAddMemberForm({ ...addMemberForm, children: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الهاتف (اختياري)' : 'Phone (optional)'}</label>
+                              <input
+                                type="text"
+                                value={child.phone}
+                                onChange={(e) => {
+                                  const updated = [...addMemberForm.children];
+                                  updated[index].phone = e.target.value;
+                                  setAddMemberForm({ ...addMemberForm, children: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAddMemberForm({
+                                  ...addMemberForm,
+                                  children: addMemberForm.children.filter((_, i) => i !== index)
+                                });
+                              }}
+                              style={{ backgroundColor: 'transparent', border: 'none', color: '#ff4d4d', padding: '8px', cursor: 'pointer', alignSelf: 'center' }}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 4: الأقارب المقيمين بالمنزل */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
+                      <h3 style={{ color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                        4. {language === 'ar' ? 'الأقارب المقيمين بالمنزل' : 'Residing Relatives'}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setAddMemberForm(prev => ({
+                          ...prev,
+                          relatives: [...prev.relatives, { name: '', nationalId: '', relationshipType: '' }]
+                        }))}
+                        style={{
+                          backgroundColor: 'rgba(226, 183, 20, 0.1)',
+                          color: 'var(--accent-gold)',
+                          border: '1px solid var(--accent-gold)',
+                          padding: '6px 12px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        {language === 'ar' ? 'إضافة قريب +' : 'Add Relative +'}
+                      </button>
+                    </div>
+
+                    {(!addMemberForm.relatives || addMemberForm.relatives.length === 0) ? (
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+                        {language === 'ar' ? 'لا يوجد أقارب مقيمين مضافين.' : 'No residing relatives added.'}
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        {addMemberForm.relatives.map((rel, index) => (
+                          <div key={index} style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr)) auto',
+                            gap: '1rem',
+                            alignItems: 'end',
+                            backgroundColor: 'var(--bg-card)',
+                            padding: '1rem',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)'
+                          }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم بالكامل *' : 'Full Name *'}</label>
+                              <input
+                                type="text"
+                                required
+                                value={rel.name}
+                                onChange={(e) => {
+                                  const updated = [...addMemberForm.relatives];
+                                  updated[index].name = e.target.value;
+                                  setAddMemberForm({ ...addMemberForm, relatives: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرقم القومي للقريب *' : 'National ID *'}</label>
+                              <input
+                                type="text"
+                                required
+                                maxLength={14}
+                                pattern="\d{14}"
+                                value={rel.nationalId}
+                                onChange={(e) => {
+                                  const updated = [...addMemberForm.relatives];
+                                  updated[index].nationalId = e.target.value;
+                                  setAddMemberForm({ ...addMemberForm, relatives: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'صلة القرابة *' : 'Relationship *'}</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder={language === 'ar' ? 'مثال: جدة / عم' : 'e.g. Grandmother'}
+                                value={rel.relationshipType}
+                                onChange={(e) => {
+                                  const updated = [...addMemberForm.relatives];
+                                  updated[index].relationshipType = e.target.value;
+                                  setAddMemberForm({ ...addMemberForm, relatives: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAddMemberForm({
+                                  ...addMemberForm,
+                                  relatives: addMemberForm.relatives.filter((_, i) => i !== index)
+                                });
+                              }}
+                              style={{ backgroundColor: 'transparent', border: 'none', color: '#ff4d4d', padding: '8px', cursor: 'pointer', alignSelf: 'center' }}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 5: خدام الكنيسة المفتقدين للأسرة */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
+                      <h3 style={{ color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                        5. {language === 'ar' ? 'خدام الكنيسة المفتقدين للأسرة' : 'Servants Visiting Family'}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setAddMemberForm(prev => ({ ...prev, servants: [...prev.servants, ''] }))}
+                        style={{
+                          backgroundColor: 'rgba(226, 183, 20, 0.1)',
+                          color: 'var(--accent-gold)',
+                          border: '1px solid var(--accent-gold)',
+                          padding: '6px 12px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        {language === 'ar' ? 'إضافة اسم خادم +' : 'Add Servant +'}
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {addMemberForm.servants.map((serv, index) => (
+                        <div key={index} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            placeholder={language === 'ar' ? 'اسم خادم الافتقاد فقط...' : 'Servant name only...'}
+                            value={serv}
+                            onChange={(e) => {
+                              const updated = [...addMemberForm.servants];
+                              updated[index] = e.target.value;
+                              setAddMemberForm({ ...addMemberForm, servants: updated });
+                            }}
+                            style={{
+                              flex: 1,
+                              backgroundColor: 'var(--bg-card)',
+                              border: '1px solid var(--border-color)',
+                              color: 'var(--text-primary)',
+                              padding: '10px',
+                              borderRadius: '4px'
+                            }}
+                          />
+                          {addMemberForm.servants.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAddMemberForm({
+                                  ...addMemberForm,
+                                  servants: addMemberForm.servants.filter((_, i) => i !== index)
+                                });
+                              }}
+                              style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer' }}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Section 6: ملاحظات هامة للأسرة & اعتمادات الإدارة */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '1.5rem' }}>
+                      <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        {language === 'ar' ? 'ملاحظات هامة للأسرة' : 'Important Family Notes'}
+                      </label>
+                      <textarea
+                        placeholder={language === 'ar' ? 'اكتب أي ملاحظات إضافية بخصوص الخدمة أو حالات خاصة بالمنزل...' : 'Write any other notes...'}
+                        value={addMemberForm.notes}
+                        onChange={(e) => setAddMemberForm({ ...addMemberForm, notes: e.target.value })}
+                        style={{
+                          backgroundColor: 'var(--bg-card)',
+                          border: '1px solid var(--border-color)',
+                          color: 'var(--text-primary)',
+                          padding: '10px',
+                          borderRadius: '4px',
+                          height: '100px',
+                          resize: 'none'
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '1.5rem' }}>
+                      <label style={{ fontSize: '0.85rem', color: 'var(--accent-gold)', fontWeight: 'bold' }}>
+                        {language === 'ar' ? 'حالة الاعتماد الكنسي الفوري للعضوية *' : 'Church Approval Status *'}
+                      </label>
+                      <select
+                        value={addMemberForm.status}
+                        onChange={(e) => setAddMemberForm({ ...addMemberForm, status: e.target.value })}
+                        style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                      >
+                        <option value="APPROVED">{language === 'ar' ? 'معتمدة وموثقة رسمياً (APPROVED) - تتيح حجز فعاليات الأعضاء فوراً' : 'Approved'}</option>
+                        <option value="PENDING">{language === 'ar' ? 'قيد المراجعة والتدقيق (PENDING)' : 'Pending'}</option>
+                      </select>
+                    </div>
+
+                    {addMemberFeedback && (
+                      <div style={{ padding: '10px 14px', borderRadius: '6px', background: 'rgba(231, 76, 60, 0.15)', border: '1px solid #e74c3c', color: '#e74c3c', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                        {addMemberFeedback}
+                      </div>
+                    )}
+
                     <button
                       type="submit"
                       disabled={addMemberLoading}
-                      style={{ padding: '10px 22px', borderRadius: '8px', background: 'var(--accent-gold)', border: 'none', color: '#000', fontWeight: 800, cursor: addMemberLoading ? 'wait' : 'pointer' }}
+                      style={{
+                        backgroundColor: 'var(--accent-gold)',
+                        color: '#000000',
+                        fontWeight: 'bold',
+                        border: 'none',
+                        padding: '14px',
+                        borderRadius: '4px',
+                        cursor: addMemberLoading ? 'wait' : 'pointer',
+                        width: '100%',
+                        fontSize: '1.05rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px'
+                      }}
                     >
-                      {addMemberLoading ? (language === 'ar' ? 'جاري التسجيل...' : 'Creating...') : (language === 'ar' ? 'حفظ وتسجيل العضوية' : 'Create Membership')}
+                      <Send size={18} />
+                      <span>{addMemberLoading ? (language === 'ar' ? 'جاري التسجيل...' : 'Creating...') : (language === 'ar' ? 'إرسال الاستمارة والاعتماد الكنسي' : 'Submit & Register Membership')}</span>
                     </button>
                   </div>
                 </form>
@@ -3670,142 +4204,918 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Admin Edit Family Membership Modal */}
+          {/* ======================================================== */}
+          {/* 2. ADMIN EDIT FAMILY MEMBERSHIP MODAL (IDENTICAL FORM)   */}
+          {/* ======================================================== */}
           {isEditMemberModalOpen && editingMember && (
             <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
-              <div style={{ background: '#16161f', border: '1.5px solid var(--accent-gold)', borderRadius: '16px', padding: '2rem', maxWidth: '640px', width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}>
-                <h3 style={{ color: 'var(--accent-gold)', margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Edit3 size={20} />
-                  <span>{language === 'ar' ? 'تعديل بيانات العضوية العائلية' : 'Edit Family Membership'}</span>
-                </h3>
+              <div style={{ background: 'var(--bg-primary, #0f1015)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: 'clamp(1.2rem, 3.5vw, 2.5rem)', maxWidth: '850px', width: '100%', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 16px 50px rgba(0,0,0,0.7)', direction: language === 'ar' ? 'rtl' : 'ltr' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsEditMemberModalOpen(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '0.9rem',
+                    marginBottom: '1.2rem'
+                  }}
+                >
+                  <ArrowLeft size={16} />
+                  <span>{language === 'ar' ? 'رجوع' : 'Back'}</span>
+                </button>
 
-                <form onSubmit={handleSaveEditMember} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'اسم رب الأسرة *' : 'Full Name *'}</label>
-                      <input
-                        type="text"
-                        required
-                        value={editingMember.fullName || ''}
-                        onChange={(e) => setEditingMember({ ...editingMember, fullName: e.target.value })}
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
-                      />
+                <h1 style={{ fontSize: 'clamp(1.25rem, 5.5vw, 2rem)', lineHeight: 1.3, color: 'var(--accent-gold)', marginBottom: '1.2rem', fontWeight: 800 }}>
+                  {language === 'ar' ? 'تعديل استمارة العضوية الكنسية للأسرة' : 'Edit Church Family Membership Form'}
+                </h1>
+
+                <form onSubmit={handleSaveEditMember} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                  
+                  {/* Section 1: بيانات رب الأسرة */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                      1. {language === 'ar' ? 'بيانات رب الأسرة' : 'Head of Family Information'}
+                    </h3>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1.2rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم الكامل ثلاثي *' : 'Full Name *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={editingMember.fullName || ''}
+                          onChange={(e) => setEditingMember({ ...editingMember, fullName: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرقم القومي (14 رقم) *' : 'National ID (14 digits) *'}</label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={14}
+                          pattern="\d{14}"
+                          value={editingMember.nationalId || ''}
+                          onChange={(e) => setEditingMember({ ...editingMember, nationalId: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الحالة الاجتماعية *' : 'Social Status *'}</label>
+                        <select
+                          value={editingMember.socialStatus || 'SINGLE'}
+                          onChange={(e) => setEditingMember({ ...editingMember, socialStatus: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        >
+                          <option value="SINGLE">{language === 'ar' ? 'أعزب' : 'Single'}</option>
+                          <option value="MARRIED">{language === 'ar' ? 'متزوج' : 'Married'}</option>
+                          <option value="DIVORCED">{language === 'ar' ? 'مطلق' : 'Divorced'}</option>
+                          <option value="WIDOWED">{language === 'ar' ? 'أرمل' : 'Widowed'}</option>
+                        </select>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الوظيفة/العمل *' : 'Job / Occupation *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={editingMember.job || ''}
+                          onChange={(e) => setEditingMember({ ...editingMember, job: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رقم الهاتف *' : 'Phone Number *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={editingMember.phoneNumbers || ''}
+                          onChange={(e) => setEditingMember({ ...editingMember, phoneNumbers: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'البريد الإلكتروني' : 'Email'}</label>
+                        <input
+                          type="email"
+                          value={editingMember.email || ''}
+                          onChange={(e) => setEditingMember({ ...editingMember, email: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'الرقم القومي *' : 'National ID *'}</label>
-                      <input
-                        type="text"
-                        required
-                        value={editingMember.nationalId || ''}
-                        onChange={(e) => setEditingMember({ ...editingMember, nationalId: e.target.value })}
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
-                      />
+
+                    <h4 style={{ color: 'var(--text-primary)', fontSize: '0.95rem', margin: '1.5rem 0 1rem 0' }}>
+                      📍 {language === 'ar' ? 'العنوان وتفاصيل السكن' : 'Address and Residence Coordinates'}
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1.2rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'اسم الشارع *' : 'Street *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={editingMember.street || ''}
+                          onChange={(e) => setEditingMember({ ...editingMember, street: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رقم المبنى *' : 'Building No *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={editingMember.buildingNumber || ''}
+                          onChange={(e) => setEditingMember({ ...editingMember, buildingNumber: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الطابق *' : 'Floor *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={editingMember.floor || ''}
+                          onChange={(e) => setEditingMember({ ...editingMember, floor: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رقم الشقة *' : 'Apartment *'}</label>
+                        <input
+                          type="text"
+                          required
+                          value={editingMember.apartment || ''}
+                          onChange={(e) => setEditingMember({ ...editingMember, apartment: e.target.value })}
+                          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'رقم الهاتف *' : 'Phone *'}</label>
-                      <input
-                        type="tel"
-                        required
-                        value={editingMember.phoneNumbers || ''}
-                        onChange={(e) => setEditingMember({ ...editingMember, phoneNumbers: e.target.value })}
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'المهنة' : 'Job'}</label>
-                      <input
-                        type="text"
-                        value={editingMember.job || ''}
-                        onChange={(e) => setEditingMember({ ...editingMember, job: e.target.value })}
-                        style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                  </div>
+                  {/* Section 2: بيانات الزوجة (Only if married) */}
+                  {editingMember.socialStatus === 'MARRIED' && (
+                    <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                      <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                        2. {language === 'ar' ? 'بيانات الزوجة' : 'Wife Details'}
+                      </h3>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '8px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الشارع</label>
-                      <input type="text" value={editingMember.street || ''} onChange={(e) => setEditingMember({ ...editingMember, street: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>رقم العقار</label>
-                      <input type="text" value={editingMember.buildingNumber || ''} onChange={(e) => setEditingMember({ ...editingMember, buildingNumber: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الدور</label>
-                      <input type="text" value={editingMember.floor || ''} onChange={(e) => setEditingMember({ ...editingMember, floor: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الشقة</label>
-                      <input type="text" value={editingMember.apartment || ''} onChange={(e) => setEditingMember({ ...editingMember, apartment: e.target.value })} style={{ width: '100%', padding: '8px', borderRadius: '4px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'اسم الزوجة' : 'Wife Name'}</label>
-                      <input type="text" value={editingMember.wifeName || ''} onChange={(e) => setEditingMember({ ...editingMember, wifeName: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>{language === 'ar' ? 'أب اعتراف الزوجة' : 'Wife Confession Father'}</label>
-                      <input type="text" value={editingMember.wifeConfessionFather || ''} onChange={(e) => setEditingMember({ ...editingMember, wifeConfessionFather: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--accent-gold)', marginBottom: '4px' }}>
-                      {language === 'ar' ? 'حالة العضوية' : 'Membership Status'}
-                    </label>
-                    <select
-                      value={editingMember.status || 'APPROVED'}
-                      onChange={(e) => setEditingMember({ ...editingMember, status: e.target.value })}
-                      style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
-                    >
-                      <option value="APPROVED">{language === 'ar' ? 'معتمدة وموثقة (APPROVED)' : 'APPROVED'}</option>
-                      <option value="PENDING">{language === 'ar' ? 'قيد المراجعة (PENDING)' : 'PENDING'}</option>
-                      <option value="REJECTED">{language === 'ar' ? 'مرفوضة (REJECTED)' : 'REJECTED'}</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', color: '#fff', marginBottom: '4px' }}>
-                      {language === 'ar' ? 'ملاحظات إدارية' : 'Admin Notes'}
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={editingMember.notes || ''}
-                      onChange={(e) => setEditingMember({ ...editingMember, notes: e.target.value })}
-                      style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: '#fff', boxSizing: 'border-box' }}
-                    />
-                  </div>
-
-                  {editMemberFeedback && (
-                    <div style={{ padding: '8px 12px', borderRadius: '6px', background: 'rgba(231, 76, 60, 0.15)', border: '1px solid #e74c3c', color: '#e74c3c', fontSize: '0.85rem' }}>
-                      {editMemberFeedback}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1.2rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم الكامل للزوجة *' : 'Wife Full Name *'}</label>
+                          <input
+                            type="text"
+                            required
+                            value={editingMember.wifeName || ''}
+                            onChange={(e) => setEditingMember({ ...editingMember, wifeName: e.target.value })}
+                            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرقم القومي للزوجة *' : 'Wife National ID *'}</label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={14}
+                            pattern="\d{14}"
+                            value={editingMember.wifeNationalId || ''}
+                            onChange={(e) => setEditingMember({ ...editingMember, wifeNationalId: e.target.value })}
+                            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'وظيفة الزوجة *' : 'Wife Job *'}</label>
+                          <input
+                            type="text"
+                            required
+                            value={editingMember.wifeJob || ''}
+                            onChange={(e) => setEditingMember({ ...editingMember, wifeJob: e.target.value })}
+                            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'هاتف الزوجة *' : 'Wife Phone *'}</label>
+                          <input
+                            type="text"
+                            required
+                            value={editingMember.wifePhone || ''}
+                            onChange={(e) => setEditingMember({ ...editingMember, wifePhone: e.target.value })}
+                            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'بريد الزوجة الإلكتروني' : 'Wife Email'}</label>
+                          <input
+                            type="email"
+                            value={editingMember.wifeEmail || ''}
+                            onChange={(e) => setEditingMember({ ...editingMember, wifeEmail: e.target.value })}
+                            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'أب اعتراف الزوجة' : 'Wife Confession Father'}</label>
+                          <input
+                            type="text"
+                            value={editingMember.wifeConfessionFather || ''}
+                            onChange={(e) => setEditingMember({ ...editingMember, wifeConfessionFather: e.target.value })}
+                            style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                    <button
-                      type="button"
-                      onClick={() => setIsEditMemberModalOpen(false)}
-                      disabled={editMemberLoading}
-                      style={{ padding: '10px 18px', borderRadius: '8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer' }}
-                    >
-                      {language === 'ar' ? 'إلغاء' : 'Cancel'}
-                    </button>
+                  {/* Section 3: بيانات الأبناء */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
+                      <h3 style={{ color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                        3. {language === 'ar' ? 'بيانات الأبناء' : 'Children'}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setEditingMember((prev: any) => ({
+                          ...prev,
+                          children: [...(prev.children || []), { name: '', nationalId: '', educationOrJob: '', phone: '' }]
+                        }))}
+                        style={{
+                          backgroundColor: 'rgba(226, 183, 20, 0.1)',
+                          color: 'var(--accent-gold)',
+                          border: '1px solid var(--accent-gold)',
+                          padding: '6px 12px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        {language === 'ar' ? 'إضافة ابن/ابنة +' : 'Add Child +'}
+                      </button>
+                    </div>
+
+                    {(!editingMember.children || editingMember.children.length === 0) ? (
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+                        {language === 'ar' ? 'لا يوجد أبناء مضافين حالياً.' : 'No children added yet.'}
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        {editingMember.children.map((child: any, index: number) => (
+                          <div key={index} style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr)) auto',
+                            gap: '1rem',
+                            alignItems: 'end',
+                            backgroundColor: 'var(--bg-card)',
+                            padding: '1rem',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)'
+                          }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'اسم الابن/الابنة *' : 'Name *'}</label>
+                              <input
+                                type="text"
+                                required
+                                value={child.name || ''}
+                                onChange={(e) => {
+                                  const updated = [...editingMember.children];
+                                  updated[index].name = e.target.value;
+                                  setEditingMember({ ...editingMember, children: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرقم القومي للابن *' : 'National ID *'}</label>
+                              <input
+                                type="text"
+                                required
+                                maxLength={14}
+                                pattern="\d{14}"
+                                value={child.nationalId || ''}
+                                onChange={(e) => {
+                                  const updated = [...editingMember.children];
+                                  updated[index].nationalId = e.target.value;
+                                  setEditingMember({ ...editingMember, children: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'المرحلة الدراسية / الوظيفة *' : 'Education/Job *'}</label>
+                              <input
+                                type="text"
+                                required
+                                value={child.educationOrJob || ''}
+                                onChange={(e) => {
+                                  const updated = [...editingMember.children];
+                                  updated[index].educationOrJob = e.target.value;
+                                  setEditingMember({ ...editingMember, children: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الهاتف (اختياري)' : 'Phone (optional)'}</label>
+                              <input
+                                type="text"
+                                value={child.phone || ''}
+                                onChange={(e) => {
+                                  const updated = [...editingMember.children];
+                                  updated[index].phone = e.target.value;
+                                  setEditingMember({ ...editingMember, children: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMember({
+                                  ...editingMember,
+                                  children: editingMember.children.filter((_: any, i: number) => i !== index)
+                                });
+                              }}
+                              style={{ backgroundColor: 'transparent', border: 'none', color: '#ff4d4d', padding: '8px', cursor: 'pointer', alignSelf: 'center' }}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 4: الأقارب المقيمين بالمنزل */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
+                      <h3 style={{ color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                        4. {language === 'ar' ? 'الأقارب المقيمين بالمنزل' : 'Residing Relatives'}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setEditingMember((prev: any) => ({
+                          ...prev,
+                          relatives: [...(prev.relatives || []), { name: '', nationalId: '', relationshipType: '' }]
+                        }))}
+                        style={{
+                          backgroundColor: 'rgba(226, 183, 20, 0.1)',
+                          color: 'var(--accent-gold)',
+                          border: '1px solid var(--accent-gold)',
+                          padding: '6px 12px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        {language === 'ar' ? 'إضافة قريب +' : 'Add Relative +'}
+                      </button>
+                    </div>
+
+                    {(!editingMember.relatives || editingMember.relatives.length === 0) ? (
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+                        {language === 'ar' ? 'لا يوجد أقارب مقيمين مضافين.' : 'No residing relatives added.'}
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        {editingMember.relatives.map((rel: any, index: number) => (
+                          <div key={index} style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr)) auto',
+                            gap: '1rem',
+                            alignItems: 'end',
+                            backgroundColor: 'var(--bg-card)',
+                            padding: '1rem',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)'
+                          }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم بالكامل *' : 'Full Name *'}</label>
+                              <input
+                                type="text"
+                                required
+                                value={rel.name || ''}
+                                onChange={(e) => {
+                                  const updated = [...editingMember.relatives];
+                                  updated[index].name = e.target.value;
+                                  setEditingMember({ ...editingMember, relatives: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرقم القومي للقريب *' : 'National ID *'}</label>
+                              <input
+                                type="text"
+                                required
+                                maxLength={14}
+                                pattern="\d{14}"
+                                value={rel.nationalId || ''}
+                                onChange={(e) => {
+                                  const updated = [...editingMember.relatives];
+                                  updated[index].nationalId = e.target.value;
+                                  setEditingMember({ ...editingMember, relatives: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'صلة القرابة *' : 'Relationship *'}</label>
+                              <input
+                                type="text"
+                                required
+                                value={rel.relationshipType || ''}
+                                onChange={(e) => {
+                                  const updated = [...editingMember.relatives];
+                                  updated[index].relationshipType = e.target.value;
+                                  setEditingMember({ ...editingMember, relatives: updated });
+                                }}
+                                style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '8px', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMember({
+                                  ...editingMember,
+                                  relatives: editingMember.relatives.filter((_: any, i: number) => i !== index)
+                                });
+                              }}
+                              style={{ backgroundColor: 'transparent', border: 'none', color: '#ff4d4d', padding: '8px', cursor: 'pointer', alignSelf: 'center' }}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 5: خدام الكنيسة المفتقدين للأسرة */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
+                      <h3 style={{ color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                        5. {language === 'ar' ? 'خدام الكنيسة المفتقدين للأسرة' : 'Servants Visiting Family'}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setEditingMember((prev: any) => ({
+                          ...prev,
+                          servants: [...(prev.servants || []), '']
+                        }))}
+                        style={{
+                          backgroundColor: 'rgba(226, 183, 20, 0.1)',
+                          color: 'var(--accent-gold)',
+                          border: '1px solid var(--accent-gold)',
+                          padding: '6px 12px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        {language === 'ar' ? 'إضافة اسم خادم +' : 'Add Servant +'}
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {(editingMember.servants || ['']).map((serv: string, index: number) => (
+                        <div key={index} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            placeholder={language === 'ar' ? 'اسم خادم الافتقاد فقط...' : 'Servant name only...'}
+                            value={serv}
+                            onChange={(e) => {
+                              const updated = [...(editingMember.servants || [''])];
+                              updated[index] = e.target.value;
+                              setEditingMember({ ...editingMember, servants: updated });
+                            }}
+                            style={{
+                              flex: 1,
+                              backgroundColor: 'var(--bg-card)',
+                              border: '1px solid var(--border-color)',
+                              color: 'var(--text-primary)',
+                              padding: '10px',
+                              borderRadius: '4px'
+                            }}
+                          />
+                          {(editingMember.servants || []).length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMember({
+                                  ...editingMember,
+                                  servants: editingMember.servants.filter((_: any, i: number) => i !== index)
+                                });
+                              }}
+                              style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer' }}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Section 6: ملاحظات هامة للأسرة & اعتمادات الإدارة */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '1.5rem' }}>
+                      <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        {language === 'ar' ? 'ملاحظات هامة للأسرة' : 'Important Family Notes'}
+                      </label>
+                      <textarea
+                        placeholder={language === 'ar' ? 'اكتب أي ملاحظات إضافية بخصوص الخدمة أو حالات خاصة بالمنزل...' : 'Write any other notes...'}
+                        value={editingMember.notes || ''}
+                        onChange={(e) => setEditingMember({ ...editingMember, notes: e.target.value })}
+                        style={{
+                          backgroundColor: 'var(--bg-card)',
+                          border: '1px solid var(--border-color)',
+                          color: 'var(--text-primary)',
+                          padding: '10px',
+                          borderRadius: '4px',
+                          height: '100px',
+                          resize: 'none'
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '1.5rem' }}>
+                      <label style={{ fontSize: '0.85rem', color: 'var(--accent-gold)', fontWeight: 'bold' }}>
+                        {language === 'ar' ? 'حالة العضوية والاعتماد الكنسي *' : 'Membership Approval Status *'}
+                      </label>
+                      <select
+                        value={editingMember.status || 'APPROVED'}
+                        onChange={(e) => setEditingMember({ ...editingMember, status: e.target.value })}
+                        style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}
+                      >
+                        <option value="APPROVED">{language === 'ar' ? 'معتمدة وموثقة رسمياً (APPROVED)' : 'APPROVED'}</option>
+                        <option value="PENDING">{language === 'ar' ? 'قيد المراجعة والتدقيق (PENDING)' : 'PENDING'}</option>
+                        <option value="REJECTED">{language === 'ar' ? 'مرفوضة (REJECTED)' : 'REJECTED'}</option>
+                      </select>
+                    </div>
+
+                    {editMemberFeedback && (
+                      <div style={{ padding: '10px 14px', borderRadius: '6px', background: 'rgba(231, 76, 60, 0.15)', border: '1px solid #e74c3c', color: '#e74c3c', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                        {editMemberFeedback}
+                      </div>
+                    )}
+
                     <button
                       type="submit"
                       disabled={editMemberLoading}
-                      style={{ padding: '10px 22px', borderRadius: '8px', background: 'var(--accent-gold)', border: 'none', color: '#000', fontWeight: 800, cursor: editMemberLoading ? 'wait' : 'pointer' }}
+                      style={{
+                        backgroundColor: 'var(--accent-gold)',
+                        color: '#000000',
+                        fontWeight: 'bold',
+                        border: 'none',
+                        padding: '14px',
+                        borderRadius: '4px',
+                        cursor: editMemberLoading ? 'wait' : 'pointer',
+                        width: '100%',
+                        fontSize: '1.05rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px'
+                      }}
                     >
-                      {editMemberLoading ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...') : (language === 'ar' ? 'تحديث البيانات' : 'Save Changes')}
+                      <Send size={18} />
+                      <span>{editMemberLoading ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...') : (language === 'ar' ? 'حفظ وتحديث الاستمارة الكنسية' : 'Save & Update Membership Form')}</span>
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* 3. ADMIN VIEW FULL FAMILY MEMBERSHIP MODAL (IDENTICAL)    */}
+          {/* ======================================================== */}
+          {viewingMember && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
+              <div style={{ background: 'var(--bg-primary, #0f1015)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: 'clamp(1.2rem, 3.5vw, 2.5rem)', maxWidth: '850px', width: '100%', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 16px 50px rgba(0,0,0,0.7)', direction: language === 'ar' ? 'rtl' : 'ltr' }}>
+                <button
+                  type="button"
+                  onClick={() => setViewingMember(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '0.9rem',
+                    marginBottom: '1.2rem'
+                  }}
+                >
+                  <ArrowLeft size={16} />
+                  <span>{language === 'ar' ? 'رجوع' : 'Back'}</span>
+                </button>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '1.2rem' }}>
+                  <h1 style={{ fontSize: 'clamp(1.25rem, 5.5vw, 2rem)', lineHeight: 1.3, color: 'var(--accent-gold)', margin: 0, fontWeight: 800 }}>
+                    {language === 'ar' ? 'استمارة العضوية الكنسية للأسرة (عرض شامل)' : 'Church Family Membership Full Profile'}
+                  </h1>
+
+                  <span style={{
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    background: viewingMember.status === 'APPROVED' ? 'rgba(46, 204, 113, 0.15)' : viewingMember.status === 'REJECTED' ? 'rgba(231, 76, 60, 0.15)' : 'rgba(226, 183, 20, 0.15)',
+                    color: viewingMember.status === 'APPROVED' ? '#2ecc71' : viewingMember.status === 'REJECTED' ? '#ff6b6b' : 'var(--accent-gold)',
+                    border: `1px solid ${viewingMember.status === 'APPROVED' ? '#2ecc71' : viewingMember.status === 'REJECTED' ? '#ff6b6b' : 'var(--accent-gold)'}`
+                  }}>
+                    {viewingMember.status === 'APPROVED' ? 'معتمدة وموثقة ✓' : viewingMember.status === 'REJECTED' ? 'مرفوضة ✕' : 'قيد المراجعة ⏳'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                  {/* Section 1: بيانات رب الأسرة */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                      1. {language === 'ar' ? 'بيانات رب الأسرة' : 'Head of Family Information'}
+                    </h3>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1.2rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>الاسم الكامل ثلاثي</span>
+                        <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px', fontWeight: 600 }}>
+                          {viewingMember.fullName}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>الرقم القومي (14 رقم)</span>
+                        <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px', fontFamily: 'monospace' }}>
+                          {viewingMember.nationalId}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>الحالة الاجتماعية</span>
+                        <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}>
+                          {viewingMember.socialStatus === 'MARRIED' ? 'متزوج' : viewingMember.socialStatus === 'DIVORCED' ? 'مطلق' : viewingMember.socialStatus === 'WIDOWED' ? 'أرمل' : 'أعزب'}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>الوظيفة/العمل</span>
+                        <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}>
+                          {viewingMember.job || 'غير محدد'}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>رقم الهاتف</span>
+                        <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}>
+                          {viewingMember.phoneNumbers || 'غير محدد'}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>البريد الإلكتروني</span>
+                        <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}>
+                          {viewingMember.email || viewingMember.user?.email || 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <h4 style={{ color: 'var(--text-primary)', fontSize: '0.95rem', margin: '1.5rem 0 1rem 0' }}>
+                      📍 {language === 'ar' ? 'العنوان وتفاصيل السكن' : 'Address Coordinates'}
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1.2rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>اسم الشارع</span>
+                        <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}>
+                          {viewingMember.street || '-'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>رقم المبنى</span>
+                        <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}>
+                          {viewingMember.buildingNumber || '-'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>الطابق</span>
+                        <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}>
+                          {viewingMember.floor || '-'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>رقم الشقة</span>
+                        <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}>
+                          {viewingMember.apartment || '-'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section 2: بيانات الزوجة */}
+                  {viewingMember.wifeName && (
+                    <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                      <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem', color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                        2. {language === 'ar' ? 'بيانات الزوجة' : 'Wife Details'}
+                      </h3>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '1.2rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>الاسم الكامل للزوجة</span>
+                          <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px', fontWeight: 600 }}>
+                            {viewingMember.wifeName}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>الرقم القومي للزوجة</span>
+                          <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px', fontFamily: 'monospace' }}>
+                            {viewingMember.wifeNationalId || 'N/A'}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>وظيفة الزوجة</span>
+                          <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}>
+                            {viewingMember.wifeJob || 'N/A'}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>هاتف الزوجة</span>
+                          <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}>
+                            {viewingMember.wifePhone || 'N/A'}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>بريد الزوجة الإلكتروني</span>
+                          <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}>
+                            {viewingMember.wifeEmail || 'N/A'}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>أب اعتراف الزوجة</span>
+                          <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '10px', borderRadius: '4px' }}>
+                            {viewingMember.wifeConfessionFather || 'N/A'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Section 3: بيانات الأبناء */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem' }}>
+                      <h3 style={{ color: 'var(--accent-gold)', fontSize: '1.15rem', margin: 0 }}>
+                        3. {language === 'ar' ? `بيانات الأبناء (${(viewingMember.children || []).length})` : `Children (${(viewingMember.children || []).length})`}
+                      </h3>
+                    </div>
+
+                    {(!viewingMember.children || viewingMember.children.length === 0) ? (
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+                        {language === 'ar' ? 'لا يوجد أبناء مضافين حالياً.' : 'No children added.'}
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {viewingMember.children.map((child: any, index: number) => (
+                          <div key={index} style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))',
+                            gap: '1rem',
+                            backgroundColor: 'var(--bg-card)',
+                            padding: '1rem',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)'
+                          }}>
+                            <div>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'block' }}>الاسم الكامل</span>
+                              <b style={{ color: '#fff' }}>{child.name}</b>
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'block' }}>الرقم القومي</span>
+                              <span style={{ fontFamily: 'monospace' }}>{child.nationalId || '-'}</span>
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'block' }}>المرحلة الدراسية / الوظيفة</span>
+                              <span>{child.educationOrJob || '-'}</span>
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'block' }}>الهاتف</span>
+                              <span>{child.phone || '-'}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 4: الأقارب المقيمين بالمنزل */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem' }}>
+                      <h3 style={{ color: 'var(--accent-gold)', fontSize: '1.15rem', margin: 0 }}>
+                        4. {language === 'ar' ? `الأقارب المقيمين بالمنزل (${(viewingMember.relatives || []).length})` : `Residing Relatives (${(viewingMember.relatives || []).length})`}
+                      </h3>
+                    </div>
+
+                    {(!viewingMember.relatives || viewingMember.relatives.length === 0) ? (
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+                        {language === 'ar' ? 'لا يوجد أقارب مقيمين مضافين.' : 'No residing relatives added.'}
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {viewingMember.relatives.map((rel: any, index: number) => (
+                          <div key={index} style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))',
+                            gap: '1rem',
+                            backgroundColor: 'var(--bg-card)',
+                            padding: '1rem',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)'
+                          }}>
+                            <div>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'block' }}>الاسم الكامل</span>
+                              <b style={{ color: '#fff' }}>{rel.name}</b>
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'block' }}>الرقم القومي للقريب</span>
+                              <span style={{ fontFamily: 'monospace' }}>{rel.nationalId || '-'}</span>
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'block' }}>صلة القرابة</span>
+                              <span style={{ color: 'var(--accent-gold)' }}>{rel.relationshipType || '-'}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 5: خدام الكنيسة المفتقدين للأسرة */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '1.5rem' }}>
+                      <h3 style={{ color: 'var(--accent-gold)', fontSize: '1.15rem', margin: 0 }}>
+                        5. {language === 'ar' ? 'خدام الكنيسة المفتقدين للأسرة' : 'Servants Visiting Family'}
+                      </h3>
+                    </div>
+
+                    {(!viewingMember.servants || viewingMember.servants.length === 0) ? (
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+                        {language === 'ar' ? 'لا يوجد خدام افتقاد مسجلين.' : 'No servants recorded.'}
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                        {viewingMember.servants.map((serv: string, index: number) => (
+                          <div key={index} style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: '8px 14px', borderRadius: '20px', color: 'var(--text-primary)', fontSize: '0.88rem', fontWeight: 600 }}>
+                            ⛪ {serv}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section 6: ملاحظات هامة للأسرة */}
+                  <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
+                    <h4 style={{ color: 'var(--accent-gold)', fontSize: '1rem', marginBottom: '10px' }}>
+                      📝 {language === 'ar' ? 'ملاحظات هامة للأسرة' : 'Important Notes'}
+                    </h4>
+                    <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: '12px', borderRadius: '6px', color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, minHeight: '60px' }}>
+                      {viewingMember.notes || (language === 'ar' ? 'لا توجد ملاحظات مدونة.' : 'No notes recorded.')}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '1.5rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const target = viewingMember;
+                          setViewingMember(null);
+                          openEditMemberModal(target);
+                        }}
+                        style={{
+                          backgroundColor: 'var(--accent-gold)',
+                          color: '#000000',
+                          fontWeight: 'bold',
+                          border: 'none',
+                          padding: '10px 20px',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '0.9rem'
+                        }}
+                      >
+                        <Edit3 size={16} />
+                        <span>{language === 'ar' ? 'تعديل بيانات هذه الاستمارة' : 'Edit This Form'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -4672,12 +5982,33 @@ export default function DashboardPage() {
                 </div>
               )}
 
+              {/* Distinct System Notice */}
+              <div style={{
+                background: 'rgba(226, 183, 20, 0.08)',
+                border: '1px solid rgba(226, 183, 20, 0.25)',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                marginBottom: '1rem',
+                fontSize: '0.84rem',
+                color: 'var(--accent-gold)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span>ℹ️</span>
+                <span>
+                  {language === 'ar' 
+                    ? 'قسم الرحلات والمؤتمرات الكنسية وحجوزاتها (منفصل ومستقل تماماً عن نظام فعاليات الكنيسة والدعوات المستمرة QR).' 
+                    : 'Church Trips & Conferences section (completely separate and distinct from Church Events & Continuous QR system).'}
+                </span>
+              </div>
+
               <form onSubmit={handleSaveTrip} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%', boxSizing: 'border-box' }}>
                 
                 {/* Event Type Selector */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <label style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 'bold' }}>
-                    {language === 'ar' ? 'نوع الفعالية *' : 'Event Type *'}
+                    {language === 'ar' ? 'نوع الرحلة / المؤتمر *' : 'Trip / Conference Type *'}
                   </label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                     <button
@@ -4721,7 +6052,7 @@ export default function DashboardPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '10px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      {language === 'ar' ? 'عنوان الفعالية (عربي) *' : 'Title (Arabic) *'}
+                      {language === 'ar' ? 'عنوان الرحلة / المؤتمر (عربي) *' : 'Trip / Conference Title (Arabic) *'}
                     </label>
                     <input
                       type="text"
@@ -4735,7 +6066,7 @@ export default function DashboardPage() {
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      {language === 'ar' ? 'عنوان الفعالية (إنجليزي) *' : 'Title (English) *'}
+                      {language === 'ar' ? 'عنوان الرحلة / المؤتمر (إنجليزي) *' : 'Trip / Conference Title (English) *'}
                     </label>
                     <input
                       type="text"
@@ -4853,7 +6184,7 @@ export default function DashboardPage() {
                       cursor: 'pointer'
                     }}
                   >
-                    {savedTrip ? '✓ تم الحفظ بنجاح!' : (editingTripId ? (language === 'ar' ? 'حفظ التعديلات' : 'Save Changes') : (language === 'ar' ? 'إضافة الفعالية' : 'Add Event'))}
+                    {savedTrip ? '✓ تم الحفظ بنجاح!' : (editingTripId ? (language === 'ar' ? 'حفظ تعديلات الرحلة / المؤتمر' : 'Save Changes') : (language === 'ar' ? 'إضافة الرحلة / المؤتمر' : 'Add Trip / Conference'))}
                   </button>
 
                   {editingTripId && (
