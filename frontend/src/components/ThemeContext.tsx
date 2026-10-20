@@ -131,7 +131,7 @@ export const dictionary: TranslationDictionary = {
   font_scale: { ar: 'حجم الخط', en: 'Font Size' },
 
   // Four Systems Nav & Section Keys
-  nav_fy: { ar: 'الإيمان وأسئلتكم (FY)', en: 'Faith & Questions (FY)' },
+  nav_fy: { ar: 'لَكَ', en: 'For you' },
   facebook_news: { ar: 'أخبار ومشاركات فيسبوك', en: 'Facebook Posts & News' },
   email_center: { ar: 'مركز البريد الإلكتروني', en: 'Email Center' },
   events_qr: { ar: 'الدعوات وتأكيد الحضور (QR)', en: 'Invitations & QR Check-in' },

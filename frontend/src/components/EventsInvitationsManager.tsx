@@ -47,6 +47,8 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
   // Issued invitations list
   const [invitations, setInvitations] = useState<any[]>([]);
   const [previewInvitation, setPreviewInvitation] = useState<any | null>(null);
+  const [invSearchQuery, setInvSearchQuery] = useState<string>('');
+  const [invFilterType, setInvFilterType] = useState<'ALL' | 'VIP' | 'STANDARD' | 'ACTIVE' | 'REDEEMED'>('ALL');
 
   // Check-in logs
   const [checkIns, setCheckIns] = useState<any[]>([]);
@@ -1814,61 +1816,265 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
       {/* TAB 3: ISSUED INVITATIONS */}
       {activeTab === 'INVITATIONS' && (
         <div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '1rem', color: '#ffffff' }}>
-            {isAr ? 'قائمة الدعوات الرسمية الصادرة للفعالية' : 'Issued Invitations for this Event'}
-          </h3>
+          {/* Header & Smart Search Bar */}
+          <div style={{
+            background: 'var(--card-bg, rgba(255, 255, 255, 0.03))',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '1.25rem',
+            marginBottom: '1.5rem'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '12px',
+              marginBottom: '1rem'
+            }}>
+              <div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                  {isAr ? 'قائمة الدعوات الرسمية الصادرة للفعالية' : 'Issued Invitations for this Event'}
+                </h3>
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                  {isAr 
+                    ? `إجمالي الدعوات: ${invitations.length} دعوة ${invSearchQuery || invFilterType !== 'ALL' ? `(المطابق للبحث: ${
+                        invitations.filter((inv: any) => {
+                          if (invFilterType === 'VIP' && !inv.isVip && inv.type !== 'VIP') return false;
+                          if (invFilterType === 'STANDARD' && (inv.isVip || inv.type === 'VIP')) return false;
+                          if (invFilterType === 'ACTIVE' && inv.status !== 'ACTIVE') return false;
+                          if (invFilterType === 'REDEEMED' && inv.status !== 'REDEEMED') return false;
+                          if (!invSearchQuery.trim()) return true;
+                          const q = invSearchQuery.toLowerCase().trim();
+                          const name = (inv.recipientName || '').toLowerCase();
+                          const email = (inv.recipientEmail || '').toLowerCase();
+                          const phone = (inv.recipientPhone || inv.user?.phone || '').toLowerCase();
+                          const qr = (inv.qrToken || '').toLowerCase();
+                          const locAr = (inv.location?.nameAr || '').toLowerCase();
+                          const locEn = (inv.location?.nameEn || '').toLowerCase();
+                          const status = (inv.status || '').toLowerCase();
+                          return name.includes(q) || email.includes(q) || phone.includes(q) || qr.includes(q) || locAr.includes(q) || locEn.includes(q) || status.includes(q);
+                        }).length
+                      })` : ''}`
+                    : `Total: ${invitations.length} invitations`}
+                </span>
+              </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '14px' }}>
-            {invitations.map(inv => (
-              <div
-                key={inv.id}
+              {/* Quick Filter Badges */}
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {[
+                  { id: 'ALL', labelAr: 'الكل', labelEn: 'All' },
+                  { id: 'VIP', labelAr: '⭐ VIP', labelEn: '⭐ VIP' },
+                  { id: 'STANDARD', labelAr: 'عادية', labelEn: 'Standard' },
+                  { id: 'ACTIVE', labelAr: 'صالحة للدخول', labelEn: 'Active' },
+                  { id: 'REDEEMED', labelAr: 'تم الحضور ✓', labelEn: 'Checked In' },
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setInvFilterType(f.id as any)}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '20px',
+                      border: invFilterType === f.id ? '1px solid var(--accent-gold)' : '1px solid rgba(255,255,255,0.1)',
+                      background: invFilterType === f.id ? 'rgba(226, 183, 20, 0.15)' : 'rgba(255,255,255,0.04)',
+                      color: invFilterType === f.id ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {isAr ? f.labelAr : f.labelEn}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Smart Search Input Field */}
+            <div style={{ position: 'relative' }}>
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                [isAr ? 'right' : 'left']: '14px',
+                transform: 'translateY(-50%)',
+                color: 'var(--accent-gold)',
+                display: 'flex',
+                alignItems: 'center',
+                pointerEvents: 'none'
+              }}>
+                <Search size={18} />
+              </div>
+              <input
+                type="text"
+                value={invSearchQuery}
+                onChange={e => setInvSearchQuery(e.target.value)}
+                placeholder={isAr ? 'بحث فوري بالاسم، البريد الإلكتروني، رقم الهاتف، المكان، أو كود الدعوة QR...' : 'Search by name, email, phone, location, or QR token...'}
                 style={{
-                  background: 'var(--card-bg, rgba(255, 255, 255, 0.03))',
-                  border: `1px solid ${inv.isVip ? 'var(--accent-gold)' : 'var(--border-color)'}`,
-                  borderRadius: '12px',
-                  padding: '1.2rem',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
+                  width: '100%',
+                  padding: isAr ? '12px 44px 12px 42px' : '12px 42px 12px 44px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(226, 183, 20, 0.35)',
+                  background: 'rgba(0, 0, 0, 0.35)',
+                  color: '#ffffff',
+                  fontSize: '0.92rem',
+                  outline: 'none',
+                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.3)',
+                  transition: 'border-color 0.2s'
                 }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                    <strong style={{ fontSize: '0.95rem', color: '#ffffff' }}>
-                      {inv.recipientName || inv.recipientEmail}
-                    </strong>
-                    {inv.isVip && (
-                      <span style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: '4px', background: 'var(--accent-gold)', color: '#000000', fontWeight: 900 }}>
-                        VIP
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    <span>{inv.location?.nameAr || inv.location?.nameEn}</span> • <span>{inv.status}</span>
-                  </div>
-                </div>
-
+              />
+              {invSearchQuery && (
                 <button
-                  onClick={() => setPreviewInvitation(inv)}
+                  onClick={() => setInvSearchQuery('')}
                   style={{
+                    position: 'absolute',
+                    top: '50%',
+                    [isAr ? 'left' : 'right']: '12px',
+                    transform: 'translateY(-50%)',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '24px',
+                    height: '24px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px',
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.15)',
+                    justifyContent: 'center',
                     color: '#ffffff',
-                    fontSize: '0.8rem',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: '0.8rem'
                   }}
+                  title={isAr ? 'مسح البحث' : 'Clear Search'}
                 >
-                  <Eye size={14} />
-                  <span>{isAr ? 'عرض البطاقة' : 'View Pass'}</span>
+                  ✕
                 </button>
-              </div>
-            ))}
+              )}
+            </div>
           </div>
+
+          {/* Filtered Invitations List */}
+          {(() => {
+            const filtered = invitations.filter((inv: any) => {
+              if (invFilterType === 'VIP' && !inv.isVip && inv.type !== 'VIP') return false;
+              if (invFilterType === 'STANDARD' && (inv.isVip || inv.type === 'VIP')) return false;
+              if (invFilterType === 'ACTIVE' && inv.status !== 'ACTIVE') return false;
+              if (invFilterType === 'REDEEMED' && inv.status !== 'REDEEMED') return false;
+              if (!invSearchQuery.trim()) return true;
+              const q = invSearchQuery.toLowerCase().trim();
+              const name = (inv.recipientName || '').toLowerCase();
+              const email = (inv.recipientEmail || '').toLowerCase();
+              const phone = (inv.recipientPhone || inv.user?.phone || '').toLowerCase();
+              const qr = (inv.qrToken || '').toLowerCase();
+              const locAr = (inv.location?.nameAr || '').toLowerCase();
+              const locEn = (inv.location?.nameEn || '').toLowerCase();
+              const status = (inv.status || '').toLowerCase();
+              return name.includes(q) || email.includes(q) || phone.includes(q) || qr.includes(q) || locAr.includes(q) || locEn.includes(q) || status.includes(q);
+            });
+
+            if (filtered.length === 0) {
+              return (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '3.5rem 1.5rem',
+                  background: 'rgba(255,255,255,0.02)',
+                  borderRadius: '16px',
+                  border: '1px dashed rgba(255,255,255,0.1)'
+                }}>
+                  <Search size={36} style={{ color: 'var(--text-secondary)', marginBottom: '0.8rem', opacity: 0.5 }} />
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', marginBottom: '1rem' }}>
+                    {invSearchQuery 
+                      ? (isAr ? `لا توجد نتائج مطابقة لبحثك عن "${invSearchQuery}".` : `No results matching "${invSearchQuery}".`)
+                      : (isAr ? 'لا توجد دعوات في هذا التصنيف.' : 'No invitations found in this category.')}
+                  </p>
+                  {(invSearchQuery || invFilterType !== 'ALL') && (
+                    <button
+                      onClick={() => { setInvSearchQuery(''); setInvFilterType('ALL'); }}
+                      style={{
+                        padding: '8px 18px',
+                        borderRadius: '8px',
+                        background: 'rgba(226, 183, 20, 0.15)',
+                        border: '1px solid var(--accent-gold)',
+                        color: 'var(--accent-gold)',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      {isAr ? 'إعادة ضبط البحث وعرض الكل' : 'Reset Search & View All'}
+                    </button>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px' }}>
+                {filtered.map(inv => (
+                  <div
+                    key={inv.id}
+                    style={{
+                      background: 'var(--card-bg, rgba(255, 255, 255, 0.03))',
+                      border: `1px solid ${inv.isVip || inv.type === 'VIP' ? 'var(--accent-gold)' : 'var(--border-color)'}`,
+                      borderRadius: '12px',
+                      padding: '1.2rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}
+                  >
+                    <div style={{ overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                        <strong style={{ fontSize: '0.95rem', color: '#ffffff' }}>
+                          {inv.recipientName || inv.recipientEmail}
+                        </strong>
+                        {(inv.isVip || inv.type === 'VIP') && (
+                          <span style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: '4px', background: 'var(--accent-gold)', color: '#000000', fontWeight: 900 }}>
+                            VIP
+                          </span>
+                        )}
+                        <span style={{
+                          fontSize: '0.68rem',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          background: inv.status === 'REDEEMED' ? 'rgba(46, 204, 113, 0.2)' : 'rgba(255,255,255,0.06)',
+                          color: inv.status === 'REDEEMED' ? '#2ecc71' : 'var(--text-secondary)',
+                          border: inv.status === 'REDEEMED' ? '1px solid #2ecc71' : 'none',
+                          fontWeight: 700
+                        }}>
+                          {inv.status === 'REDEEMED' ? (isAr ? 'تم الحضور ✓' : 'Checked In') : (isAr ? 'صالحة' : 'Active')}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        <span>📍 {inv.location?.nameAr || inv.location?.nameEn || (isAr ? 'المقر' : 'Venue')}</span>
+                        {inv.qrToken && (
+                          <span style={{ margin: '0 6px', opacity: 0.6 }}>• QR: {inv.qrToken.slice(0, 8)}...</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setPreviewInvitation(inv)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        background: 'rgba(255,255,255,0.06)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        color: '#ffffff',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <Eye size={14} />
+                      <span>{isAr ? 'عرض البطاقة' : 'View Pass'}</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
 

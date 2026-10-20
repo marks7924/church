@@ -54,32 +54,17 @@ export default function FyLandingPage() {
     }}>
       {/* Header Section */}
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '6px 16px',
-          borderRadius: '24px',
-          background: 'rgba(226, 183, 20, 0.12)',
-          border: '1px solid rgba(226, 183, 20, 0.3)',
-          color: 'var(--accent-gold)',
-          fontSize: '0.88rem',
-          fontWeight: 700,
-          marginBottom: '1rem'
-        }}>
-          <Sparkles size={16} />
-          <span>{isAr ? 'منصة الإيمان والتعليم الأرثوذكسي' : 'Faith & Orthodox Teachings'}</span>
-        </div>
         <h1 style={{
-          fontSize: 'clamp(2rem, 5vw, 3.2rem)',
+          fontSize: 'clamp(2.2rem, 5vw, 3.5rem)',
           fontWeight: 900,
           margin: '0 0 1rem 0',
           background: 'linear-gradient(135deg, #ffffff 40%, var(--accent-gold) 100%)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
-          lineHeight: 1.2
+          lineHeight: 1.2,
+          letterSpacing: isAr ? 'normal' : '-0.5px'
         }}>
-          {isAr ? 'الإيمان وأسئلتكم — FY' : 'Faith & Your Questions — FY'}
+          {isAr ? 'لَكَ' : 'For You'}
         </h1>
         <p style={{
           fontSize: 'clamp(0.95rem, 2vw, 1.15rem)',

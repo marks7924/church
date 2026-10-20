@@ -110,8 +110,16 @@ router.get(['/events', '/admin/events'], async (req: Request, res: Response) => 
       return res.status(200).json([]);
     }
 
-    // If staff, can see all; if public visitor, only isPublicVisible === true
-    const where: any = isStaff ? {} : { isPublicVisible: true };
+    // If staff, can see all; if public visitor, events that are visible or application-active
+    const where: any = isStaff
+      ? {}
+      : {
+          status: { not: 'CANCELLED' },
+          OR: [
+            { isPublicVisible: true },
+            { isApplicationActive: true }
+          ]
+        };
 
     const events = await prisma.event.findMany({
       where,
@@ -917,8 +925,8 @@ router.post(
         date,
         startTime,
         endTime,
-        isPublicVisible = false,
-        isApplicationActive = false,
+        isPublicVisible = true,
+        isApplicationActive = true,
         locations = [],
         rules = {}
       } = req.body;

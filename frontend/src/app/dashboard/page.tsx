@@ -389,13 +389,6 @@ export default function DashboardPage() {
       }
 
       tabs.push({
-        id: 'ai-knowledge-chat',
-        labelAr: language === 'ar' ? 'محادثة المعرفة الكنسية (AI Knowledge Chat)' : 'AI Knowledge Chat',
-        labelEn: language === 'ar' ? 'محادثة المعرفة الكنسية (AI Knowledge Chat)' : 'AI Knowledge Chat',
-        icon: <MessageSquare size={16} />
-      });
-
-      tabs.push({
         id: 'ai-assistant',
         labelAr: language === 'ar' ? 'إدارة المساعد الذكي (AI Manager)' : 'AI Assistant Manager',
         labelEn: language === 'ar' ? 'إدارة المساعد الذكي (AI Manager)' : 'AI Assistant Manager',
@@ -4555,11 +4548,6 @@ export default function DashboardPage() {
             </p>
           )}
         </div>
-      )}
-
-      {/* Tab: AI Knowledge Chat */}
-      {activeTab === 'ai-knowledge-chat' && (
-        <AdminAiManager token={token} language={language} initialSubTab="admin-chat" />
       )}
 
       {/* Tab: AI Assistant Administration & Safe Testing Playground */}
