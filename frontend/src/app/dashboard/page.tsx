@@ -1839,21 +1839,89 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Member's Invitations & VIP Passes */}
+          {/* Member's Invitations & Passes (Categorized: VIP vs Standard) */}
           <div className="dashboard-panel">
             <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
-              🎟️ {language === 'ar' ? 'دعواتي الرسمية وبطاقات الدخول (VIP Passes)' : 'My Official Event Invitations & Passes'}
+              🎟️ {language === 'ar' ? 'الدعوات وبطاقات الدخول للفعاليات' : 'Event Invitations & Admission Passes'}
             </h3>
 
             {myInvitations.length > 0 ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-                {myInvitations.map(inv => (
-                  <VipInvitationCard key={inv.id} invitation={inv} language={language} />
-                ))}
+              <div>
+                {/* 👑 VIP Passes Category */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '10px 16px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(90deg, rgba(226, 183, 20, 0.15) 0%, rgba(226, 183, 20, 0.02) 100%)',
+                    border: '1px solid rgba(226, 183, 20, 0.35)',
+                    marginBottom: '1.2rem'
+                  }}>
+                    <span style={{ fontSize: '1.2rem' }}>👑</span>
+                    <div>
+                      <h4 style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '1.05rem', fontWeight: 800 }}>
+                        {language === 'ar' ? 'دعوات كبار الزوار الرسمية (VIP Passes)' : 'Official VIP Passes'}
+                      </h4>
+                      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        {language === 'ar' ? 'دعوات رسمية صادرة من إدارة الكنيسة بإطار ذهبي ومعاملة VIP' : 'Official passes issued by Church admin with gold frame distinction'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).length > 0 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                      {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).map(inv => (
+                        <VipInvitationCard key={inv.id} invitation={inv} language={language} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.5rem 0' }}>
+                      {language === 'ar' ? 'لا توجد دعوات كبار زوار (VIP) صادرة لحسابك حاليًا.' : 'No VIP passes issued.'}
+                    </p>
+                  )}
+                </div>
+
+                {/* 🎟️ Standard Passes Category */}
+                <div>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '10px 16px',
+                    borderRadius: '12px',
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    marginBottom: '1.2rem'
+                  }}>
+                    <span style={{ fontSize: '1.2rem' }}>🎟️</span>
+                    <div>
+                      <h4 style={{ margin: 0, color: '#ffffff', fontSize: '1.05rem', fontWeight: 800 }}>
+                        {language === 'ar' ? 'بطاقات الحضور العامة (Standard Passes)' : 'Standard Event Passes'}
+                      </h4>
+                      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        {language === 'ar' ? 'بطاقات الحضور العامة الصادرة عبر التقديم على فعاليات الكنيسة' : 'Standard admission passes issued via event registration'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {myInvitations.filter(inv => inv.type !== 'VIP' && !inv.isVip).length > 0 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                      {myInvitations.filter(inv => inv.type !== 'VIP' && !inv.isVip).map(inv => (
+                        <VipInvitationCard key={inv.id} invitation={inv} language={language} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.5rem 0' }}>
+                      {language === 'ar' ? 'لا توجد بطاقات حضور عامة صادرة لحسابك حاليًا.' : 'No standard passes issued.'}
+                    </p>
+                  )}
+                </div>
               </div>
             ) : (
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', textAlign: 'center', margin: '1rem 0' }}>
-                {language === 'ar' ? 'لا توجد دعوات حالية صادرة لحسابك.' : 'No active invitations found for your account.'}
+                {language === 'ar' ? 'لا توجد دعوات أو بطاقات حضور حالية لحسابك.' : 'No active invitations found for your account.'}
               </p>
             )}
           </div>
@@ -1866,14 +1934,82 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           <div className="dashboard-panel">
             <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
-              🎟️ {language === 'ar' ? 'دعواتي الرسمية وبطاقات الدخول (VIP Passes)' : 'My Official Event Invitations & Passes'}
+              🎟️ {language === 'ar' ? 'الدعوات وبطاقات الدخول للفعاليات' : 'Event Invitations & Admission Passes'}
             </h3>
 
             {myInvitations.length > 0 ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-                {myInvitations.map(inv => (
-                  <VipInvitationCard key={inv.id} invitation={inv} language={language} />
-                ))}
+              <div>
+                {/* 👑 VIP Passes Category */}
+                <div style={{ marginBottom: '2.5rem' }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '10px 16px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(90deg, rgba(226, 183, 20, 0.15) 0%, rgba(226, 183, 20, 0.02) 100%)',
+                    border: '1px solid rgba(226, 183, 20, 0.35)',
+                    marginBottom: '1.2rem'
+                  }}>
+                    <span style={{ fontSize: '1.2rem' }}>👑</span>
+                    <div>
+                      <h4 style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '1.05rem', fontWeight: 800 }}>
+                        {language === 'ar' ? 'دعوات كبار الزوار الرسمية (VIP Passes)' : 'Official VIP Passes'}
+                      </h4>
+                      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        {language === 'ar' ? 'دعوات رسمية خاصة صادرة من إدارة الكنيسة بإطار ذهبي ومعاملة VIP' : 'Official passes issued by Church admin with gold frame distinction'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).length > 0 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                      {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).map(inv => (
+                        <VipInvitationCard key={inv.id} invitation={inv} language={language} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.5rem 0' }}>
+                      {language === 'ar' ? 'لا توجد دعوات كبار زوار (VIP) صادرة لحسابك حتى الآن.' : 'No VIP passes issued.'}
+                    </p>
+                  )}
+                </div>
+
+                {/* 🎟️ Standard Passes Category */}
+                <div>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '10px 16px',
+                    borderRadius: '12px',
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    marginBottom: '1.2rem'
+                  }}>
+                    <span style={{ fontSize: '1.2rem' }}>🎟️</span>
+                    <div>
+                      <h4 style={{ margin: 0, color: '#ffffff', fontSize: '1.05rem', fontWeight: 800 }}>
+                        {language === 'ar' ? 'بطاقات الحضور العامة (Standard Passes)' : 'Standard Event Passes'}
+                      </h4>
+                      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        {language === 'ar' ? 'بطاقات الدخول العامة الصادرة عبر التقديم على فعاليات الكنيسة' : 'Standard admission passes issued via event registration'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {myInvitations.filter(inv => inv.type !== 'VIP' && !inv.isVip).length > 0 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                      {myInvitations.filter(inv => inv.type !== 'VIP' && !inv.isVip).map(inv => (
+                        <VipInvitationCard key={inv.id} invitation={inv} language={language} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.5rem 0' }}>
+                      {language === 'ar' ? 'لا توجد بطاقات حضور عامة صادرة لحسابك حتى الآن.' : 'No standard passes issued.'}
+                    </p>
+                  )}
+                </div>
               </div>
             ) : (
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', textAlign: 'center', margin: '2rem 0' }}>

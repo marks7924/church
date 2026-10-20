@@ -252,7 +252,7 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
       });
     }
 
-    // Server-Side Eligibility Rules Enforcement
+    // Server-Side Eligibility Rules Enforcement: Church Membership Rule
     let rules: any = {};
     try {
       rules = JSON.parse(event.eligibilityRulesJson || '{}');
@@ -262,19 +262,24 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
       if (!optionalUser) {
         return res.status(401).json({
           error: 'Verified church membership is required. Please login first.',
-          errorAr: 'التقديم مقتصر على أعضاء الكنيسة المسجلين. يرجى تسجيل الدخول بحسابك أولاً.'
+          errorAr: 'التقديم مقتصر على أعضاء الكنيسة المسجلين. يرجى تسجيل الدخول أولاً.'
         });
       }
 
       const dbUser = await prisma.user.findUnique({
         where: { id: optionalUser.userId || optionalUser.id },
-        select: { isVerified: true, role: true }
+        include: { familyProfile: true }
       });
 
-      if (!dbUser || (!dbUser.isVerified && dbUser.role === Role.MEMBER)) {
+      const isChurchMember = dbUser && (
+        ['PRIEST', 'BISHOP', 'SUPER_ADMIN', 'CHURCH_ADMIN', 'SECRETARY'].includes(dbUser.role) ||
+        (dbUser.familyProfile && dbUser.familyProfile.status === 'APPROVED')
+      );
+
+      if (!isChurchMember) {
         return res.status(403).json({
-          error: 'Verified church membership required to apply.',
-          errorAr: 'التقديم يتطلب استمارة عضوية كنسية معتمدة للأسرة.'
+          error: 'Approved family church membership required to apply.',
+          errorAr: 'عذراً، هذا الحجز مخصص فقط للأسر التي تمتلك ملف عضوية كنسية معتمد (🎖️ حالة ملف العضوية الكنسية للأسرة).'
         });
       }
     }
@@ -286,72 +291,93 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
 
     const cleanEmail = (externalEmail || optionalUser?.email || '').trim().toLowerCase();
 
-    // Prevent duplicate active application for same email/user on same event
-    const duplicate = await prisma.eventApplication.findFirst({
+    // Check existing tickets for this user/email/phone on this event (Max 2 tickets per user)
+    const existingInvitations = await prisma.eventInvitation.findMany({
       where: {
         eventId,
         OR: [
           ...(optionalUser ? [{ userId: optionalUser.userId || optionalUser.id }] : []),
-          ...(cleanEmail ? [{ externalEmail: cleanEmail }] : [])
+          ...(cleanEmail ? [{ recipientEmail: cleanEmail }] : [])
         ],
-        status: { in: ['PENDING', 'APPROVED', 'CONFIRMED'] }
+        status: { notIn: ['CANCELLED', 'REVOKED'] }
       }
     });
 
-    if (duplicate) {
+    const alreadyBooked = existingInvitations.length;
+    if (alreadyBooked >= 2) {
       return res.status(409).json({
-        error: 'You have already submitted an application for this event.',
-        errorAr: 'لديك طلب تسجيل مقدم بالفعل لهذه الفعالية.'
+        error: 'You have already reached the maximum limit (2 tickets) for this event.',
+        errorAr: 'لقد حصلت بالفعل على الحد الأقصى المسموح به (تذكرتان) لهذه الفعالية.'
       });
     }
 
-    // Atomic Capacity Check and Allocation Transaction
+    const requestedCount = Math.min(2, Math.max(1, parseInt(String(req.body.ticketCount || req.body.requestedTickets || 1), 10)));
+    const maxCanGrant = 2 - alreadyBooked;
+    const desiredTickets = Math.min(requestedCount, maxCanGrant);
+
+    // Atomic Capacity Check and Allocation Transaction using PostgreSQL Row-Level Lock FOR UPDATE
     const result = await prisma.$transaction(async tx => {
-      // Lock and re-read the location row inside transaction
-      const loc = await tx.eventLocation.findUnique({
-        where: { id: locationId }
-      });
+      // Row-Level Lock: eliminates race conditions and simultaneous double bookings across devices
+      const locRows: any[] = await tx.$queryRaw`
+        SELECT id, "maxCapacity", "confirmedCount", "isFull"
+        FROM "EventLocation"
+        WHERE id = ${locationId}
+        FOR UPDATE
+      `;
 
-      if (!loc) throw new Error('Location not found');
+      if (!locRows || locRows.length === 0) {
+        throw new Error('LOCATION_NOT_FOUND');
+      }
 
-      if (loc.isFull || loc.confirmedCount >= loc.maxCapacity) {
+      const loc = locRows[0];
+      const available = loc.maxCapacity - loc.confirmedCount;
+
+      if (available <= 0 || loc.isFull) {
         throw new Error('CAPACITY_EXCEEDED');
       }
 
-      // Generate cryptographically secure unguessable QR token
-      const qrToken = `evt-${Date.now()}-${crypto.randomBytes(32).toString('hex')}`;
+      // If user asked for 2 tickets, but only 1 seat was left, grant 1 seat and flag partial notice
+      const seatsGranted = Math.min(desiredTickets, available);
+      const isPartial = (desiredTickets === 2 && seatsGranted === 1);
 
-      // Create confirmed application
-      const application = await tx.eventApplication.create({
-        data: {
-          eventId,
-          locationId,
-          userId: optionalUser ? optionalUser.userId || optionalUser.id : null,
-          externalEmail: cleanEmail,
-          fullName: fullName.trim(),
-          phone: phone.trim(),
-          status: 'CONFIRMED',
-          notes: notes ? String(notes).trim() : null
-        }
-      });
+      // Create applications and invitations
+      const issuedPasses = [];
+      for (let i = 0; i < seatsGranted; i++) {
+        const qrToken = `evt-${Date.now()}-${i}-${crypto.randomBytes(24).toString('hex')}`;
+        const passSuffix = seatsGranted > 1 ? ` (تذكرة ${i + 1}/${seatsGranted})` : (alreadyBooked > 0 ? ' (المقعد الثاني)' : '');
 
-      // Issue invitation with QR code
-      const invitation = await tx.eventInvitation.create({
-        data: {
-          eventId,
-          locationId,
-          userId: optionalUser ? optionalUser.userId || optionalUser.id : null,
-          recipientEmail: cleanEmail || 'attendee@church.org',
-          recipientName: fullName.trim(),
-          type: 'STANDARD',
-          qrToken,
-          status: 'ACTIVE',
-          emailDeliveryStatus: cleanEmail ? 'QUEUED' : 'SENT'
-        }
-      });
+        await tx.eventApplication.create({
+          data: {
+            eventId,
+            locationId,
+            userId: optionalUser ? optionalUser.userId || optionalUser.id : null,
+            externalEmail: cleanEmail,
+            fullName: `${fullName.trim()}${passSuffix}`,
+            phone: phone.trim(),
+            status: 'CONFIRMED',
+            notes: notes ? String(notes).trim() : null
+          }
+        });
+
+        const inv = await tx.eventInvitation.create({
+          data: {
+            eventId,
+            locationId,
+            userId: optionalUser ? optionalUser.userId || optionalUser.id : null,
+            recipientEmail: cleanEmail || 'attendee@church.org',
+            recipientName: `${fullName.trim()}${passSuffix}`,
+            type: 'STANDARD',
+            qrToken,
+            status: 'ACTIVE',
+            emailDeliveryStatus: cleanEmail ? 'QUEUED' : 'SENT'
+          }
+        });
+
+        issuedPasses.push(inv);
+      }
 
       // Atomically increment confirmed count
-      const updatedConfirmed = loc.confirmedCount + 1;
+      const updatedConfirmed = loc.confirmedCount + seatsGranted;
       const isNowFull = updatedConfirmed >= loc.maxCapacity;
 
       await tx.eventLocation.update({
@@ -362,15 +388,36 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
         }
       });
 
-      return { application, invitation, isNowFull };
+      return {
+        issuedPasses,
+        seatsGranted,
+        isPartial,
+        isNowFull
+      };
     });
+
+    const isPlural = result.seatsGranted > 1;
+    const messageAr = result.isPartial
+      ? 'عذرًا، كان متبقيًا مقعد واحد فقط في هذا المكان وتم حجزه لك بنجاح!'
+      : (isPlural
+          ? 'تم تأكيد حجز مقعدين بنجاح وإصدار بطاقتي الدعوة الخاصة بكما!'
+          : 'تم تأكيد حجزك بنجاح وإصدار بطاقة الدعوة الخاصة بك!');
+
+    const messageEn = result.isPartial
+      ? 'Notice: Only 1 seat was remaining for this venue and it has been booked for you!'
+      : (isPlural
+          ? 'Successfully confirmed 2 seats and issued both invitation passes!'
+          : 'Your event booking has been confirmed and invitation issued!');
 
     return res.status(201).json({
       success: true,
-      messageAr: 'تم تأكيد حجزك بنجاح وإصدار بطاقة الدعوة الخاصة بك!',
-      messageEn: 'Your event booking has been confirmed and invitation issued!',
-      invitationId: result.invitation.id,
-      qrToken: result.invitation.qrToken,
+      messageAr,
+      messageEn,
+      seatsGranted: result.seatsGranted,
+      isPartial: result.isPartial,
+      invitations: result.issuedPasses,
+      invitationId: result.issuedPasses[0]?.id,
+      qrToken: result.issuedPasses[0]?.qrToken,
       locationFull: result.isNowFull
     });
   } catch (error: any) {
@@ -530,12 +577,20 @@ router.post(
         return res.status(404).json({ error: 'Event location not found.' });
       }
 
-      const availableSlots = location.maxCapacity - location.confirmedCount;
-      if (recipients.length > availableSlots) {
-        return res.status(400).json({
-          error: `Cannot issue ${recipients.length} invitations. Only ${availableSlots} slots remaining.`,
-          errorAr: `لا يمكن إصدار ${recipients.length} دعوة. الأماكن المتبقية فقط: ${availableSlots}.`
-        });
+      // Admin choice: Deduct from capacity or issue unlimited VIP passes
+      // If type is VIP, deductCapacity defaults to false unless explicitly requested
+      const deductCapacity = req.body.deductCapacity !== undefined 
+        ? Boolean(req.body.deductCapacity) 
+        : (type !== 'VIP');
+
+      if (deductCapacity) {
+        const availableSlots = location.maxCapacity - location.confirmedCount;
+        if (recipients.length > availableSlots) {
+          return res.status(400).json({
+            error: `Cannot issue ${recipients.length} invitations. Only ${availableSlots} slots remaining.`,
+            errorAr: `لا يمكن إصدار ${recipients.length} دعوة. المقاعد المتبقية في المكان فقط: ${availableSlots}.`
+          });
+        }
       }
 
       const issuedInvitations = [];
@@ -551,7 +606,7 @@ router.post(
               locationId,
               userId: rec.userId || null,
               recipientEmail: cleanEmail || 'vip@church.org',
-              recipientName: rec.name ? String(rec.name).trim() : 'ضيف الكنيسة',
+              recipientName: rec.name ? String(rec.name).trim() : 'ضيف الكنيسة الرسمي',
               type: type === 'VIP' ? 'VIP' : 'STANDARD',
               qrToken,
               status: 'ACTIVE',
@@ -559,12 +614,14 @@ router.post(
             }
           });
 
-          await tx.eventLocation.update({
-            where: { id: locationId },
-            data: {
-              confirmedCount: { increment: 1 }
-            }
-          });
+          if (deductCapacity) {
+            await tx.eventLocation.update({
+              where: { id: locationId },
+              data: {
+                confirmedCount: { increment: 1 }
+              }
+            });
+          }
 
           return created;
         });
@@ -572,13 +629,15 @@ router.post(
         issuedInvitations.push(inv);
       }
 
-      // Check if location is now full
-      const finalLoc = await prisma.eventLocation.findUnique({ where: { id: locationId } });
-      if (finalLoc && finalLoc.confirmedCount >= finalLoc.maxCapacity) {
-        await prisma.eventLocation.update({
-          where: { id: locationId },
-          data: { isFull: true }
-        });
+      // Check if location is now full (only if capacity was deducted)
+      if (deductCapacity) {
+        const finalLoc = await prisma.eventLocation.findUnique({ where: { id: locationId } });
+        if (finalLoc && finalLoc.confirmedCount >= finalLoc.maxCapacity) {
+          await prisma.eventLocation.update({
+            where: { id: locationId },
+            data: { isFull: true }
+          });
+        }
       }
 
       logAction(

@@ -39,6 +39,8 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
   const [recipientSearch, setRecipientSearch] = useState<string>('');
   const [recipientResults, setRecipientResults] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [selectedUsersList, setSelectedUsersList] = useState<any[]>([]);
+  const [deductVipCapacity, setDeductVipCapacity] = useState<boolean>(false);
   const [externalEmail, setExternalEmail] = useState<string>('');
   const [externalName, setExternalName] = useState<string>('');
   const [isVip, setIsVip] = useState<boolean>(false);
@@ -558,6 +560,35 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
     e.preventDefault();
     if (!token || !selectedEventId || !selectedLocationId) return;
 
+    const recipientsList: any[] = [];
+    selectedUsersList.forEach(u => {
+      recipientsList.push({
+        userId: u.id,
+        email: u.email,
+        name: u.fullName
+      });
+    });
+
+    if (selectedUser && !selectedUsersList.some(u => u.id === selectedUser.id)) {
+      recipientsList.push({
+        userId: selectedUser.id,
+        email: selectedUser.email,
+        name: selectedUser.fullName
+      });
+    }
+
+    if (externalName.trim()) {
+      recipientsList.push({
+        name: externalName.trim(),
+        email: externalEmail.trim() || undefined
+      });
+    }
+
+    if (recipientsList.length === 0) {
+      setActionMsg(isAr ? 'يرجى اختيار مستلم واحد على الأقل أو كتابة بيانات الضيف.' : 'Please select at least one recipient.');
+      return;
+    }
+
     setIssuing(true);
     setActionMsg(null);
 
@@ -571,21 +602,24 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
         body: JSON.stringify({
           eventId: selectedEventId,
           locationId: selectedLocationId,
-          userId: selectedUser?.id || undefined,
-          recipientEmail: selectedUser ? selectedUser.email : externalEmail.trim(),
-          recipientName: selectedUser ? selectedUser.fullName : externalName.trim(),
-          isVip
+          isVip,
+          deductCapacity: isVip ? deductVipCapacity : true,
+          recipients: recipientsList
         })
       });
 
       const data = await res.json();
       if (res.ok) {
-        setActionMsg(isAr ? '✓ تم إصدار الدعوة وإرسالها للبريد بنجاح!' : '✓ Invitation successfully issued and sent via email!');
+        setActionMsg(isAr 
+          ? `✓ تم إصدار ${data.count || recipientsList.length} دعوة ${isVip ? 'VIP مميزة' : 'رسمية'} بنجاح!` 
+          : `✓ Successfully issued ${data.count || recipientsList.length} ${isVip ? 'VIP' : 'standard'} passes!`);
         setShowIssueModal(false);
         setSelectedUser(null);
+        setSelectedUsersList([]);
         setExternalEmail('');
         setExternalName('');
         setIsVip(false);
+        setDeductVipCapacity(false);
         // Refresh invitations
         fetch(`${API_URL}/invitations/admin/events/${selectedEventId}/invitations`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -593,7 +627,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
           .then(r => r.json())
           .then(d => { if (Array.isArray(d)) setInvitations(d); });
       } else {
-        setActionMsg(data.error || (isAr ? 'فشل إصدار الدعوة.' : 'Failed to issue invitation.'));
+        setActionMsg(data.errorAr || data.error || (isAr ? 'فشل إصدار الدعوات.' : 'Failed to issue invitations.'));
       }
     } catch (err) {
       setActionMsg(isAr ? 'خطأ في الاتصال بالخادم.' : 'Connection error.');
@@ -1441,142 +1475,183 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
             />
 
             {/* Result Feedback Banner */}
-            {scanResult && (
-              <div style={{
-                borderRadius: '12px',
-                padding: '1.25rem',
-                margin: '1rem 0',
-                background: scanResult.status === 'VERIFIED'
-                  ? 'rgba(46, 204, 113, 0.15)'
-                  : scanResult.status === 'ALREADY_USED'
-                  ? 'rgba(230, 126, 34, 0.2)'
-                  : scanResult.status === 'WRONG_EVENT'
-                  ? 'rgba(243, 156, 18, 0.2)'
-                  : 'rgba(231, 76, 60, 0.2)',
-                border: `2px solid ${
-                  scanResult.status === 'VERIFIED'
-                    ? '#2ecc71'
+            {scanResult && (() => {
+              const isVipScan = scanResult.invitation?.isVip || scanResult.invitation?.type === 'VIP';
+              return (
+                <div style={{
+                  borderRadius: '16px',
+                  padding: '1.5rem',
+                  margin: '1.25rem 0',
+                  background: isVipScan 
+                    ? 'linear-gradient(145deg, rgba(30, 25, 12, 0.95) 0%, rgba(18, 16, 10, 0.95) 100%)'
+                    : (scanResult.status === 'VERIFIED'
+                    ? 'rgba(46, 204, 113, 0.15)'
                     : scanResult.status === 'ALREADY_USED'
-                    ? '#e67e22'
+                    ? 'rgba(230, 126, 34, 0.2)'
                     : scanResult.status === 'WRONG_EVENT'
-                    ? '#f39c12'
-                    : '#e74c3c'
-                }`
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
-                  {scanResult.status === 'VERIFIED' && (
-                    <>
-                      <CheckCircle2 size={24} style={{ color: '#2ecc71' }} />
-                      <strong style={{ fontSize: '1.2rem', color: '#2ecc71' }}>{isAr ? 'تم التحقق بنجاح ✓ (VERIFIED)' : 'VERIFIED ✓'}</strong>
-                    </>
-                  )}
-                  {scanResult.status === 'ALREADY_USED' && (
-                    <>
-                      <AlertTriangle size={24} style={{ color: '#e67e22' }} />
-                      <strong style={{ fontSize: '1.2rem', color: '#e67e22' }}>{isAr ? 'مستخدمة سابقاً ! (ALREADY USED)' : 'ALREADY USED !'}</strong>
-                    </>
-                  )}
-                  {scanResult.status === 'WRONG_EVENT' && (
-                    <>
-                      <AlertTriangle size={24} style={{ color: '#f39c12' }} />
-                      <strong style={{ fontSize: '1.2rem', color: '#f39c12' }}>
-                        {isAr ? 'تنبيه: دعوة لفعالية أخرى ⚠️' : 'Notice: Different Event ⚠️'}
-                      </strong>
-                    </>
-                  )}
-                  {scanResult.status !== 'VERIFIED' && scanResult.status !== 'ALREADY_USED' && scanResult.status !== 'WRONG_EVENT' && (
-                    <>
-                      <XCircle size={24} style={{ color: '#e74c3c' }} />
-                      <strong style={{ fontSize: '1.2rem', color: '#e74c3c' }}>{isAr ? 'رمز غير صالح ✗ (INVALID)' : 'INVALID ✗'}</strong>
-                    </>
-                  )}
-                </div>
-
-                {scanResult.invitation && (
-                  <div style={{ fontSize: '0.95rem', color: '#ffffff', margin: '8px 0' }}>
-                    <div>
-                      {isAr ? 'حامل الدعوة:' : 'Guest:'} <strong style={{ color: 'var(--accent-gold)' }}>{scanResult.invitation.recipientName || scanResult.invitation.recipientEmail}</strong>
-                    </div>
-                    {scanResult.invitation.isVip && (
+                    ? 'rgba(243, 156, 18, 0.2)'
+                    : 'rgba(231, 76, 60, 0.2)'),
+                  border: isVipScan 
+                    ? '2.5px solid var(--accent-gold)' 
+                    : `2px solid ${
+                    scanResult.status === 'VERIFIED'
+                      ? '#2ecc71'
+                      : scanResult.status === 'ALREADY_USED'
+                      ? '#e67e22'
+                      : scanResult.status === 'WRONG_EVENT'
+                      ? '#f39c12'
+                      : '#e74c3c'
+                  }`,
+                  boxShadow: isVipScan 
+                    ? '0 0 30px rgba(226, 183, 20, 0.4), inset 0 0 20px rgba(226, 183, 20, 0.12)' 
+                    : 'none',
+                  position: 'relative'
+                }}>
+                  {/* VIP USER Radiant Gold Banner */}
+                  {isVipScan && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px',
+                      padding: '8px 24px',
+                      borderRadius: '24px',
+                      background: 'linear-gradient(135deg, rgba(226, 183, 20, 0.28) 0%, rgba(226, 183, 20, 0.08) 100%)',
+                      border: '2px solid var(--accent-gold)',
+                      boxShadow: '0 0 16px rgba(226, 183, 20, 0.4)',
+                      margin: '0 auto 14px auto',
+                      width: 'fit-content'
+                    }}>
+                      <Crown size={22} style={{ color: 'var(--accent-gold)' }} />
                       <span style={{
-                        display: 'inline-block',
-                        marginTop: '6px',
-                        padding: '2px 8px',
-                        borderRadius: '6px',
-                        background: 'var(--accent-gold)',
-                        color: '#000000',
+                        fontSize: '1.25rem',
                         fontWeight: 900,
-                        fontSize: '0.75rem'
+                        color: 'var(--accent-gold)',
+                        letterSpacing: '2px',
+                        textShadow: '0 0 12px rgba(226, 183, 20, 0.7)'
                       }}>
-                        VIP PASS
+                        VIP USER
                       </span>
+                      <Crown size={22} style={{ color: 'var(--accent-gold)' }} />
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
+                    {scanResult.status === 'VERIFIED' && (
+                      <>
+                        <CheckCircle2 size={24} style={{ color: '#2ecc71' }} />
+                        <strong style={{ fontSize: '1.2rem', color: '#2ecc71' }}>{isAr ? 'تم التحقق بنجاح ✓ (VERIFIED)' : 'VERIFIED ✓'}</strong>
+                      </>
+                    )}
+                    {scanResult.status === 'ALREADY_USED' && (
+                      <>
+                        <AlertTriangle size={24} style={{ color: '#e67e22' }} />
+                        <strong style={{ fontSize: '1.2rem', color: '#e67e22' }}>{isAr ? 'مستخدمة سابقاً ! (ALREADY USED)' : 'ALREADY USED !'}</strong>
+                      </>
                     )}
                     {scanResult.status === 'WRONG_EVENT' && (
-                      <div style={{
-                        marginTop: '8px',
-                        padding: '6px 12px',
-                        borderRadius: '6px',
-                        background: 'rgba(243, 156, 18, 0.2)',
-                        border: '1px solid rgba(243, 156, 18, 0.4)',
-                        color: '#ffffff',
-                        fontSize: '0.88rem'
-                      }}>
-                        {isAr ? 'الفعالية المسجل لها:' : 'Registered Event:'}{' '}
-                        <strong style={{ color: '#f39c12' }}>
-                          {scanResult.invitation.eventTitleAr || scanResult.invitation.event?.titleAr || (isAr ? 'فعالية أخرى' : 'Other Event')}
+                      <>
+                        <AlertTriangle size={24} style={{ color: '#f39c12' }} />
+                        <strong style={{ fontSize: '1.2rem', color: '#f39c12' }}>
+                          {isAr ? 'تنبيه: دعوة لفعالية أخرى ⚠️' : 'Notice: Different Event ⚠️'}
                         </strong>
-                      </div>
+                      </>
+                    )}
+                    {scanResult.status !== 'VERIFIED' && scanResult.status !== 'ALREADY_USED' && scanResult.status !== 'WRONG_EVENT' && (
+                      <>
+                        <XCircle size={24} style={{ color: '#e74c3c' }} />
+                        <strong style={{ fontSize: '1.2rem', color: '#e74c3c' }}>{isAr ? 'رمز غير صالح ✗ (INVALID)' : 'INVALID ✗'}</strong>
+                      </>
                     )}
                   </div>
-                )}
 
-                {scanResult.error && (
-                  <p style={{
-                    margin: '8px 0',
-                    fontSize: '0.88rem',
-                    color: scanResult.status === 'WRONG_EVENT' ? '#f39c12' : '#e74c3c',
-                    fontWeight: 600
-                  }}>
-                    {scanResult.error}
-                  </p>
-                )}
+                  {scanResult.invitation && (
+                    <div style={{ fontSize: '0.95rem', color: '#ffffff', margin: '8px 0' }}>
+                      <div>
+                        {isAr ? 'حامل الدعوة:' : 'Guest:'} <strong style={{ color: isVipScan ? 'var(--accent-gold)' : '#ffffff' }}>{scanResult.invitation.recipientName || scanResult.invitation.recipientEmail}</strong>
+                      </div>
+                      {isVipScan && (
+                        <span style={{
+                          display: 'inline-block',
+                          marginTop: '6px',
+                          padding: '3px 12px',
+                          borderRadius: '8px',
+                          background: 'var(--accent-gold)',
+                          color: '#000000',
+                          fontWeight: 900,
+                          fontSize: '0.8rem',
+                          boxShadow: '0 2px 8px rgba(226, 183, 20, 0.4)'
+                        }}>
+                          ⭐ VIP OFFICIAL INVITATION
+                        </span>
+                      )}
+                      {scanResult.status === 'WRONG_EVENT' && (
+                        <div style={{
+                          marginTop: '8px',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          background: 'rgba(243, 156, 18, 0.2)',
+                          border: '1px solid rgba(243, 156, 18, 0.4)',
+                          color: '#ffffff',
+                          fontSize: '0.88rem'
+                        }}>
+                          {isAr ? 'الفعالية المسجل لها:' : 'Registered Event:'}{' '}
+                          <strong style={{ color: '#f39c12' }}>
+                            {scanResult.invitation.eventTitleAr || scanResult.invitation.event?.titleAr || (isAr ? 'فعالية أخرى' : 'Other Event')}
+                          </strong>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '12px' }}>
-                  {scanResult.status === 'WRONG_EVENT' && (
+                  {scanResult.error && (
+                    <p style={{
+                      margin: '8px 0',
+                      fontSize: '0.88rem',
+                      color: scanResult.status === 'WRONG_EVENT' ? '#f39c12' : '#e74c3c',
+                      fontWeight: 600
+                    }}>
+                      {scanResult.error}
+                    </p>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '12px' }}>
+                    {scanResult.status === 'WRONG_EVENT' && (
+                      <button
+                        onClick={() => handleForceCheckInDifferentEvent(scanResult.qrToken)}
+                        style={{
+                          padding: '8px 18px',
+                          borderRadius: '8px',
+                          background: 'var(--accent-gold)',
+                          color: '#000000',
+                          fontWeight: 800,
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '0.88rem'
+                        }}
+                      >
+                        {isAr ? '✓ اعتماد الحضور وتأكيد الدخول الآن' : '✓ Check-in for this event'}
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleForceCheckInDifferentEvent(scanResult.qrToken)}
+                      onClick={resumeScan}
                       style={{
-                        padding: '8px 18px',
+                        padding: '8px 22px',
                         borderRadius: '8px',
-                        background: 'var(--accent-gold)',
+                        background: '#ffffff',
                         color: '#000000',
                         fontWeight: 800,
                         border: 'none',
                         cursor: 'pointer',
-                        fontSize: '0.88rem'
+                        fontSize: '0.9rem'
                       }}
                     >
-                      {isAr ? '✓ اعتماد الحضور وتأكيد الدخول الآن' : '✓ Check-in for this event'}
+                      {isAr ? 'متابعة المسح التالي (Next)' : 'Scan Next Code'}
                     </button>
-                  )}
-                  <button
-                    onClick={resumeScan}
-                    style={{
-                      padding: '8px 22px',
-                      borderRadius: '8px',
-                      background: '#ffffff',
-                      color: '#000000',
-                      fontWeight: 800,
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '0.9rem'
-                    }}
-                  >
-                    {isAr ? 'متابعة المسح التالي (Next)' : 'Scan Next Code'}
-                  </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       )}
@@ -2315,139 +2390,208 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
               {/* Recipient Search or External Entry */}
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                  {isAr ? 'البحث عن عضو مسجل، أو دعوة خارجية *' : 'Search Member or Enter External Email *'}
+                  {isAr ? 'المستلمون للدعوة (يمكنك اختيار أكثر من شخص) *' : 'Recipients (Select multiple members or guests) *'}
                 </label>
 
-                {selectedUser ? (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    background: 'rgba(226, 183, 20, 0.15)',
-                    border: '1px solid var(--accent-gold)'
-                  }}>
-                    <div>
-                      <strong style={{ color: '#ffffff', fontSize: '0.9rem' }}>{selectedUser.fullName}</strong>
-                      <span style={{ fontSize: '0.82rem', color: 'var(--accent-gold)', marginInlineStart: '8px' }}>
-                        ({selectedUser.email})
+                {/* Selected Users Chips */}
+                {selectedUsersList.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                    {selectedUsersList.map(u => (
+                      <span
+                        key={u.id}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 10px',
+                          borderRadius: '16px',
+                          background: 'rgba(226, 183, 20, 0.15)',
+                          border: '1px solid var(--accent-gold)',
+                          color: '#ffffff',
+                          fontSize: '0.82rem'
+                        }}
+                      >
+                        <strong>{u.fullName}</strong>
+                        <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>({u.email})</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedUsersList(prev => prev.filter(item => item.id !== u.id))}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#e74c3c',
+                            cursor: 'pointer',
+                            fontSize: '0.9rem',
+                            padding: '0 2px',
+                            lineHeight: 1
+                          }}
+                        >
+                          ✕
+                        </button>
                       </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedUser(null); setRecipientSearch(''); }}
-                      style={{ background: 'transparent', border: 'none', color: '#e74c3c', cursor: 'pointer', fontWeight: 700 }}
-                    >
-                      ✕
-                    </button>
+                    ))}
                   </div>
-                ) : (
-                  <div>
+                )}
+
+                <div>
+                  <input
+                    type="text"
+                    placeholder={isAr ? '🔍 ابحث بالاسم لإضافة أعضاء إلى القائمة...' : '🔍 Search member name to add...'}
+                    value={recipientSearch}
+                    onChange={(e) => setRecipientSearch(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      borderRadius: '8px',
+                      background: 'rgba(0,0,0,0.3)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      color: '#ffffff',
+                      fontSize: '0.92rem',
+                      boxSizing: 'border-box',
+                      marginBottom: '8px'
+                    }}
+                  />
+
+                  {/* Autocomplete */}
+                  {recipientResults.length > 0 && (
+                    <div style={{
+                      background: '#1a1a24',
+                      border: '1px solid var(--accent-gold)',
+                      borderRadius: '8px',
+                      maxHeight: '160px',
+                      overflowY: 'auto',
+                      marginBottom: '8px',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.5)'
+                    }}>
+                      {recipientResults.map(r => (
+                        <div
+                          key={r.id}
+                          onClick={() => {
+                            if (!selectedUsersList.some(item => item.id === r.id)) {
+                              setSelectedUsersList(prev => [...prev, r]);
+                            }
+                            setRecipientSearch('');
+                            setRecipientResults([]);
+                          }}
+                          style={{
+                            padding: '8px 12px',
+                            borderBottom: '1px solid rgba(255,255,255,0.06)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 700, color: '#ffffff', fontSize: '0.88rem' }}>{r.fullName}</div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{r.email}</div>
+                          </div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)' }}>+ {isAr ? 'إضافة' : 'Add'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    {isAr ? 'أو إضافة ضيف خارجي (غير مسجل):' : 'Or add external guest:'}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                     <input
                       type="text"
-                      placeholder={isAr ? 'ابحث باسم العضو المسجل...' : 'Search registered member...'}
-                      value={recipientSearch}
-                      onChange={(e) => setRecipientSearch(e.target.value)}
+                      placeholder={isAr ? 'اسم الضيف الخارجي' : 'External Guest Name'}
+                      value={externalName}
+                      onChange={(e) => setExternalName(e.target.value)}
                       style={{
-                        width: '100%',
-                        padding: '10px',
+                        padding: '9px',
                         borderRadius: '8px',
                         background: 'rgba(0,0,0,0.3)',
                         border: '1px solid rgba(255,255,255,0.15)',
                         color: '#ffffff',
-                        fontSize: '0.92rem',
-                        boxSizing: 'border-box',
-                        marginBottom: '8px'
+                        fontSize: '0.85rem'
                       }}
                     />
-
-                    {/* Autocomplete */}
-                    {recipientResults.length > 0 && (
-                      <div style={{
-                        background: '#1a1a24',
-                        border: '1px solid var(--accent-gold)',
+                    <input
+                      type="email"
+                      placeholder={isAr ? 'البريد الإلكتروني' : 'External Email'}
+                      value={externalEmail}
+                      onChange={(e) => setExternalEmail(e.target.value)}
+                      style={{
+                        padding: '9px',
                         borderRadius: '8px',
-                        maxHeight: '160px',
-                        overflowY: 'auto',
-                        marginBottom: '8px'
-                      }}>
-                        {recipientResults.map(r => (
-                          <div
-                            key={r.id}
-                            onClick={() => { setSelectedUser(r); setRecipientResults([]); }}
-                            style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer' }}
-                          >
-                            <div style={{ fontWeight: 700, color: '#ffffff', fontSize: '0.88rem' }}>{r.fullName}</div>
-                            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{r.email}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                      <input
-                        type="text"
-                        placeholder={isAr ? 'اسم الضيف الخارجي' : 'External Guest Name'}
-                        value={externalName}
-                        onChange={(e) => setExternalName(e.target.value)}
-                        style={{
-                          padding: '9px',
-                          borderRadius: '8px',
-                          background: 'rgba(0,0,0,0.3)',
-                          border: '1px solid rgba(255,255,255,0.15)',
-                          color: '#ffffff',
-                          fontSize: '0.85rem'
-                        }}
-                      />
-                      <input
-                        type="email"
-                        placeholder={isAr ? 'البريد الإلكتروني' : 'External Email'}
-                        value={externalEmail}
-                        onChange={(e) => setExternalEmail(e.target.value)}
-                        style={{
-                          padding: '9px',
-                          borderRadius: '8px',
-                          background: 'rgba(0,0,0,0.3)',
-                          border: '1px solid rgba(255,255,255,0.15)',
-                          color: '#ffffff',
-                          fontSize: '0.85rem'
-                        }}
-                      />
-                    </div>
+                        background: 'rgba(0,0,0,0.3)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        color: '#ffffff',
+                        fontSize: '0.85rem'
+                      }}
+                    />
                   </div>
-                )}
+                </div>
               </div>
 
-              {/* VIP Toggle Switch */}
+              {/* VIP Toggle Switch & Options */}
               <div style={{
-                background: isVip ? 'rgba(226, 183, 20, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                background: isVip ? 'rgba(226, 183, 20, 0.12)' : 'rgba(255, 255, 255, 0.04)',
                 border: `1px solid ${isVip ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.1)'}`,
                 borderRadius: '10px',
                 padding: '12px 16px',
-                marginBottom: '1.5rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
+                marginBottom: '1.5rem'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <Crown size={22} style={{ color: isVip ? 'var(--accent-gold)' : 'var(--text-secondary)' }} />
-                  <div>
-                    <strong style={{ color: '#ffffff', fontSize: '0.92rem', display: 'block' }}>
-                      {isAr ? 'إصدار دعوة كبار الزوار (VIP Invitation)' : 'Issue as VIP Invitation'}
-                    </strong>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                      {isAr ? 'تمنح بطاقة ذهبية مميزة وتدرج بصفتها الرسمية' : 'Gold framed VIP pass card design'}
-                    </span>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Crown size={22} style={{ color: isVip ? 'var(--accent-gold)' : 'var(--text-secondary)' }} />
+                    <div>
+                      <strong style={{ color: '#ffffff', fontSize: '0.92rem', display: 'block' }}>
+                        {isAr ? 'إصدار دعوة كبار الزوار (VIP Invitation)' : 'Issue as VIP Invitation'}
+                      </strong>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        {isAr ? 'تمنح بطاقة ذهبية وتظهر بصفتها VIP عند المسح وفي الحساب الشخصي' : 'Gold-framed VIP pass card and scanned as VIP USER'}
+                      </span>
+                    </div>
                   </div>
+
+                  <input
+                    type="checkbox"
+                    checked={isVip}
+                    onChange={(e) => setIsVip(e.target.checked)}
+                    style={{ width: '20px', height: '20px', accentColor: 'var(--accent-gold)', cursor: 'pointer' }}
+                  />
                 </div>
 
-                <input
-                  type="checkbox"
-                  checked={isVip}
-                  onChange={(e) => setIsVip(e.target.checked)}
-                  style={{ width: '20px', height: '20px', accentColor: 'var(--accent-gold)', cursor: 'pointer' }}
-                />
+                {/* Unlimited VIP & Capacity deduction choice */}
+                {isVip && (
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '10px 12px',
+                    background: 'rgba(0, 0, 0, 0.35)',
+                    borderRadius: '8px',
+                    border: '1px dashed rgba(226, 183, 20, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px'
+                  }}>
+                    <div>
+                      <div style={{ color: '#ffffff', fontSize: '0.85rem', fontWeight: 600 }}>
+                        {isAr ? 'خصم المقاعد من السعة الاستيعابية للمكان' : 'Deduct from Venue Capacity'}
+                      </div>
+                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '2px' }}>
+                        {deductVipCapacity
+                          ? (isAr ? 'سيتم احتساب هذه الدعوات وخصمها من السعة المتبقية للقاعة' : 'Will be counted against venue capacity')
+                          : (isAr ? 'دعوات VIP غير محدودة (لا تؤثر على السعة الاستيعابية العامة المتاحة للحجز)' : 'Unlimited VIP passes (does not deduct from public capacity)')}
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={deductVipCapacity}
+                      onChange={(e) => setDeductVipCapacity(e.target.checked)}
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--accent-gold)', cursor: 'pointer' }}
+                    />
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>

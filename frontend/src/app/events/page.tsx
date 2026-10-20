@@ -24,12 +24,24 @@ export default function EventsPublicPage() {
   // Application modal state
   const [applyingEvent, setApplyingEvent] = useState<any | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+  const [ticketCount, setTicketCount] = useState<number>(1);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [isApplying, setIsApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+  const [partialNotice, setPartialNotice] = useState<string | null>(null);
   const [issuedInvitation, setIssuedInvitation] = useState<any | null>(null);
+  const [issuedInvitationsList, setIssuedInvitationsList] = useState<any[]>([]);
+
+  // In-app Designed Alert / Modal State (No browser alerts)
+  const [webAlertModal, setWebAlertModal] = useState<{
+    title: string;
+    message: string;
+    type: 'warning' | 'error' | 'info';
+    actionUrl?: string;
+    actionText?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -95,24 +107,74 @@ export default function EventsPublicPage() {
   const handleOpenApply = (event: any, locationId?: string) => {
     // 1. Check if application is active
     if (!event.isApplicationActive) {
-      alert(isAr ? '🔒 باب التقديم لم يُفتح بعد لهذه الفعالية.' : '🔒 Applications are not opened yet for this event.');
+      setWebAlertModal({
+        title: isAr ? 'باب التقديم مغلق' : 'Applications Closed',
+        message: isAr ? 'باب التقديم لم يُفتح بعد لهذه الفعالية.' : 'Applications are not opened yet for this event.',
+        type: 'warning'
+      });
       return;
     }
 
-    // 2. Select initial location
-    const chosenLocId = locationId || (event.locations && event.locations.length > 0 ? event.locations[0].id : '');
-    const chosenLoc = event.locations?.find((l: any) => l.id === chosenLocId);
+    // 2. Server-Side Eligibility Rules Enforcement: Church Membership Rule
+    let rules: any = {};
+    try { rules = JSON.parse(event.eligibilityRulesJson || '{}'); } catch {}
+    if (rules.requireVerifiedMember) {
+      if (!user) {
+        setWebAlertModal({
+          title: isAr ? 'تسجيل الدخول مطلوب' : 'Login Required',
+          message: isAr 
+            ? 'هذه الفعالية مخصصة لأعضاء الكنيسة المسجلين. يرجى تسجيل الدخول بحسابك أولاً.' 
+            : 'This event is restricted to registered church members. Please log in first.',
+          type: 'warning',
+          actionUrl: '/login',
+          actionText: isAr ? 'تسجيل الدخول الآن' : 'Log In'
+        });
+        return;
+      }
 
-    // 3. Check if location capacity reached
-    if (chosenLoc && (chosenLoc.isFull || chosenLoc.confirmedCount >= chosenLoc.maxCapacity)) {
-      alert(isAr ? '⚠️ اكتمل العدد الأقصى المسموح به لهذا المكان.' : '⚠️ Maximum capacity reached for this location.');
+      const isChurchMember = ['PRIEST', 'BISHOP', 'SUPER_ADMIN', 'CHURCH_ADMIN', 'SECRETARY'].includes(user.role) ||
+                             user.familyProfileStatus === 'APPROVED';
+
+      if (!isChurchMember) {
+        setWebAlertModal({
+          title: isAr ? 'ملف العضوية الكنسية للأسرة مطلوب' : 'Family Membership Required',
+          message: isAr 
+            ? 'عذراً، هذا الحجز مخصص فقط للأسر التي تمتلك ملف عضوية كنسية معتمد (🎖️ حالة ملف العضوية الكنسية للأسرة). يرجى استكمال استمارة العضوية الكنسية.' 
+            : 'An approved family church membership is required to register for this gathering.',
+          type: 'warning',
+          actionUrl: '/register-member',
+          actionText: isAr ? 'ملء استمارة العضوية الكنسية' : 'Register Membership'
+        });
+        return;
+      }
+    }
+
+    // 3. Find available locations (never block if at least one location has space)
+    const availableLocs = event.locations?.filter((l: any) => !l.isFull && l.confirmedCount < l.maxCapacity) || [];
+    if (availableLocs.length === 0) {
+      setWebAlertModal({
+        title: isAr ? 'اكتمل العدد الأقصى' : 'Full Capacity',
+        message: isAr 
+          ? 'عذراً، اكتمل العدد الأقصى المسموح به في جميع قاعات ومقار الفعالية.' 
+          : 'Maximum capacity reached for all locations of this event.',
+        type: 'error'
+      });
       return;
     }
+
+    // 4. Select initial location: prefer requested locationId if still has space, else fallback to first available
+    const requestedLoc = event.locations?.find((l: any) => l.id === locationId);
+    const chosenLocId = (requestedLoc && !requestedLoc.isFull && requestedLoc.confirmedCount < requestedLoc.maxCapacity)
+      ? requestedLoc.id
+      : availableLocs[0].id;
 
     setApplyingEvent(event);
     setSelectedLocationId(chosenLocId);
+    setTicketCount(1);
     setApplyError(null);
+    setPartialNotice(null);
     setIssuedInvitation(null);
+    setIssuedInvitationsList([]);
   };
 
   const handleConfirmApplication = async (e: React.FormEvent) => {
@@ -126,6 +188,7 @@ export default function EventsPublicPage() {
 
     setIsApplying(true);
     setApplyError(null);
+    setPartialNotice(null);
 
     try {
       const res = await fetch(`${API_URL}/invitations/events/${applyingEvent.id}/apply`, {
@@ -138,13 +201,14 @@ export default function EventsPublicPage() {
           locationId: selectedLocationId,
           fullName: fullName.trim(),
           phone: phone.trim(),
-          externalEmail: email.trim() || undefined
+          externalEmail: email.trim() || undefined,
+          ticketCount
         })
       });
 
       const data = await res.json();
       if (res.ok) {
-        setIssuedInvitation({
+        const passes = data.invitations || [{
           id: data.invitationId,
           qrToken: data.qrToken,
           type: 'STANDARD',
@@ -152,7 +216,13 @@ export default function EventsPublicPage() {
           recipientEmail: email.trim(),
           event: applyingEvent,
           location: applyingEvent.locations?.find((l: any) => l.id === selectedLocationId)
-        });
+        }];
+
+        setIssuedInvitationsList(passes);
+        setIssuedInvitation(passes[0]);
+        if (data.isPartial && data.messageAr) {
+          setPartialNotice(isAr ? data.messageAr : data.messageEn);
+        }
         fetchEvents();
       } else {
         setApplyError(isAr ? (data.errorAr || data.error) : (data.error || 'Failed to submit application.'));
@@ -563,49 +633,150 @@ export default function EventsPublicPage() {
                   {isAr ? applyingEvent.titleAr : applyingEvent.titleEn}
                 </p>
 
+                {partialNotice && (
+                  <div style={{
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    background: 'rgba(243, 156, 18, 0.18)',
+                    border: '1px solid #f39c12',
+                    color: '#f39c12',
+                    fontSize: '0.9rem',
+                    marginBottom: '1.2rem',
+                    fontWeight: 700
+                  }}>
+                    ℹ️ {partialNotice}
+                  </div>
+                )}
+
                 {applyError && (
                   <div style={{
-                    padding: '10px 14px',
-                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    borderRadius: '10px',
                     background: 'rgba(231, 76, 60, 0.15)',
                     border: '1px solid #e74c3c',
                     color: '#e74c3c',
                     fontSize: '0.88rem',
-                    marginBottom: '1rem'
+                    marginBottom: '1.2rem'
                   }}>
-                    {applyError}
+                    ⚠️ {applyError}
                   </div>
                 )}
 
                 <form onSubmit={handleConfirmApplication}>
-                  {/* Select Location */}
-                  <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  {/* Select Location with clear red styling for maxed places */}
+                  <div style={{ marginBottom: '1.2rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 600 }}>
                       {isAr ? 'اختر مقر الحضور / القاعة *' : 'Select Location *'}
                     </label>
-                    <select
-                      value={selectedLocationId}
-                      onChange={(e) => setSelectedLocationId(e.target.value)}
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        borderRadius: '8px',
-                        background: 'rgba(255,255,255,0.06)',
-                        border: '1px solid rgba(255,255,255,0.15)',
-                        color: '#ffffff',
-                        fontSize: '0.92rem'
-                      }}
-                    >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       {applyingEvent.locations?.map((loc: any) => {
                         const isFull = loc.isFull || loc.confirmedCount >= loc.maxCapacity;
+                        const remaining = Math.max(0, loc.maxCapacity - loc.confirmedCount);
+                        const isSelected = selectedLocationId === loc.id;
                         return (
-                          <option key={loc.id} value={loc.id} disabled={isFull} style={{ background: '#1a1a24' }}>
-                            {isAr ? loc.nameAr : loc.nameEn} {isFull ? (isAr ? '(مكتمل)' : '(Full)') : ''}
-                          </option>
+                          <div
+                            key={loc.id}
+                            onClick={() => { if (!isFull) setSelectedLocationId(loc.id); }}
+                            style={{
+                              padding: '12px 16px',
+                              borderRadius: '10px',
+                              border: isFull 
+                                ? '1px solid rgba(231, 76, 60, 0.5)' 
+                                : isSelected 
+                                ? '1.5px solid var(--accent-gold)' 
+                                : '1px solid rgba(255,255,255,0.12)',
+                              background: isFull 
+                                ? 'rgba(231, 76, 60, 0.12)' 
+                                : isSelected 
+                                ? 'rgba(226, 183, 20, 0.12)' 
+                                : 'rgba(255,255,255,0.04)',
+                              cursor: isFull ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              opacity: isFull ? 0.75 : 1,
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <input
+                                type="radio"
+                                name="event-location"
+                                checked={isSelected}
+                                disabled={isFull}
+                                onChange={() => { if (!isFull) setSelectedLocationId(loc.id); }}
+                                style={{ accentColor: 'var(--accent-gold)', cursor: isFull ? 'not-allowed' : 'pointer', width: '16px', height: '16px' }}
+                              />
+                              <span style={{ fontWeight: 700, color: isFull ? '#e74c3c' : '#ffffff', fontSize: '0.95rem' }}>
+                                {isAr ? loc.nameAr : loc.nameEn}
+                              </span>
+                            </div>
+                            <span style={{
+                              fontSize: '0.78rem',
+                              fontWeight: 800,
+                              color: isFull ? '#e74c3c' : '#2ecc71',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              background: isFull ? 'rgba(231, 76, 60, 0.22)' : 'rgba(46, 204, 113, 0.15)',
+                              border: isFull ? '1px solid rgba(231, 76, 60, 0.3)' : '1px solid rgba(46, 204, 113, 0.3)'
+                            }}>
+                              {isFull 
+                                ? (isAr ? 'اكتمل العدد الأقصى' : 'Full') 
+                                : (isAr ? `متبقي ${remaining} مقعد` : `${remaining} seats left`)}
+                            </span>
+                          </div>
                         );
                       })}
-                    </select>
+                    </div>
+                  </div>
+
+                  {/* Ticket Count Selection: 1 or 2 */}
+                  <div style={{ marginBottom: '1.2rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                        {isAr ? 'عدد بطاقات الدعوة المطلوبة *' : 'Requested Passes *'}
+                      </label>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--accent-gold)', fontWeight: 700 }}>
+                        {isAr ? 'الحد الأقصى: تذكرتان لكل شخص' : 'Max 2 passes per attendee'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      {[1, 2].map(count => {
+                        const currentLoc = applyingEvent.locations?.find((l: any) => l.id === selectedLocationId);
+                        const remainingInLoc = currentLoc ? Math.max(0, currentLoc.maxCapacity - currentLoc.confirmedCount) : 0;
+                        const isCountSelected = ticketCount === count;
+                        return (
+                          <button
+                            key={count}
+                            type="button"
+                            onClick={() => setTicketCount(count)}
+                            style={{
+                              padding: '10px 14px',
+                              borderRadius: '10px',
+                              border: `1.5px solid ${isCountSelected ? 'var(--accent-gold)' : 'rgba(255,255,255,0.12)'}`,
+                              background: isCountSelected ? 'rgba(226, 183, 20, 0.16)' : 'rgba(255,255,255,0.04)',
+                              color: isCountSelected ? 'var(--accent-gold)' : '#ffffff',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <span style={{ fontSize: '0.92rem' }}>
+                              {count === 1 ? (isAr ? 'تذكرة واحدة (1)' : '1 Pass') : (isAr ? 'تذكرتان (2)' : '2 Passes')}
+                            </span>
+                            {count === 2 && remainingInLoc === 1 && (
+                              <span style={{ fontSize: '0.72rem', color: '#f39c12', fontWeight: 700 }}>
+                                {isAr ? '⚠️ يتبقى مقعد واحد فقط بالمكان' : '⚠️ Only 1 seat left'}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div style={{ marginBottom: '1rem' }}>
@@ -704,7 +875,7 @@ export default function EventsPublicPage() {
                     >
                       {isApplying 
                         ? (isAr ? 'جاري التأكيد...' : 'Issuing Pass...') 
-                        : (isAr ? 'تأكيد الحجز وإصدار الدعوة' : 'Confirm & Issue Pass')}
+                        : (isAr ? `تأكيد الحجز (${ticketCount} ${ticketCount === 1 ? 'تذكرة' : 'تذاكر'})` : `Confirm (${ticketCount} ${ticketCount === 1 ? 'Pass' : 'Passes'})`)}
                     </button>
                   </div>
                 </form>
@@ -714,18 +885,36 @@ export default function EventsPublicPage() {
                 <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                   <CheckCircle size={44} style={{ color: '#2ecc71', margin: '0 auto 8px auto' }} />
                   <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ffffff', margin: 0 }}>
-                    {isAr ? 'تم تأكيد حجزك وإصدار بطاقة الدعوة بنجاح!' : 'Your Invitation Pass is Ready!'}
+                    {isAr ? 'تم تأكيد حجزك وإصدار بطاقات الدعوة بنجاح!' : 'Your Invitation Passes are Ready!'}
                   </h3>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '6px 0 0 0' }}>
                     {isAr 
-                      ? 'تم حفظ بطاقة الدعوة برمز QR في ملفك الشخصي وإرسال نسخة عبر البريد الإلكتروني.' 
-                      : 'Saved to your profile with single-use entry QR code and emailed to you.'}
+                      ? 'تم حفظ بطاقات الدعوة برمز QR في ملفك الشخصي ويمكنك استخدامها عند الدخول.' 
+                      : 'Saved to your profile with single-use entry QR codes.'}
                   </p>
                 </div>
 
-                {/* Live Card Preview */}
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <VipInvitationCard invitation={issuedInvitation} />
+                {partialNotice && (
+                  <div style={{
+                    padding: '12px',
+                    borderRadius: '8px',
+                    background: 'rgba(243, 156, 18, 0.2)',
+                    border: '1px solid rgba(243, 156, 18, 0.5)',
+                    color: '#f39c12',
+                    fontSize: '0.88rem',
+                    marginBottom: '1rem',
+                    fontWeight: 700,
+                    textAlign: 'center'
+                  }}>
+                    ℹ️ {partialNotice}
+                  </div>
+                )}
+
+                {/* Live Cards Preview */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '1.5rem' }}>
+                  {(issuedInvitationsList.length > 0 ? issuedInvitationsList : [issuedInvitation]).map((inv, idx) => (
+                    <VipInvitationCard key={inv.id || idx} invitation={inv} />
+                  ))}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
@@ -744,7 +933,7 @@ export default function EventsPublicPage() {
                     {isAr ? 'الانتقال لتذاكري ودعواتي (QR)' : 'Go to My Invitations'}
                   </Link>
                   <button
-                    onClick={() => { setApplyingEvent(null); setIssuedInvitation(null); }}
+                    onClick={() => { setApplyingEvent(null); setIssuedInvitation(null); setIssuedInvitationsList([]); }}
                     style={{
                       padding: '10px 18px',
                       borderRadius: '8px',
@@ -760,6 +949,90 @@ export default function EventsPublicPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* In-app Web Designed Alert / Action Modal (No browser alerts) */}
+      {webAlertModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: '#181822',
+            border: `1.5px solid ${webAlertModal.type === 'error' ? '#e74c3c' : webAlertModal.type === 'warning' ? '#f39c12' : 'var(--accent-gold)'}`,
+            borderRadius: '16px',
+            padding: '2rem',
+            maxWidth: '480px',
+            width: '100%',
+            textAlign: 'center',
+            direction: isAr ? 'rtl' : 'ltr',
+            boxShadow: '0 16px 48px rgba(0,0,0,0.5)'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              background: webAlertModal.type === 'error' ? 'rgba(231, 76, 60, 0.18)' : 'rgba(243, 156, 18, 0.18)',
+              color: webAlertModal.type === 'error' ? '#e74c3c' : '#f39c12',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.25rem auto'
+            }}>
+              {webAlertModal.type === 'error' ? <AlertTriangle size={30} /> : <Lock size={28} />}
+            </div>
+
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#ffffff', margin: '0 0 0.6rem 0' }}>
+              {webAlertModal.title}
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6', margin: '0 0 1.5rem 0' }}>
+              {webAlertModal.message}
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+              {webAlertModal.actionUrl && (
+                <Link
+                  href={webAlertModal.actionUrl}
+                  onClick={() => setWebAlertModal(null)}
+                  style={{
+                    padding: '10px 22px',
+                    borderRadius: '8px',
+                    background: 'var(--accent-gold)',
+                    color: '#000000',
+                    fontWeight: 800,
+                    textDecoration: 'none',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  {webAlertModal.actionText || (isAr ? 'متابعة' : 'Continue')}
+                </Link>
+              )}
+              <button
+                onClick={() => setWebAlertModal(null)}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.18)',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                {isAr ? 'إغلاق' : 'Close'}
+              </button>
+            </div>
           </div>
         </div>
       )}

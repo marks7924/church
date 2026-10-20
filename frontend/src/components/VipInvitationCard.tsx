@@ -74,13 +74,13 @@ export default function VipInvitationCard({ invitation, language = 'ar', isAr: i
       margin: '0 auto',
       borderRadius: '20px',
       background: isVip 
-        ? 'linear-gradient(145deg, #18150c 0%, #0d0c08 50%, #1f1b0f 100%)' 
-        : 'linear-gradient(145deg, #1a1a24 0%, #121218 100%)',
+        ? 'linear-gradient(145deg, #1f1a0e 0%, #0d0c08 50%, #231d0e 100%)' 
+        : 'linear-gradient(145deg, #181822 0%, #101016 100%)',
       border: isVip 
-        ? '2px solid rgba(226, 183, 20, 0.85)' 
-        : '1px solid rgba(255, 255, 255, 0.15)',
+        ? '3.5px double #e2b714' 
+        : '1px solid rgba(255, 255, 255, 0.12)',
       boxShadow: isVip 
-        ? '0 12px 40px rgba(226, 183, 20, 0.25), inset 0 0 20px rgba(226, 183, 20, 0.12)' 
+        ? '0 0 20px rgba(226, 183, 20, 0.4), 0 12px 40px rgba(0, 0, 0, 0.6), inset 0 0 25px rgba(226, 183, 20, 0.18)' 
         : '0 8px 30px rgba(0,0,0,0.3)',
       padding: '24px',
       position: 'relative',
@@ -88,41 +88,61 @@ export default function VipInvitationCard({ invitation, language = 'ar', isAr: i
       direction: isAr ? 'rtl' : 'ltr',
       color: '#ffffff'
     }}>
-      {/* Decorative Gold Accent Borders for VIP */}
-      {isVip && (
+      {/* Decorative Gold Accent Borders and Glowing Header for VIP */}
+      {isVip ? (
         <>
           <div style={{
             position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
-            height: '4px',
-            background: 'linear-gradient(90deg, transparent, #e2b714, #fff8db, #e2b714, transparent)'
+            height: '5px',
+            background: 'linear-gradient(90deg, transparent, #e2b714, #fff2a8, #e2b714, transparent)'
           }} />
           <div style={{
-            position: 'absolute',
-            top: '12px',
-            [isAr ? 'left' : 'right']: '12px',
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
-            background: 'linear-gradient(135deg, #e2b714 0%, #99780a 100%)',
-            color: '#000000',
-            fontWeight: 900,
-            fontSize: '0.78rem',
-            padding: '4px 10px',
-            borderRadius: '12px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+            justifyContent: 'center',
+            gap: '8px',
+            background: 'linear-gradient(135deg, rgba(226, 183, 20, 0.25) 0%, rgba(226, 183, 20, 0.08) 100%)',
+            border: '1px solid rgba(226, 183, 20, 0.5)',
+            color: 'var(--accent-gold)',
+            fontWeight: 800,
+            fontSize: '0.82rem',
+            padding: '6px 14px',
+            borderRadius: '20px',
+            margin: '0 auto 1rem auto',
+            width: 'fit-content',
+            boxShadow: '0 2px 10px rgba(226, 183, 20, 0.2)',
             letterSpacing: '1px'
           }}>
-            <Crown size={14} />
-            <span>VIP</span>
+            <Crown size={16} />
+            <span>{isAr ? 'دعوة كبار الزوار الرسمية • VIP PASS' : 'OFFICIAL VIP PASS'}</span>
+            <Crown size={16} />
           </div>
         </>
+      ) : (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px',
+          background: 'rgba(255, 255, 255, 0.06)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          color: 'var(--text-secondary)',
+          fontWeight: 600,
+          fontSize: '0.78rem',
+          padding: '4px 12px',
+          borderRadius: '16px',
+          margin: '0 auto 1rem auto',
+          width: 'fit-content'
+        }}>
+          <span>🎟️ {isAr ? 'بطاقة حضور عامة (Standard Pass)' : 'Standard Entry Pass'}</span>
+        </div>
       )}
 
       {/* Card Header */}
-      <div style={{ textAlign: 'center', marginBottom: '1.2rem', marginTop: isVip ? '0.5rem' : '0' }}>
+      <div style={{ textAlign: 'center', marginBottom: '1.2rem' }}>
         <div style={{
           fontSize: '0.82rem',
           color: isVip ? 'var(--accent-gold)' : 'var(--text-secondary)',
