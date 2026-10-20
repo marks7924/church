@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTheme } from '../../components/ThemeContext';
 import { Plus, Trash2, ShieldAlert, CheckCircle, ArrowLeft, Send } from 'lucide-react';
 import { API_URL } from '../../config';
+import AuthLockedSection from '../../components/AuthLockedSection';
 
 interface Child {
   name: string;
@@ -227,37 +228,6 @@ export default function RegisterMemberPage() {
     }
   };
 
-  // Auth Protection Guard
-  if (!token) {
-    return (
-      <div className="container" style={{ padding: '4rem 1rem', textAlign: 'center', maxWidth: '550px' }}>
-        <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '3rem 2rem' }}>
-          <ShieldAlert size={48} style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem' }} />
-          <h2 style={{ marginBottom: '1rem' }}>{language === 'ar' ? 'تنبيه تسجيل الدخول' : 'Login Required'}</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', lineHeight: '1.6' }}>
-            {language === 'ar' 
-              ? 'يجب تسجيل الدخول في حسابك لتتمكن من تقديم بيانات العضوية الكنسية للأسرة.'
-              : 'You must log in to your account first to register your family membership records.'}
-          </p>
-          <button onClick={() => router.push('/login')} style={{
-            backgroundColor: 'var(--accent-gold)',
-            color: '#000000',
-            fontWeight: 'bold',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.95rem',
-            maxWidth: '200px',
-            display: 'inline-block'
-          }}>
-            {t('login')}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="container" style={{ padding: 'clamp(1.5rem, 4vw, 3rem) clamp(0.8rem, 3vw, 1.5rem)', maxWidth: '850px' }}>
       {/* Return button */}
@@ -273,8 +243,18 @@ export default function RegisterMemberPage() {
         marginBottom: '1.5rem'
       }}>
         <ArrowLeft size={16} />
-        <span>{t('back')}</span>
+        {t('back')}
       </button>
+
+      <AuthLockedSection
+        isLocked={!token}
+        titleAr="استمارة العضوية الكنسية متاحة حصرياً للأعضاء المسجلين"
+        titleEn="Church Family Membership is Exclusive for Registered Members"
+        descriptionAr="يرجى تسجيل الدخول بحسابك أولاً لتتمكن من ملء وتحديث استمارة العضوية الكنسية وتوثيق بيانات الأسرة."
+        descriptionEn="Please log in first to submit and maintain your family membership record."
+        redirectUrl="/register-member"
+        minHeight="600px"
+      >
 
       <h1 style={{ fontSize: 'clamp(1.25rem, 5.5vw, 2rem)', lineHeight: 1.3, color: 'var(--accent-gold)', marginBottom: '1.2rem', fontWeight: 800 }}>
         {t('membership_title')}
@@ -649,6 +629,7 @@ export default function RegisterMemberPage() {
         </div>
 
       </form>
+      </AuthLockedSection>
     </div>
   );
 }

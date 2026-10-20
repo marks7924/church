@@ -7,6 +7,7 @@ import { Play, Calendar, User, Heart, ShieldAlert, X, ChevronRight } from 'lucid
 import Link from 'next/link';
 import { API_URL } from '../config';
 import { formatTimeSlot } from '../utils/format';
+import AuthLockedSection from '../components/AuthLockedSection';
 
 interface Priest {
   id: string;
@@ -101,6 +102,13 @@ export default function Home() {
   const [tripNotes, setTripNotes] = useState('');
   const [tripBookingMsg, setTripBookingMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSubmittingTrip, setIsSubmittingTrip] = useState(false);
+  const [userToken, setUserToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setUserToken(localStorage.getItem('church-token'));
+    }
+  }, []);
 
   useEffect(() => {
     // 1. Fetch live status
@@ -227,33 +235,27 @@ export default function Home() {
     }
 
     // Check if user is logged in
-    const token = localStorage.getItem('church-token');
-    if (!token) {
-      setBookingMessage({ type: 'error', text: language === 'ar' ? 'يرجى تسجيل الدخول أولاً لتتمكن من الحجز.' : 'Please login first to book an appointment.' });
-      setSelectedPriest(priest);
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      setBookingDate(tomorrow.toISOString().split('T')[0]);
-      return;
-    }
-
+    const token = typeof window !== 'undefined' ? localStorage.getItem('church-token') : null;
+    setUserToken(token);
     setSelectedPriest(priest);
     setBookingMessage(null);
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     setBookingDate(tomorrow.toISOString().split('T')[0]);
 
-    // Pre-populate details if booking with Bishop or noFixedSchedule
-    const isCustomRequest = priest.role === 'BISHOP' || priest.noFixedSchedule;
-    if (isCustomRequest) {
-      const userStr = localStorage.getItem('church-user');
-      if (userStr) {
-        try {
-          const userObj = JSON.parse(userStr);
-          setBishopPhone(userObj.phone || '');
-          setBishopEmail(userObj.email || '');
-        } catch (e) {
-          console.error(e);
+    if (token) {
+      // Pre-populate details if booking with Bishop or noFixedSchedule
+      const isCustomRequest = priest.role === 'BISHOP' || priest.noFixedSchedule;
+      if (isCustomRequest) {
+        const userStr = localStorage.getItem('church-user');
+        if (userStr) {
+          try {
+            const userObj = JSON.parse(userStr);
+            setBishopPhone(userObj.phone || '');
+            setBishopEmail(userObj.email || '');
+          } catch (e) {
+            console.error(e);
+          }
         }
       }
     }
@@ -636,6 +638,7 @@ export default function Home() {
                     style={{ width: '100%', marginTop: 'auto' }}
                     onClick={() => {
                       setSelectedTrip(e);
+                      setUserToken(typeof window !== 'undefined' ? localStorage.getItem('church-token') : null);
                       setTripBookingMsg(null);
                       const userStr = typeof window !== 'undefined' ? localStorage.getItem('church-user') : null;
                       if (userStr) {
@@ -715,8 +718,16 @@ export default function Home() {
               </div>
             )}
 
-            {/* Check if user logged in - only render form if we have token */}
-            {typeof window !== 'undefined' && localStorage.getItem('church-token') ? (
+            {/* Confession Booking Form - Locked & Blurred for unsigned users */}
+            <AuthLockedSection
+              isLocked={!userToken}
+              titleAr="حجز مواعيد الاعتراف متاح حصرياً للأعضاء المسجلين"
+              titleEn="Confession Booking is Exclusive for Registered Members"
+              descriptionAr="يرجى تسجيل الدخول بحسابك الكنسي لتتمكن من اختيار الأب الكاهن وتأكيد موعد سر الاعتراف أو طلب اللقاء الرعوي."
+              descriptionEn="Please log in with your church account to select a confession father and confirm your spiritual appointment."
+              redirectUrl="/"
+              minHeight="420px"
+            >
               <form onSubmit={handleBookAppointment}>
                 {(selectedPriest.role === 'BISHOP' || selectedPriest.noFixedSchedule) ? (
                   <>
@@ -851,16 +862,7 @@ export default function Home() {
                   {(selectedPriest.role === 'BISHOP' || selectedPriest.noFixedSchedule) ? (language === 'ar' ? 'تقديم طلب اللقاء' : 'Submit Meeting Request') : t('confirm_booking')}
                 </button>
               </form>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '1rem 0' }}>
-                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
-                  {language === 'ar' ? 'لتسجيل مواعيد سر الاعتراف والإرشاد، يجب إنشاء حساب شخصي أو تسجيل دخولك.' : 'To book confession or counseling sessions, you must create a personal account or login.'}
-                </p>
-                <Link href="/login" onClick={closeBookingModal} className={styles.bookBtn} style={{ display: 'inline-block', width: 'auto', padding: '10px 30px' }}>
-                  {t('login')}
-                </Link>
-              </div>
-            )}
+            </AuthLockedSection>
           </div>
         </div>
       )}
@@ -904,7 +906,16 @@ export default function Home() {
               </div>
             )}
 
-            <form onSubmit={handleBookTripSubmit}>
+            <AuthLockedSection
+              isLocked={!userToken}
+              titleAr="حجز واشتراك الرحلات متاح حصرياً للأعضاء المسجلين"
+              titleEn="Trip Booking is Exclusive for Registered Members"
+              descriptionAr="يرجى تسجيل الدخول بحسابك الكنسي لتتمكن من حجز واشتراك مقاعد الرحلة ونظام السداد."
+              descriptionEn="Please log in with your church account to book your seats and select payment arrangements."
+              redirectUrl="/"
+              minHeight="420px"
+            >
+              <form onSubmit={handleBookTripSubmit}>
               {/* Full Name */}
               <div className={styles.formGroup}>
                 <label>{language === 'ar' ? 'الاسم بالكامل *' : 'Full Name *'}</label>
@@ -1059,7 +1070,8 @@ export default function Home() {
                   ? (language === 'ar' ? 'جاري إرسال الحجز...' : 'Submitting Booking...') 
                   : (language === 'ar' ? 'تأكيد إرسال طلب الحجز' : 'Confirm & Submit Booking')}
               </button>
-            </form>
+              </form>
+            </AuthLockedSection>
           </div>
         </div>
       )}

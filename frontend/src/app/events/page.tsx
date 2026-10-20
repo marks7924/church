@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { useTheme } from '../../components/ThemeContext';
 import { 
   Calendar, MapPin, Users, Lock, CheckCircle, AlertTriangle, ArrowLeft, ArrowRight,
-  ShieldCheck, Sparkles, Mail, Phone, User, QrCode
+  ShieldCheck, Sparkles, Mail, Phone, User, QrCode, X
 } from 'lucide-react';
 import { API_URL } from '../../config';
 import VipInvitationCard from '../../components/VipInvitationCard';
+import AuthLockedSection from '../../components/AuthLockedSection';
 
 export default function EventsPublicPage() {
   const { language } = useTheme();
@@ -130,22 +131,22 @@ export default function EventsPublicPage() {
       return;
     }
 
+    // If not signed in, still open modal so the user sees the real event locations & options blurred under the lock badge
+    if (!user || !token) {
+      setApplyingEvent(event);
+      setSelectedLocationId(event.locations?.[0]?.id || '');
+      setTicketCount(1);
+      setApplyError(null);
+      setPartialNotice(null);
+      setIssuedInvitation(null);
+      setIssuedInvitationsList([]);
+      return;
+    }
+
     // 2. Server-Side Eligibility Rules Enforcement: Church Membership Rule
     let rules: any = {};
     try { rules = JSON.parse(event.eligibilityRulesJson || '{}'); } catch {}
     if (rules.requireVerifiedMember) {
-      if (!user) {
-        setWebAlertModal({
-          title: isAr ? 'تسجيل الدخول مطلوب' : 'Login Required',
-          message: isAr 
-            ? 'هذه الفعالية مخصصة لأعضاء الكنيسة المسجلين. يرجى تسجيل الدخول بحسابك أولاً.' 
-            : 'This event is restricted to registered church members. Please log in first.',
-          type: 'warning',
-          actionUrl: '/login',
-          actionText: isAr ? 'تسجيل الدخول الآن' : 'Log In'
-        });
-        return;
-      }
 
       const isChurchMember = ['PRIEST', 'BISHOP', 'SUPER_ADMIN', 'CHURCH_ADMIN', 'SECRETARY', 'DEVELOPER'].includes(user.role) ||
                              user.familyProfileStatus === 'APPROVED' ||
@@ -643,12 +644,29 @@ export default function EventsPublicPage() {
           }}>
             {!issuedInvitation ? (
               <>
-                <h3 style={{ fontSize: '1.3rem', fontWeight: 800, margin: '0 0 0.5rem 0', color: '#ffffff' }}>
-                  {isAr ? 'تأكيد التسجيل وإصدار بطاقة الدعوة' : 'Event Pass Application'}
-                </h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', margin: '0 0 1.25rem 0' }}>
-                  {isAr ? applyingEvent.titleAr : applyingEvent.titleEn}
-                </p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.3rem', fontWeight: 800, margin: '0 0 0.35rem 0', color: '#ffffff' }}>
+                      {isAr ? 'تأكيد التسجيل وإصدار بطاقة الدعوة' : 'Event Pass Application'}
+                    </h3>
+                    <p style={{ color: 'var(--accent-gold)', fontSize: '0.9rem', margin: 0, fontWeight: 700 }}>
+                      {isAr ? applyingEvent.titleAr : applyingEvent.titleEn}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setApplyingEvent(null)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      padding: '4px'
+                    }}
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
 
                 {partialNotice && (
                   <div style={{
@@ -679,7 +697,16 @@ export default function EventsPublicPage() {
                   </div>
                 )}
 
-                <form onSubmit={handleConfirmApplication}>
+                <AuthLockedSection
+                  isLocked={!token || !user}
+                  titleAr="الاشتراك في الفعاليات متاح حصرياً للأعضاء المسجلين"
+                  titleEn="Event Participation is Exclusive for Registered Members"
+                  descriptionAr="يرجى تسجيل الدخول بحسابك الكنسي لتتمكن من اختيار مقر الحضور وتأكيد حجز بطاقة الدعوة الخاصة بك."
+                  descriptionEn="Please log in with your church account to select attendance location and secure your invitation pass."
+                  redirectUrl="/events"
+                  minHeight="420px"
+                >
+                  <form onSubmit={handleConfirmApplication}>
                   {/* Select Location with clear red styling for maxed places */}
                   <div style={{ marginBottom: '1.2rem' }}>
                     <label style={{ display: 'block', fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 600 }}>
@@ -895,7 +922,8 @@ export default function EventsPublicPage() {
                         : (isAr ? `تأكيد الحجز (${ticketCount} ${ticketCount === 1 ? 'تذكرة' : 'تذاكر'})` : `Confirm (${ticketCount} ${ticketCount === 1 ? 'Pass' : 'Passes'})`)}
                     </button>
                   </div>
-                </form>
+                  </form>
+                </AuthLockedSection>
               </>
             ) : (
               <div>

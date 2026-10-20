@@ -10,6 +10,7 @@ import {
   HeartHandshake, Calendar, Users, Phone, MapPin, ArrowUpRight,
   CheckCircle2, Clock, HelpCircle
 } from 'lucide-react';
+import AuthLockedSection from './AuthLockedSection';
 
 export interface PriestScheduleRule {
   id: string;
@@ -157,6 +158,13 @@ export default function ChurchAiAssistant() {
   const [showPrivacyBanner, setShowPrivacyBanner] = useState(true);
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [isFooterVisible, setIsFooterVisible] = useState(false);
+  const [userToken, setUserToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setUserToken(localStorage.getItem('church-token'));
+    }
+  }, [isOpen]);
 
   // FAQ Menu Toggle State
   const [isFaqMenuOpen, setIsFaqMenuOpen] = useState(false);
@@ -1204,7 +1212,15 @@ export default function ChurchAiAssistant() {
 
           {/* Body (Hidden when minimized) */}
           {!isMinimized && (
-            <>
+            <AuthLockedSection
+              isLocked={!userToken}
+              titleAr="المساعد الكنسي الذكي متاح حصرياً للأعضاء المسجلين"
+              titleEn="Church AI Assistant is Exclusive for Registered Members"
+              descriptionAr="يرجى تسجيل الدخول بحسابك الكنسي للدردشة مع المساعد الذكي، الاستعلام عن القداسات والخدمات، ومتابعة طلباتك."
+              descriptionEn="Please log in with your church account to chat with the AI assistant and access personalized church guidance."
+              redirectUrl={typeof window !== 'undefined' ? window.location.pathname : '/'}
+              minHeight="420px"
+            >
               {/* Subtle Elegant Privacy Notice */}
               {showPrivacyBanner && (
                 <div
@@ -2179,7 +2195,7 @@ export default function ChurchAiAssistant() {
                   </button>
                 </form>
               </div>
-            </>
+            </AuthLockedSection>
           )}
         </div>
       )}
