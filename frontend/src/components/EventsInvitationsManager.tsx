@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from './ThemeContext';
 import { 
   QrCode, Camera, CheckCircle2, AlertTriangle, XCircle, Users, PlusCircle, 
-  RefreshCw, MapPin, Crown, Search, ShieldAlert, ArrowLeft, ArrowRight, Eye, Undo2,
+  RefreshCw, MapPin, Crown, Search, ShieldAlert, ArrowLeft, ArrowRight, Eye, EyeOff, Trash2, Undo2,
   Calendar, Clock, Check, Lock, Unlock, PlayCircle, Sparkles, Repeat
 } from 'lucide-react';
 import { API_URL } from '../config';
@@ -435,10 +435,19 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
       await qrScanner.start(
         { facingMode: 'environment' },
         {
-          fps: 10,
-          qrbox: { width: 250, height: 250 }
+          fps: 20,
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+            const size = Math.floor(minEdge * 0.78);
+            return { width: Math.max(220, size), height: Math.max(220, size) };
+          },
+          videoConstraints: {
+            facingMode: { ideal: 'environment' },
+            width: { min: 640, ideal: 1920, max: 2560 },
+            height: { min: 480, ideal: 1080, max: 1440 }
+          }
         },
-        async (decodedText) => {
+        async (decodedText: string) => {
           if (isProcessingScanRef.current) return;
           isProcessingScanRef.current = true;
 
@@ -452,18 +461,21 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
               },
               body: JSON.stringify({
                 qrToken: decodedText,
-                eventId: selectedEventId || undefined,
+                eventId: selectedEventId === 'ALL' ? undefined : (selectedEventId || undefined),
                 locationId: selectedLocationId || undefined
               })
             });
 
             const data = await res.json();
             setScanResult({
-              success: data.success,
+              success: data.status === 'VERIFIED',
               status: data.status,
               invitation: data.invitation,
-              error: data.error,
-              redeemedAt: data.redeemedAt
+              error: data.messageAr || data.error,
+              messageAr: data.messageAr,
+              messageEn: data.messageEn,
+              redeemedAt: data.redeemedAt,
+              qrToken: decodedText
             });
           } catch (err) {
             setScanResult({
@@ -621,6 +633,42 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
     }
   };
 
+  const handleForceCheckInDifferentEvent = async (qrToken?: string) => {
+    if (!qrToken || !token) return;
+    try {
+      const res = await fetch(`${API_URL}/invitations/admin/verify-qr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          qrToken,
+          autoAcceptDifferentEvent: true
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'VERIFIED') {
+        setScanResult({
+          success: true,
+          status: 'VERIFIED',
+          invitation: data.invitation,
+          redeemedAt: data.invitation?.redeemedAt
+        });
+        if (data.invitation?.eventId) {
+          setSelectedEventId(data.invitation.eventId);
+        }
+      } else {
+        alert(data.messageAr || data.error || 'Failed to check in.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert(isAr ? 'خطأ في الاتصال بالخادم.' : 'Connection error.');
+    }
+  };
+
+  const currentEvent = events.find(e => e.id === selectedEventId) || events[0];
+
   return (
     <div style={{ direction: isAr ? 'rtl' : 'ltr' }}>
       {/* Top Controls & Event Selection */}
@@ -653,7 +701,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
             <h2 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
               {isAr ? 'نظام الفعاليات والدعوات والتحقق المستمر (QR)' : 'Events, VIP Invitations & Continuous QR Check-in'}
             </h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
                 {isAr ? 'الفعالية الحالية:' : 'Active Event:'}
               </span>
@@ -671,9 +719,12 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                   cursor: 'pointer'
                 }}
               >
+                <option value="ALL">
+                  {isAr ? '🌐 فحص لجميع الفعاليات (Universal Check-in)' : '🌐 All Events (Universal Check-in)'}
+                </option>
                 {events.map(ev => (
                   <option key={ev.id} value={ev.id}>
-                    {isAr ? ev.titleAr : ev.titleEn} ({ev.isPublished ? (isAr ? 'معلن' : 'Published') : (isAr ? 'مخفي' : 'Hidden')})
+                    {isAr ? ev.titleAr : ev.titleEn} ({ev.isPublicVisible ? (isAr ? 'ظاهرة للجمهور' : 'Public') : (isAr ? 'مخفية' : 'Hidden')})
                   </option>
                 ))}
               </select>
@@ -681,7 +732,60 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Toggle Show / Hide Current Event in Navbar & Site - ONLY HERE */}
+          {currentEvent && (
+            <button
+              onClick={() => handleToggleEventVisibility(currentEvent.id, currentEvent.isPublicVisible)}
+              title={isAr ? 'التحكم في ظهور أو إخفاء الفعالية وتبويبها في شريط التنقل بالموقع' : 'Toggle public visibility of this event and navbar tab'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 14px',
+                borderRadius: '8px',
+                border: `1px solid ${currentEvent.isPublicVisible ? 'rgba(46, 204, 113, 0.4)' : 'rgba(231, 76, 60, 0.4)'}`,
+                background: currentEvent.isPublicVisible ? 'rgba(46, 204, 113, 0.15)' : 'rgba(231, 76, 60, 0.15)',
+                color: currentEvent.isPublicVisible ? '#2ecc71' : '#ff6b6b',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              {currentEvent.isPublicVisible ? <Eye size={16} /> : <EyeOff size={16} />}
+              <span>
+                {currentEvent.isPublicVisible
+                  ? (isAr ? 'الفعالية ظاهرة للجمهور ✓ (انقر للإخفاء)' : 'Public Visible ✓ (Click to Hide)')
+                  : (isAr ? 'الفعالية مخفية ✕ (انقر للإظهار)' : 'Hidden ✕ (Click to Show)')
+                }
+              </span>
+            </button>
+          )}
+
+          {/* Delete Current Event */}
+          {currentEvent && (
+            <button
+              onClick={() => handleDeleteEvent(currentEvent.id, isAr ? currentEvent.titleAr : currentEvent.titleEn)}
+              title={isAr ? 'حذف هذه الفعالية نهائياً' : 'Delete event permanently'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 14px',
+                borderRadius: '8px',
+                border: '1px solid rgba(231, 76, 60, 0.3)',
+                background: 'rgba(231, 76, 60, 0.12)',
+                color: '#e74c3c',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              <Trash2 size={16} />
+              <span>{isAr ? 'حذف الفعالية' : 'Delete Event'}</span>
+            </button>
+          )}
+
           <button
             onClick={() => setShowIssueModal(true)}
             style={{
@@ -1113,22 +1217,22 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                       <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button
-                            onClick={() => handleTogglePublish(ev)}
+                            onClick={() => setSelectedEventId(ev.id)}
                             style={{
                               flex: 1,
                               padding: '8px 10px',
                               borderRadius: '6px',
                               border: 'none',
-                              background: ev.isPublicVisible ? 'rgba(46, 204, 113, 0.2)' : 'rgba(255,255,255,0.08)',
-                              color: ev.isPublicVisible ? '#2ecc71' : 'var(--text-secondary)',
+                              background: selectedEventId === ev.id ? 'var(--accent-gold)' : 'rgba(255,255,255,0.08)',
+                              color: selectedEventId === ev.id ? '#000000' : '#ffffff',
                               fontWeight: 700,
                               cursor: 'pointer',
                               fontSize: '0.8rem'
                             }}
                           >
-                            {ev.isPublicVisible 
-                              ? (isAr ? 'صفحة الفعالية ظاهرة للجمهور ✓' : 'Public Page Visible ✓') 
-                              : (isAr ? 'إظهار الفعالية للجمهور' : 'Make Public')}
+                            {selectedEventId === ev.id 
+                              ? (isAr ? 'الفعالية المحددة حالياً ✓' : 'Selected Event ✓') 
+                              : (isAr ? 'تحديد كفعالية حالية' : 'Select Event')}
                           </button>
 
                           <button
@@ -1309,8 +1413,22 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                 borderRadius: '12px',
                 padding: '1.25rem',
                 margin: '1rem 0',
-                background: scanResult.status === 'VERIFIED' ? 'rgba(46, 204, 113, 0.15)' : scanResult.status === 'ALREADY_USED' ? 'rgba(230, 126, 34, 0.2)' : 'rgba(231, 76, 60, 0.2)',
-                border: `2px solid ${scanResult.status === 'VERIFIED' ? '#2ecc71' : scanResult.status === 'ALREADY_USED' ? '#e67e22' : '#e74c3c'}`
+                background: scanResult.status === 'VERIFIED'
+                  ? 'rgba(46, 204, 113, 0.15)'
+                  : scanResult.status === 'ALREADY_USED'
+                  ? 'rgba(230, 126, 34, 0.2)'
+                  : scanResult.status === 'WRONG_EVENT'
+                  ? 'rgba(243, 156, 18, 0.2)'
+                  : 'rgba(231, 76, 60, 0.2)',
+                border: `2px solid ${
+                  scanResult.status === 'VERIFIED'
+                    ? '#2ecc71'
+                    : scanResult.status === 'ALREADY_USED'
+                    ? '#e67e22'
+                    : scanResult.status === 'WRONG_EVENT'
+                    ? '#f39c12'
+                    : '#e74c3c'
+                }`
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
                   {scanResult.status === 'VERIFIED' && (
@@ -1325,7 +1443,15 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                       <strong style={{ fontSize: '1.2rem', color: '#e67e22' }}>{isAr ? 'مستخدمة سابقاً ! (ALREADY USED)' : 'ALREADY USED !'}</strong>
                     </>
                   )}
-                  {scanResult.status !== 'VERIFIED' && scanResult.status !== 'ALREADY_USED' && (
+                  {scanResult.status === 'WRONG_EVENT' && (
+                    <>
+                      <AlertTriangle size={24} style={{ color: '#f39c12' }} />
+                      <strong style={{ fontSize: '1.2rem', color: '#f39c12' }}>
+                        {isAr ? 'تنبيه: دعوة لفعالية أخرى ⚠️' : 'Notice: Different Event ⚠️'}
+                      </strong>
+                    </>
+                  )}
+                  {scanResult.status !== 'VERIFIED' && scanResult.status !== 'ALREADY_USED' && scanResult.status !== 'WRONG_EVENT' && (
                     <>
                       <XCircle size={24} style={{ color: '#e74c3c' }} />
                       <strong style={{ fontSize: '1.2rem', color: '#e74c3c' }}>{isAr ? 'رمز غير صالح ✗ (INVALID)' : 'INVALID ✗'}</strong>
@@ -1352,29 +1478,70 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                         VIP PASS
                       </span>
                     )}
+                    {scanResult.status === 'WRONG_EVENT' && (
+                      <div style={{
+                        marginTop: '8px',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        background: 'rgba(243, 156, 18, 0.2)',
+                        border: '1px solid rgba(243, 156, 18, 0.4)',
+                        color: '#ffffff',
+                        fontSize: '0.88rem'
+                      }}>
+                        {isAr ? 'الفعالية المسجل لها:' : 'Registered Event:'}{' '}
+                        <strong style={{ color: '#f39c12' }}>
+                          {scanResult.invitation.eventTitleAr || scanResult.invitation.event?.titleAr || (isAr ? 'فعالية أخرى' : 'Other Event')}
+                        </strong>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {scanResult.error && (
-                  <p style={{ margin: '6px 0 0 0', fontSize: '0.85rem', color: '#e74c3c' }}>{scanResult.error}</p>
+                  <p style={{
+                    margin: '8px 0',
+                    fontSize: '0.88rem',
+                    color: scanResult.status === 'WRONG_EVENT' ? '#f39c12' : '#e74c3c',
+                    fontWeight: 600
+                  }}>
+                    {scanResult.error}
+                  </p>
                 )}
 
-                <button
-                  onClick={resumeScan}
-                  style={{
-                    marginTop: '12px',
-                    padding: '8px 22px',
-                    borderRadius: '8px',
-                    background: '#ffffff',
-                    color: '#000000',
-                    fontWeight: 800,
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  {isAr ? 'متابعة المسح التالي (Next)' : 'Scan Next Code'}
-                </button>
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '12px' }}>
+                  {scanResult.status === 'WRONG_EVENT' && (
+                    <button
+                      onClick={() => handleForceCheckInDifferentEvent(scanResult.qrToken)}
+                      style={{
+                        padding: '8px 18px',
+                        borderRadius: '8px',
+                        background: 'var(--accent-gold)',
+                        color: '#000000',
+                        fontWeight: 800,
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.88rem'
+                      }}
+                    >
+                      {isAr ? '✓ اعتماد الحضور وتأكيد الدخول الآن' : '✓ Check-in for this event'}
+                    </button>
+                  )}
+                  <button
+                    onClick={resumeScan}
+                    style={{
+                      padding: '8px 22px',
+                      borderRadius: '8px',
+                      background: '#ffffff',
+                      color: '#000000',
+                      fontWeight: 800,
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem'
+                    }}
+                  >
+                    {isAr ? 'متابعة المسح التالي (Next)' : 'Scan Next Code'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1451,25 +1618,6 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
                   </div>
 
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {/* Toggle Public Visibility */}
-                    <button
-                      onClick={() => handleToggleEventVisibility(currentEvent.id, currentEvent.isPublicVisible)}
-                      style={{
-                        padding: '8px 14px',
-                        borderRadius: '8px',
-                        border: 'none',
-                        background: currentEvent.isPublicVisible ? 'rgba(46, 204, 113, 0.2)' : 'rgba(231, 76, 60, 0.2)',
-                        color: currentEvent.isPublicVisible ? '#2ecc71' : '#e74c3c',
-                        fontWeight: 700,
-                        fontSize: '0.82rem',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {currentEvent.isPublicVisible 
-                        ? (isAr ? 'صفحة الفعالية ظاهرة للجمهور ✓' : 'Public Visible ✓') 
-                        : (isAr ? 'صفحة الفعالية مخفية 🔒' : 'Hidden 🔒')}
-                    </button>
-
                     {/* Toggle Apply Button Active */}
                     <button
                       onClick={() => handleToggleApplicationActive(currentEvent.id, currentEvent.isApplicationActive)}

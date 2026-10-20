@@ -632,12 +632,21 @@ router.post(
       }
 
       // Check Wrong Event or Wrong Location
-      if (eventId && invitation.eventId !== eventId) {
+      const isUniversalMode = !eventId || eventId === 'ALL';
+      const autoAcceptDifferentEvent = Boolean(req.body.autoAcceptDifferentEvent);
+
+      if (!isUniversalMode && invitation.eventId !== eventId && !autoAcceptDifferentEvent) {
         return res.status(400).json({
           status: 'WRONG_EVENT',
           messageAr: `هذه الدعوة تخص فعالية أخرى (${invitation.event.titleAr}).`,
           messageEn: `Wrong Event: Invitation belongs to "${invitation.event.titleEn}".`,
-          invitation
+          invitation: {
+            ...invitation,
+            eventTitleAr: invitation.event.titleAr,
+            eventTitleEn: invitation.event.titleEn,
+            locationNameAr: invitation.location.nameAr,
+            locationNameEn: invitation.location.nameEn
+          }
         });
       }
 

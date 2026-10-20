@@ -306,21 +306,19 @@ export default function DashboardPage() {
     const role = user.role;
     const tabs = [];
 
-    // Member Tab
-    if (role === 'MEMBER') {
-      tabs.push({
-        id: 'my-profile',
-        labelAr: 'حسابي وعضويتي',
-        labelEn: 'My Profile & Status',
-        icon: <User size={16} />
-      });
-      tabs.push({
-        id: 'my-invitations',
-        labelAr: language === 'ar' ? 'دعواتي الرسمية (VIP)' : 'My Official Invitations',
-        labelEn: language === 'ar' ? 'دعواتي الرسمية (VIP)' : 'My Official Invitations',
-        icon: <QrCode size={16} />
-      });
-    }
+    // Universal Tabs: My Profile & My Invitations (Available to every member/admin)
+    tabs.push({
+      id: 'my-profile',
+      labelAr: language === 'ar' ? 'ملفي الشخصي وحسابي' : 'My Profile & Account',
+      labelEn: language === 'ar' ? 'ملفي الشخصي وحسابي' : 'My Profile & Account',
+      icon: <User size={16} />
+    });
+    tabs.push({
+      id: 'my-invitations',
+      labelAr: language === 'ar' ? 'تذاكري ودعواتي (QR)' : 'My Tickets & Invitations',
+      labelEn: language === 'ar' ? 'تذاكري ودعواتي (QR)' : 'My Tickets & Invitations',
+      icon: <QrCode size={16} />
+    });
 
     // Non-member News Tab
     if (role && role !== 'MEMBER') {
@@ -478,7 +476,12 @@ export default function DashboardPage() {
       const parsedUser = JSON.parse(userStr);
       setUser(parsedUser);
 
-      if (['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(parsedUser.role)) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get('tab');
+
+      if (tabParam) {
+        setActiveTab(tabParam);
+      } else if (['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(parsedUser.role)) {
         setActiveTab('members');
       } else if (parsedUser.role === 'TRIP_MANAGER') {
         setActiveTab('trips');
@@ -1730,6 +1733,33 @@ export default function DashboardPage() {
       {activeTab === 'my-profile' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           
+          {/* User Account Details Card */}
+          <div className="dashboard-panel">
+            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              👤 {language === 'ar' ? 'معلومات الحساب والملف الشخصي' : 'Account Profile Information'}
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px' }}>
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block' }}>{language === 'ar' ? 'الاسم الكامل:' : 'Full Name:'}</span>
+                <strong style={{ fontSize: '1rem', color: '#ffffff' }}>{user?.fullName || '—'}</strong>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block' }}>{language === 'ar' ? 'البريد الإلكتروني:' : 'Email:'}</span>
+                <strong style={{ fontSize: '0.95rem', color: '#ffffff', wordBreak: 'break-all' }}>{user?.email || '—'}</strong>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block' }}>{language === 'ar' ? 'الرتبة والصفة:' : 'Role:'}</span>
+                <strong style={{ fontSize: '0.95rem', color: 'var(--accent-gold)' }}>{user?.role || 'MEMBER'}</strong>
+              </div>
+              {user?.phone && (
+                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block' }}>{language === 'ar' ? 'رقم الهاتف:' : 'Phone:'}</span>
+                  <strong style={{ fontSize: '0.95rem', color: '#ffffff' }}>{user.phone}</strong>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Membership Status Summary */}
           <div className="dashboard-panel">
             <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1rem' }}>

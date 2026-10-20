@@ -459,11 +459,17 @@ router.get('/questions/:slug', async (req: Request, res: Response) => {
       take: 4
     });
 
-    return res.status(200).json({
+    const fullDetail = {
       ...question,
       externalLinks: links,
       tagsList: tags,
       relatedQuestions: related
+    };
+
+    return res.status(200).json({
+      success: true,
+      question: fullDetail,
+      ...fullDetail
     });
   } catch (error: any) {
     return res.status(500).json({ error: 'Failed to fetch question detail.' });
@@ -605,13 +611,21 @@ router.post(
       const cleanTitle = titleAr || sub.questionTitle;
       const slug = `q-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
 
+      let resolvedCategoryId = categoryId;
+      if (!resolvedCategoryId) {
+        const defaultCat = await prisma.fyQuestionCategory.findFirst({
+          orderBy: { orderIndex: 'asc' }
+        });
+        resolvedCategoryId = defaultCat?.id || null;
+      }
+
       const [published] = await prisma.$transaction([
         prisma.fyQuestion.create({
           data: {
             titleAr: cleanTitle,
             titleEn: titleEn ? String(titleEn).trim() : null,
             slug,
-            categoryId: categoryId || null,
+            categoryId: resolvedCategoryId,
             answerTextAr: String(answerTextAr || '').trim(),
             answerTextEn: answerTextEn ? String(answerTextEn).trim() : null,
             videoUrl: videoUrl ? String(videoUrl).trim() : null,

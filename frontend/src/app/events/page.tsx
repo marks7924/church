@@ -647,7 +647,7 @@ export default function EventsPublicPage() {
 
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
                   <Link
-                    href="/dashboard"
+                    href="/dashboard?tab=my-invitations"
                     style={{
                       padding: '10px 20px',
                       borderRadius: '8px',
@@ -658,7 +658,7 @@ export default function EventsPublicPage() {
                       fontSize: '0.9rem'
                     }}
                   >
-                    {isAr ? 'الانتقال لملفي الشخصي' : 'Go to Profile'}
+                    {isAr ? 'الانتقال لتذاكري ودعواتي (QR)' : 'Go to My Invitations'}
                   </Link>
                   <button
                     onClick={() => { setApplyingEvent(null); setIssuedInvitation(null); }}

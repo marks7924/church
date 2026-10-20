@@ -41,8 +41,11 @@ export default function QuestionDetailPage() {
         return res.json();
       })
       .then(data => {
-        if (data && data.question) {
-          setQuestion(data.question);
+        if (data) {
+          const q = data.question || data;
+          if (q && (q.id || q.titleAr)) {
+            setQuestion(q);
+          }
         }
       })
       .catch(err => setError(err.message))
