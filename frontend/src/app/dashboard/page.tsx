@@ -375,23 +375,29 @@ const initialAddMemberFormState = {
   const [tripMsg, setTripMsg] = useState<string | null>(null);
   const [tripSubTab, setTripSubTab] = useState<'bookings' | 'trips' | 'form'>('bookings');
 
+  // Modern Dashboard Tabs Categorization & Fast Filter
+  const [dashboardTabCategory, setDashboardTabCategory] = useState<'ALL' | 'personal' | 'pastoral_events' | 'media' | 'admin'>('ALL');
+  const [tabSearchQuery, setTabSearchQuery] = useState('');
+
   const getAvailableTabs = () => {
     if (!user) return [];
     const role = user.role;
-    const tabs = [];
+    const tabs: Array<{ id: string; labelAr: string; labelEn: string; icon: React.ReactNode; category: 'personal' | 'pastoral_events' | 'media' | 'admin' }> = [];
 
     // Universal Tabs: My Profile & My Invitations (Available to every member/admin)
     tabs.push({
       id: 'my-profile',
       labelAr: language === 'ar' ? 'ملفي الشخصي وحسابي' : 'My Profile & Account',
       labelEn: language === 'ar' ? 'ملفي الشخصي وحسابي' : 'My Profile & Account',
-      icon: <User size={16} />
+      icon: <User size={16} />,
+      category: 'personal'
     });
     tabs.push({
       id: 'my-invitations',
       labelAr: language === 'ar' ? 'تذاكري ودعواتي (QR)' : 'My Tickets & Invitations',
       labelEn: language === 'ar' ? 'تذاكري ودعواتي (QR)' : 'My Tickets & Invitations',
-      icon: <QrCode size={16} />
+      icon: <QrCode size={16} />,
+      category: 'personal'
     });
 
     // Non-member News Tab
@@ -400,7 +406,8 @@ const initialAddMemberFormState = {
         id: 'manage-news',
         labelAr: 'إدارة الأخبار',
         labelEn: 'Manage News',
-        icon: <FileText size={16} />
+        icon: <FileText size={16} />,
+        category: 'media'
       });
     }
 
@@ -410,13 +417,15 @@ const initialAddMemberFormState = {
         id: 'my-schedule',
         labelAr: language === 'ar' ? 'مواعيد اعترافاتي وحالتي' : 'My Confession Schedule',
         labelEn: language === 'ar' ? 'مواعيد اعترافاتي وحالتي' : 'My Confession Schedule',
-        icon: <Calendar size={16} />
+        icon: <Calendar size={16} />,
+        category: 'pastoral_events'
       });
       tabs.push({
         id: 'confessions',
         labelAr: t('booking_requests'),
         labelEn: t('booking_requests'),
-        icon: <Calendar size={16} />
+        icon: <Calendar size={16} />,
+        category: 'pastoral_events'
       });
     }
 
@@ -426,19 +435,22 @@ const initialAddMemberFormState = {
         id: 'members',
         labelAr: t('manage_members'),
         labelEn: t('manage_members'),
-        icon: <Users size={16} />
+        icon: <Users size={16} />,
+        category: 'pastoral_events'
       });
       tabs.push({
         id: 'live',
         labelAr: t('manage_live'),
         labelEn: t('manage_live'),
-        icon: <Radio size={16} />
+        icon: <Radio size={16} />,
+        category: 'media'
       });
       tabs.push({
         id: 'push-alerts',
         labelAr: language === 'ar' ? 'إرسال إشعار جماعي' : 'Broadcast Push Alerts',
         labelEn: language === 'ar' ? 'إرسال إشعار جماعي' : 'Broadcast Push Alerts',
-        icon: <Bell size={16} />
+        icon: <Bell size={16} />,
+        category: 'media'
       });
 
       if (['SUPER_ADMIN', 'DEVELOPER'].includes(role)) {
@@ -446,19 +458,22 @@ const initialAddMemberFormState = {
           id: 'manage-priests',
           labelAr: language === 'ar' ? 'إدارة الكهنة' : 'Manage Priests',
           labelEn: language === 'ar' ? 'إدارة الكهنة' : 'Manage Priests',
-          icon: <Users size={16} />
+          icon: <Users size={16} />,
+          category: 'admin'
         });
         tabs.push({
           id: 'manage-roles',
           labelAr: language === 'ar' ? 'إدارة الرتب والمستخدمين' : 'Manage Role Accounts',
           labelEn: language === 'ar' ? 'إدارة الرتب والمستخدمين' : 'Manage Role Accounts',
-          icon: <User size={16} />
+          icon: <User size={16} />,
+          category: 'admin'
         });
         tabs.push({
           id: 'action-logs',
           labelAr: language === 'ar' ? 'سجل العمليات' : 'Action Logs',
           labelEn: language === 'ar' ? 'سجل العمليات' : 'Action Logs',
-          icon: <FileText size={16} />
+          icon: <FileText size={16} />,
+          category: 'admin'
         });
       }
 
@@ -466,7 +481,8 @@ const initialAddMemberFormState = {
         id: 'ai-assistant',
         labelAr: language === 'ar' ? 'إدارة المساعد الذكي (AI Manager)' : 'AI Assistant Manager',
         labelEn: language === 'ar' ? 'إدارة المساعد الذكي (AI Manager)' : 'AI Assistant Manager',
-        icon: <Sparkles size={16} />
+        icon: <Sparkles size={16} />,
+        category: 'admin'
       });
 
       // Four Integrated Systems Admin Tabs
@@ -474,28 +490,32 @@ const initialAddMemberFormState = {
         id: 'facebook-news',
         labelAr: language === 'ar' ? 'مشاركات فيسبوك والأخبار' : 'Facebook News & Moderation',
         labelEn: language === 'ar' ? 'مشاركات فيسبوك والأخبار' : 'Facebook News & Moderation',
-        icon: <Facebook size={16} />
+        icon: <Facebook size={16} />,
+        category: 'media'
       });
 
       tabs.push({
         id: 'email-center',
         labelAr: language === 'ar' ? 'مركز البريد الإلكتروني' : 'Admin Email Center',
         labelEn: language === 'ar' ? 'مركز البريد الإلكتروني' : 'Admin Email Center',
-        icon: <Mail size={16} />
+        icon: <Mail size={16} />,
+        category: 'media'
       });
 
       tabs.push({
         id: 'events-qr',
         labelAr: language === 'ar' ? 'الدعوات وتأكيد الحضور (QR)' : 'Invitations & QR Scanner',
         labelEn: language === 'ar' ? 'الدعوات وتأكيد الحضور (QR)' : 'Invitations & QR Scanner',
-        icon: <QrCode size={16} />
+        icon: <QrCode size={16} />,
+        category: 'pastoral_events'
       });
 
       tabs.push({
         id: 'fy-moderation',
         labelAr: language === 'ar' ? 'إشراف أسئلة الإيمان (FY)' : 'FY Questions Moderation',
         labelEn: language === 'ar' ? 'إشراف أسئلة الإيمان (FY)' : 'FY Questions Moderation',
-        icon: <HelpCircle size={16} />
+        icon: <HelpCircle size={16} />,
+        category: 'pastoral_events'
       });
     }
 
@@ -505,13 +525,15 @@ const initialAddMemberFormState = {
         id: 'manage-site-info',
         labelAr: language === 'ar' ? 'محتوى وإعدادات الموقع' : 'Manage Site & Services',
         labelEn: language === 'ar' ? 'محتوى وإعدادات الموقع' : 'Manage Site & Services',
-        icon: <FileText size={16} />
+        icon: <FileText size={16} />,
+        category: 'admin'
       });
       tabs.push({
         id: 'member-messages',
         labelAr: language === 'ar' ? 'رسائل الأعضاء' : 'Member Messages',
         labelEn: language === 'ar' ? 'رسائل الأعضاء' : 'Member Messages',
-        icon: <Bell size={16} />
+        icon: <Bell size={16} />,
+        category: 'pastoral_events'
       });
     }
 
@@ -521,7 +543,8 @@ const initialAddMemberFormState = {
         id: 'trips',
         labelAr: language === 'ar' ? 'إدارة الرحلات والاشتراكات' : 'Manage Trips & Bookings',
         labelEn: language === 'ar' ? 'إدارة الرحلات والاشتراكات' : 'Manage Trips & Bookings',
-        icon: <Calendar size={16} />
+        icon: <Calendar size={16} />,
+        category: 'pastoral_events'
       });
     }
 
@@ -2121,53 +2144,193 @@ const initialAddMemberFormState = {
           </span>
         </button>
 
-        {/* Scrollable Horizontal Pill Tabs */}
-        <div 
-          className="dashboard-tabs-scrollable" 
-          style={{ 
-            display: 'flex', 
-            gap: '8px', 
-            overflowX: 'auto', 
-            paddingBottom: '10px', 
-            marginBottom: '1.8rem',
-            scrollbarWidth: 'none',
-            WebkitOverflowScrolling: 'touch',
-            touchAction: 'pan-x'
-          }}
-        >
-          {getAvailableTabs().map(tab => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button 
-                key={tab.id}
-                type="button"
-                className={`dashboard-tab-btn ${isActive ? 'dashboard-tab-btn-active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  padding: '9px 16px',
-                  borderRadius: '24px',
-                  border: isActive ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
-                  background: isActive ? 'var(--accent-gold)' : 'var(--bg-secondary)',
-                  color: isActive ? '#000000' : 'var(--text-primary)',
-                  cursor: 'pointer',
-                  fontWeight: isActive ? '700' : '600',
-                  fontSize: '0.85rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                  minHeight: '40px',
-                  touchAction: 'manipulation',
-                  transition: 'all 0.2s ease',
-                  boxShadow: isActive ? '0 4px 12px rgba(226, 183, 20, 0.25)' : 'none'
-                }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center' }}>{tab.icon}</span>
-                <span>{language === 'ar' ? tab.labelAr : tab.labelEn}</span>
-              </button>
-            );
-          })}
+        {/* Modern Organized Dashboard Navigation Header */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.02)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '16px',
+          padding: '16px',
+          marginBottom: '2rem',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+          backdropFilter: 'blur(10px)'
+        }}>
+          {/* Top Controls: Category Segmented Bar + Quick Search */}
+          {getAvailableTabs().length > 3 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap',
+              paddingBottom: '14px',
+              marginBottom: '14px',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.06)'
+            }}>
+              {/* Category Segmented Control Chips */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                {[
+                  { id: 'ALL', labelAr: '✨ الكل', labelEn: '✨ All', count: getAvailableTabs().length },
+                  { id: 'personal', labelAr: '👤 الحساب', labelEn: '👤 Account', count: getAvailableTabs().filter(t => t.category === 'personal').length },
+                  { id: 'pastoral_events', labelAr: '🏛️ الرعوية والفعاليات', labelEn: '🏛️ Pastoral & Events', count: getAvailableTabs().filter(t => t.category === 'pastoral_events').length },
+                  { id: 'media', labelAr: '📢 الإعلام والتواصل', labelEn: '📢 Media & Alerts', count: getAvailableTabs().filter(t => t.category === 'media').length },
+                  { id: 'admin', labelAr: '⚙️ الإدارة والنظام', labelEn: '⚙️ Administration', count: getAvailableTabs().filter(t => t.category === 'admin').length },
+                ].filter(cat => cat.id === 'ALL' || cat.count > 0).map(cat => {
+                  const isCatActive = dashboardTabCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setDashboardTabCategory(cat.id as any)}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        border: isCatActive ? '1px solid var(--accent-gold)' : '1px solid rgba(255, 255, 255, 0.08)',
+                        background: isCatActive ? 'rgba(226, 183, 20, 0.16)' : 'rgba(255, 255, 255, 0.03)',
+                        color: isCatActive ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                        fontSize: '0.8rem',
+                        fontWeight: isCatActive ? 700 : 500,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s ease',
+                        boxShadow: isCatActive ? '0 2px 8px rgba(226, 183, 20, 0.2)' : 'none'
+                      }}
+                    >
+                      <span>{language === 'ar' ? cat.labelAr : cat.labelEn}</span>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        padding: '1px 6px',
+                        borderRadius: '10px',
+                        background: isCatActive ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.08)',
+                        color: isCatActive ? '#000000' : 'var(--text-secondary)',
+                        fontWeight: 700
+                      }}>
+                        {cat.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Quick Search Input */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 12px',
+                borderRadius: '20px',
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                minWidth: '200px',
+                maxWidth: '280px',
+                flex: '1 1 auto'
+              }}>
+                <Search size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                <input
+                  type="text"
+                  value={tabSearchQuery}
+                  onChange={(e) => setTabSearchQuery(e.target.value)}
+                  placeholder={language === 'ar' ? 'بحث سريع في الأقسام...' : 'Search sections...'}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontSize: '0.8rem',
+                    width: '100%',
+                    outline: 'none'
+                  }}
+                />
+                {tabSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setTabSearchQuery('')}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 0 }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Tab Buttons Grid / Flex Wrap */}
+          <div 
+            className="dashboard-tabs-scrollable" 
+            style={{ 
+              display: 'flex', 
+              flexWrap: 'wrap',
+              gap: '10px', 
+              touchAction: 'pan-x'
+            }}
+          >
+            {getAvailableTabs()
+              .filter(tab => {
+                if (dashboardTabCategory !== 'ALL' && tab.category !== dashboardTabCategory) {
+                  return false;
+                }
+                if (tabSearchQuery.trim()) {
+                  const q = tabSearchQuery.toLowerCase();
+                  return (
+                    (tab.labelAr && tab.labelAr.toLowerCase().includes(q)) ||
+                    (tab.labelEn && tab.labelEn.toLowerCase().includes(q))
+                  );
+                }
+                return true;
+              })
+              .map(tab => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button 
+                    key={tab.id}
+                    type="button"
+                    className={`dashboard-tab-btn ${isActive ? 'dashboard-tab-btn-active' : ''}`}
+                    onClick={() => setActiveTab(tab.id)}
+                    style={{
+                      padding: '10px 18px',
+                      borderRadius: '12px',
+                      border: isActive ? '1px solid var(--accent-gold)' : '1px solid rgba(255, 255, 255, 0.08)',
+                      background: isActive 
+                        ? 'linear-gradient(135deg, rgba(226, 183, 20, 0.22) 0%, rgba(226, 183, 20, 0.08) 100%)' 
+                        : 'rgba(255, 255, 255, 0.03)',
+                      color: isActive ? 'var(--accent-gold)' : 'var(--text-primary)',
+                      cursor: 'pointer',
+                      fontWeight: isActive ? 800 : 600,
+                      fontSize: '0.86rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '9px',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      minHeight: '44px',
+                      touchAction: 'manipulation',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      boxShadow: isActive ? '0 4px 16px rgba(226, 183, 20, 0.22)' : 'none',
+                      position: 'relative'
+                    }}
+                  >
+                    <span style={{ 
+                      display: 'flex', 
+                      alignItems: 'center',
+                      color: isActive ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.65)'
+                    }}>
+                      {tab.icon}
+                    </span>
+                    <span>{language === 'ar' ? tab.labelAr : tab.labelEn}</span>
+                    {isActive && (
+                      <span style={{
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        background: 'var(--accent-gold)',
+                        boxShadow: '0 0 8px var(--accent-gold)',
+                        display: 'inline-block'
+                      }} />
+                    )}
+                  </button>
+                );
+              })}
+          </div>
         </div>
       </div>
 
@@ -2188,35 +2351,62 @@ const initialAddMemberFormState = {
               </button>
             </div>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {getAvailableTabs().map(tab => {
-                const isActive = activeTab === tab.id;
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '70vh', overflowY: 'auto' }}>
+              {[
+                { id: 'personal', labelAr: '👤 الحساب والبطاقات', labelEn: '👤 Account & Passes' },
+                { id: 'pastoral_events', labelAr: '🏛️ الرعوية والفعاليات', labelEn: '🏛️ Pastoral & Events' },
+                { id: 'media', labelAr: '📢 الإعلام والتواصل', labelEn: '📢 Media & Alerts' },
+                { id: 'admin', labelAr: '⚙️ الإدارة والنظام', labelEn: '⚙️ System & Administration' },
+              ].map(catGroup => {
+                const groupTabs = getAvailableTabs().filter(t => t.category === catGroup.id);
+                if (groupTabs.length === 0) return null;
                 return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    className={`dashboard-drawer-item ${isActive ? 'dashboard-drawer-item-active' : ''}`}
-                    onClick={() => {
-                      setActiveTab(tab.id);
-                      setIsMobileTabMenuOpen(false);
-                    }}
-                    style={{
-                      minHeight: '48px',
-                      touchAction: 'manipulation'
-                    }}
-                  >
-                    <span style={{ color: isActive ? 'var(--accent-gold)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>
-                      {tab.icon}
-                    </span>
-                    <span style={{ flex: 1, fontSize: '0.92rem' }}>
-                      {language === 'ar' ? tab.labelAr : tab.labelEn}
-                    </span>
-                    {isActive && (
-                      <span style={{ fontSize: '0.75rem', backgroundColor: 'var(--accent-gold)', color: '#000000', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
-                        {language === 'ar' ? 'نشط' : 'Active'}
-                      </span>
-                    )}
-                  </button>
+                  <div key={catGroup.id}>
+                    <div style={{
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      color: 'var(--accent-gold)',
+                      marginBottom: '6px',
+                      padding: '2px 6px',
+                      background: 'rgba(226, 183, 20, 0.08)',
+                      borderRadius: '6px',
+                      display: 'inline-block'
+                    }}>
+                      {language === 'ar' ? catGroup.labelAr : catGroup.labelEn}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                      {groupTabs.map(tab => {
+                        const isActive = activeTab === tab.id;
+                        return (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            className={`dashboard-drawer-item ${isActive ? 'dashboard-drawer-item-active' : ''}`}
+                            onClick={() => {
+                              setActiveTab(tab.id);
+                              setIsMobileTabMenuOpen(false);
+                            }}
+                            style={{
+                              minHeight: '46px',
+                              touchAction: 'manipulation'
+                            }}
+                          >
+                            <span style={{ color: isActive ? 'var(--accent-gold)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>
+                              {tab.icon}
+                            </span>
+                            <span style={{ flex: 1, fontSize: '0.9rem', fontWeight: isActive ? 800 : 500 }}>
+                              {language === 'ar' ? tab.labelAr : tab.labelEn}
+                            </span>
+                            {isActive && (
+                              <span style={{ fontSize: '0.72rem', backgroundColor: 'var(--accent-gold)', color: '#000000', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                                {language === 'ar' ? 'نشط' : 'Active'}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })}
             </div>

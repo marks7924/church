@@ -5,7 +5,8 @@ import { useTheme } from './ThemeContext';
 import { 
   QrCode, Camera, CheckCircle2, AlertTriangle, XCircle, Users, PlusCircle, 
   RefreshCw, MapPin, Crown, Search, ShieldAlert, ArrowLeft, ArrowRight, Eye, EyeOff, Trash2, Undo2,
-  Calendar, Clock, Check, Lock, Unlock, PlayCircle, Sparkles, Repeat, Edit3, Key, Copy, Phone, Mail, User, FileText
+  Calendar, Clock, Check, Lock, Unlock, PlayCircle, Sparkles, Repeat, Edit3, Key, Copy, Phone, Mail, User, FileText,
+  ChevronDown, Globe
 } from 'lucide-react';
 import { API_URL } from '../config';
 import VipInvitationCard from './VipInvitationCard';
@@ -26,6 +27,23 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
   const [locations, setLocations] = useState<any[]>([]);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [isGlobalEventsPublic, setIsGlobalEventsPublic] = useState<boolean>(true);
+
+  // Modern Event Selector State
+  const [isEventDropdownOpen, setIsEventDropdownOpen] = useState(false);
+  const [eventSearchQuery, setEventSearchQuery] = useState('');
+  const eventDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (eventDropdownRef.current && !eventDropdownRef.current.contains(e.target as Node)) {
+        setIsEventDropdownOpen(false);
+      }
+    };
+    if (isEventDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isEventDropdownOpen]);
 
   // Scanner States
   const [isScanning, setIsScanning] = useState<boolean>(false);
@@ -1038,33 +1056,252 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
             <h2 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
               {isAr ? 'نظام الفعاليات والدعوات والتحقق المستمر (QR)' : 'Events, VIP Invitations & Continuous QR Check-in'}
             </h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                {isAr ? 'الفعالية الحالية:' : 'Active Event:'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                {isAr ? 'الفعالية النشطة:' : 'Active Event:'}
               </span>
-              <select
-                value={selectedEventId}
-                onChange={(e) => setSelectedEventId(e.target.value)}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(226, 183, 20, 0.3)',
-                  color: '#ffffff',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="ALL">
-                  {isAr ? '🌐 فحص لجميع الفعاليات (Universal Check-in)' : '🌐 All Events (Universal Check-in)'}
-                </option>
-                {events.map(ev => (
-                  <option key={ev.id} value={ev.id}>
-                    {isAr ? ev.titleAr : ev.titleEn} ({ev.isPublicVisible ? (isAr ? 'ظاهرة للجمهور' : 'Public') : (isAr ? 'مخفية' : 'Hidden')})
-                  </option>
-                ))}
-              </select>
+
+              {/* Modern Custom Event Selector Dropdown */}
+              {(() => {
+                const currentEvent = events.find(ev => ev.id === selectedEventId);
+                const isUniversal = selectedEventId === 'ALL' || !currentEvent;
+
+                return (
+                  <div ref={eventDropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsEventDropdownOpen(prev => !prev)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '6px 14px',
+                        borderRadius: '10px',
+                        background: 'linear-gradient(135deg, rgba(226, 183, 20, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%)',
+                        border: '1px solid rgba(226, 183, 20, 0.4)',
+                        color: '#ffffff',
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.25)'
+                      }}
+                      title={isAr ? 'انقر لتغيير الفعالية النشطة أو تفعيل الفحص الشامل' : 'Click to select active event'}
+                    >
+                      <span style={{ color: 'var(--accent-gold)', display: 'flex', alignItems: 'center' }}>
+                        {isUniversal ? <Globe size={15} /> : <Calendar size={15} />}
+                      </span>
+                      <span style={{ maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {isUniversal 
+                          ? (isAr ? '🌐 فحص لجميع الفعاليات (شامل)' : '🌐 All Events (Universal)')
+                          : (isAr ? currentEvent.titleAr : currentEvent.titleEn)}
+                      </span>
+                      {!isUniversal && (
+                        <span style={{
+                          fontSize: '0.72rem',
+                          padding: '1px 6px',
+                          borderRadius: '6px',
+                          background: currentEvent.isPublicVisible ? 'rgba(46, 204, 113, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+                          color: currentEvent.isPublicVisible ? '#2ecc71' : 'var(--text-secondary)',
+                          border: `1px solid ${currentEvent.isPublicVisible ? 'rgba(46, 204, 113, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`
+                        }}>
+                          {currentEvent.isPublicVisible ? (isAr ? 'عامة' : 'Public') : (isAr ? 'مسودة' : 'Hidden')}
+                        </span>
+                      )}
+                      <ChevronDown 
+                        size={14} 
+                        style={{ 
+                          color: 'var(--accent-gold)', 
+                          transform: isEventDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease',
+                          flexShrink: 0
+                        }} 
+                      />
+                    </button>
+
+                    {/* Floating Dropdown Card */}
+                    {isEventDropdownOpen && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 8px)',
+                        ...(isAr ? { right: 0 } : { left: 0 }),
+                        minWidth: '320px',
+                        maxWidth: '380px',
+                        width: 'max-content',
+                        background: 'rgba(18, 19, 23, 0.98)',
+                        backdropFilter: 'blur(20px)',
+                        border: '1px solid rgba(226, 183, 20, 0.35)',
+                        borderRadius: '12px',
+                        boxShadow: '0 14px 40px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+                        zIndex: 1000,
+                        padding: '8px',
+                        overflow: 'hidden'
+                      }}>
+                        {/* Search Filter if multiple events */}
+                        {events.length > 3 && (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '6px 10px',
+                            background: 'rgba(255, 255, 255, 0.04)',
+                            borderRadius: '8px',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            marginBottom: '8px'
+                          }}>
+                            <Search size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                            <input
+                              type="text"
+                              value={eventSearchQuery}
+                              onChange={(e) => setEventSearchQuery(e.target.value)}
+                              placeholder={isAr ? 'ابحث عن فعالية...' : 'Search events...'}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ffffff',
+                                fontSize: '0.82rem',
+                                width: '100%',
+                                outline: 'none'
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            {eventSearchQuery && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setEventSearchQuery(''); }}
+                                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 0 }}
+                              >
+                                <XCircle size={14} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 1. Universal Check-in Option */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedEventId('ALL');
+                            setIsEventDropdownOpen(false);
+                            setEventSearchQuery('');
+                          }}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            background: isUniversal ? 'rgba(226, 183, 20, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                            border: isUniversal ? '1px solid rgba(226, 183, 20, 0.4)' : '1px solid transparent',
+                            cursor: 'pointer',
+                            textAlign: isAr ? 'right' : 'left',
+                            marginBottom: '6px',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '8px',
+                              background: 'rgba(226, 183, 20, 0.15)',
+                              color: 'var(--accent-gold)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '1rem',
+                              flexShrink: 0
+                            }}>
+                              🌐
+                            </span>
+                            <div>
+                              <div style={{ color: isUniversal ? 'var(--accent-gold)' : '#ffffff', fontWeight: 800, fontSize: '0.88rem' }}>
+                                {isAr ? 'فحص شامل لجميع الفعاليات' : 'Universal Check-in (All)'}
+                              </div>
+                              <div style={{ color: 'var(--text-secondary)', fontSize: '0.74rem', marginTop: '2px' }}>
+                                {isAr ? 'التحقق التلقائي من أي تذكرة فعالية نشطة' : 'Auto-validates tickets for any active event'}
+                              </div>
+                            </div>
+                          </div>
+                          {isUniversal && <Check size={16} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />}
+                        </button>
+
+                        <div style={{
+                          height: '1px',
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          margin: '6px 0'
+                        }} />
+
+                        {/* 2. Specific Events List */}
+                        <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {events
+                            .filter(ev => {
+                              if (!eventSearchQuery.trim()) return true;
+                              const q = eventSearchQuery.toLowerCase();
+                              return (
+                                (ev.titleAr && ev.titleAr.toLowerCase().includes(q)) ||
+                                (ev.titleEn && ev.titleEn.toLowerCase().includes(q))
+                              );
+                            })
+                            .map(ev => {
+                              const isSelected = selectedEventId === ev.id;
+                              const evDate = ev.date ? new Date(ev.date).toLocaleDateString(isAr ? 'ar-EG' : 'en-US') : '';
+                              return (
+                                <button
+                                  key={ev.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedEventId(ev.id);
+                                    setIsEventDropdownOpen(false);
+                                    setEventSearchQuery('');
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '9px 12px',
+                                    borderRadius: '8px',
+                                    background: isSelected ? 'rgba(226, 183, 20, 0.12)' : 'transparent',
+                                    border: isSelected ? '1px solid rgba(226, 183, 20, 0.35)' : '1px solid transparent',
+                                    cursor: 'pointer',
+                                    textAlign: isAr ? 'right' : 'left',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                                    <Calendar size={15} style={{ color: isSelected ? 'var(--accent-gold)' : 'var(--text-secondary)', flexShrink: 0 }} />
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{
+                                        color: isSelected ? 'var(--accent-gold)' : '#ffffff',
+                                        fontWeight: isSelected ? 800 : 600,
+                                        fontSize: '0.85rem',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis'
+                                      }}>
+                                        {isAr ? ev.titleAr : ev.titleEn}
+                                      </div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                                        {evDate && <span>📅 {evDate}</span>}
+                                        <span>•</span>
+                                        <span style={{ color: ev.isPublicVisible ? '#2ecc71' : 'var(--text-secondary)' }}>
+                                          {ev.isPublicVisible ? (isAr ? 'ظاهرة للجمهور' : 'Public') : (isAr ? 'مسودة' : 'Hidden')}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {isSelected && <Check size={16} style={{ color: 'var(--accent-gold)', flexShrink: 0 }} />}
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
