@@ -16,7 +16,14 @@ interface BibleTranslationComparisonProps {
   bookNameEn: string;
   chapterNumber: number;
   highlightVerse?: number;
-  onOpenImageForVerse: (verse: { verseNumber: number; text: string; translationName: string }) => void;
+  onOpenImageForVerse: (verse: {
+    verseNumber: number;
+    text: string;
+    reference?: string;
+    bookName?: string;
+    chapterNumber?: number;
+    translationName?: string;
+  }) => void;
 }
 
 export default function BibleTranslationComparison({
@@ -172,6 +179,9 @@ export default function BibleTranslationComparison({
                             onClick={() => onOpenImageForVerse({
                               verseNumber: vNum,
                               text: ar?.text || '',
+                              bookName: bookNameAr,
+                              chapterNumber: chapterNumber,
+                              reference: `${bookNameAr} ${chapterNumber}: ${vNum}`,
                               translationName: 'فاندايك (1865)'
                             })}
                             className="p-1 text-slate-400 hover:text-amber-400 rounded transition"
@@ -208,6 +218,9 @@ export default function BibleTranslationComparison({
                             onClick={() => onOpenImageForVerse({
                               verseNumber: vNum,
                               text: en?.text || '',
+                              bookName: bookNameEn,
+                              chapterNumber: chapterNumber,
+                              reference: `${bookNameEn} ${chapterNumber}:${vNum}`,
                               translationName: 'King James (KJV)'
                             })}
                             className="p-1 text-slate-400 hover:text-blue-400 rounded transition"

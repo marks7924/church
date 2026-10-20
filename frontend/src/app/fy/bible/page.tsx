@@ -45,7 +45,14 @@ function BibleReaderContent() {
 
   // Modals & Drawers State
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
-  const [imageModalVerseData, setImageModalVerseData] = useState<{ verseNumber: number; text: string; translationName: string } | null>(null);
+  const [imageModalVerseData, setImageModalVerseData] = useState<{
+    verseNumber: number;
+    text: string;
+    bookName?: string;
+    chapterNumber?: number;
+    reference?: string;
+    translationName?: string;
+  } | null>(null);
 
   const [isStudyDrawerOpen, setIsStudyDrawerOpen] = useState(false);
   const [studyVerseNumber, setStudyVerseNumber] = useState<number>(1);
@@ -108,10 +115,16 @@ function BibleReaderContent() {
 
           let initialBook = null;
           if (bookParam) {
-            initialBook = normalized.find((b: any) => b.slug === bookParam || b.code === bookParam || b.id === bookParam);
+            initialBook = normalized.find((b: any) => 
+              b.slug?.toLowerCase() === bookParam.toLowerCase() || 
+              b.id?.toLowerCase() === bookParam.toLowerCase()
+            );
           }
           if (!initialBook) {
-            initialBook = normalized.find((b: any) => b.slug === 'mat' || b.slug === 'john' || b.slug === 'jhn') || normalized[0];
+            initialBook = normalized.find((b: any) => 
+              b.slug?.toUpperCase() === 'MAT' || 
+              b.id?.toUpperCase() === 'MAT'
+            ) || normalized[0];
           }
 
           if (initialBook) {
@@ -239,7 +252,11 @@ function BibleReaderContent() {
 
   // Navigate to passage helper
   const handleNavigateToPassage = (bookSlug: string, chapter: number) => {
-    const targetBook = books.find(b => b.slug === bookSlug || b.code === bookSlug || b.id.toLowerCase() === bookSlug.toLowerCase());
+    const targetBook = books.find(b => 
+      b.slug?.toLowerCase() === bookSlug?.toLowerCase() || 
+      b.code?.toLowerCase() === bookSlug?.toLowerCase() || 
+      b.id?.toLowerCase() === bookSlug?.toLowerCase()
+    );
     if (targetBook) {
       setSelectedBook(targetBook);
       setSelectedTestament(targetBook.testament);
@@ -292,7 +309,16 @@ function BibleReaderContent() {
   const currentTranslationName = translationCode === 'van-dyck' ? (isAr ? 'ترجمة فاندايك (1865)' : 'Smith & Van Dyck (1865)') : 'King James Version (KJV)';
 
   return (
-    <div className="min-h-screen py-8 px-3 sm:px-6 max-w-7xl mx-auto" style={{ color: 'var(--text-primary)' }}>
+    <div 
+      className="min-h-screen py-8 px-4 sm:px-6 w-full" 
+      style={{ 
+        maxWidth: '1240px',
+        width: '100%',
+        margin: '0 auto',
+        color: 'var(--text-primary)',
+        boxSizing: 'border-box'
+      }}
+    >
       {/* Breadcrumb & Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b" style={{ borderColor: 'var(--border-color)' }}>
         <div className="flex items-center gap-2 text-xs text-slate-400">
@@ -861,10 +887,11 @@ function BibleReaderContent() {
             setIsImageModalOpen(false);
             setImageModalVerseData(null);
           }}
-          selectedVerses={imageModalVerseData ? [imageModalVerseData] : selectedVerses}
-          bookName={imageModalVerseData ? 'الكتاب المقدس' : currentBookName}
-          chapterNumber={imageModalVerseData ? 1 : selectedChapter}
-          translationName={imageModalVerseData ? imageModalVerseData.translationName : currentTranslationName}
+          selectedVerses={imageModalVerseData ? [{ verseNumber: imageModalVerseData.verseNumber, text: imageModalVerseData.text }] : selectedVerses}
+          bookName={imageModalVerseData?.bookName || currentBookName}
+          chapterNumber={imageModalVerseData?.chapterNumber || selectedChapter}
+          referenceString={imageModalVerseData?.reference}
+          translationName={imageModalVerseData?.translationName || currentTranslationName}
           isRtl={translationCode !== 'kjv'}
         />
       )}

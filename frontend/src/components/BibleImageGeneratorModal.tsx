@@ -16,9 +16,10 @@ interface BibleImageGeneratorModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedVerses: SelectedVerseItem[];
-  bookName: string;
-  chapterNumber: number;
-  translationName: string;
+  bookName?: string;
+  chapterNumber?: number;
+  translationName?: string;
+  referenceString?: string;
   isRtl?: boolean;
 }
 
@@ -26,16 +27,16 @@ export default function BibleImageGeneratorModal({
   isOpen,
   onClose,
   selectedVerses,
-  bookName,
-  chapterNumber,
-  translationName,
+  bookName = '',
+  chapterNumber = 1,
+  translationName = '',
+  referenceString = '',
   isRtl = true
 }: BibleImageGeneratorModalProps) {
   // Two official backgrounds
   const [activeTheme, setActiveTheme] = useState<'dark' | 'light'>('dark');
   const [includeTashkeel, setIncludeTashkeel] = useState<boolean>(true);
   const [showReference, setShowReference] = useState<boolean>(true);
-  const [showTranslation, setShowTranslation] = useState<boolean>(true);
   const [fontSize, setFontSize] = useState<number>(44);
   const [textAlign, setTextAlign] = useState<'center' | 'right' | 'left'>('center');
   const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -64,13 +65,20 @@ export default function BibleImageGeneratorModal({
 
   const verseNumbers = selectedVerses.map(v => v.verseNumber).sort((a, b) => a - b);
   const verseRefString = React.useMemo(() => {
-    if (verseNumbers.length === 0) return '';
+    if (referenceString && referenceString.trim()) {
+      return referenceString.trim();
+    }
+    if (verseNumbers.length === 0) return bookName || '';
     const isConsecutive = verseNumbers.every((v, i) => i === 0 || v === verseNumbers[i - 1] + 1);
     const range = isConsecutive && verseNumbers.length > 1
       ? `${verseNumbers[0]}–${verseNumbers[verseNumbers.length - 1]}`
       : verseNumbers.join(', ');
-    return `${bookName} ${chapterNumber}: ${range}`;
-  }, [bookName, chapterNumber, verseNumbers]);
+    const bName = bookName && bookName !== 'الكتاب المقدس' ? bookName : '';
+    if (bName && chapterNumber) {
+      return `${bName} ${chapterNumber}: ${range}`;
+    }
+    return range ? `${bName} ${range}`.trim() : (bName || '');
+  }, [referenceString, bookName, chapterNumber, verseNumbers]);
 
   // Load and render canvas
   const renderCanvas = (targetTheme: 'dark' | 'light', customSize?: number): Promise<string> => {
@@ -102,7 +110,6 @@ export default function BibleImageGeneratorModal({
 
         // 3. Styling rules per theme
         const textColor = targetTheme === 'dark' ? '#FFFFFF' : '#1A1D20';
-        const subTextColor = targetTheme === 'dark' ? 'rgba(240, 244, 248, 0.85)' : 'rgba(30, 41, 59, 0.85)';
         const shadowColor = targetTheme === 'dark' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(255, 255, 255, 0.8)';
 
         // 4. Auto-Fitting Text Algorithm
@@ -135,7 +142,7 @@ export default function BibleImageGeneratorModal({
         };
 
         // Iteratively scale down until text block fits safe height
-        const reservedFooterHeight = (showReference ? 60 : 0) + (showTranslation ? 40 : 0) + 40;
+        const reservedFooterHeight = (showReference && verseRefString ? 55 : 0) + 30;
         const availableTextHeight = SAFE_HEIGHT - reservedFooterHeight;
 
         let fitted = false;
@@ -179,20 +186,12 @@ export default function BibleImageGeneratorModal({
           startY += lineHeight;
         }
 
-        // 6. Draw Reference and Translation Label
-        startY += 24;
-
-        if (showReference) {
-          ctx.font = `700 ${Math.max(24, Math.round(currentSize * 0.65))}px "Amiri", "Noto Naskh Arabic", sans-serif`;
-          ctx.fillStyle = targetTheme === 'dark' ? '#E2B714' : '#92400E'; // Elegant gold accent
+        // 6. Draw Reference Label (الشاهد الكتابي)
+        if (showReference && verseRefString) {
+          startY += 26;
+          ctx.font = `700 ${Math.max(26, Math.round(currentSize * 0.68))}px "Cairo", "Amiri", "Noto Naskh Arabic", sans-serif`;
+          ctx.fillStyle = targetTheme === 'dark' ? '#E2B714' : '#92400E'; // Gold accent
           ctx.fillText(`— ${verseRefString} —`, posX, startY);
-          startY += Math.round(currentSize * 0.7);
-        }
-
-        if (showTranslation) {
-          ctx.font = `500 ${Math.max(18, Math.round(currentSize * 0.45))}px "Segoe UI", Tahoma, sans-serif`;
-          ctx.fillStyle = subTextColor;
-          ctx.fillText(translationName, posX, startY);
         }
 
         resolve(canvas.toDataURL('image/png'));
@@ -219,7 +218,7 @@ export default function BibleImageGeneratorModal({
     renderCanvas('light').then(url => { if (isMounted) setLightThumbUrl(url); });
 
     return () => { isMounted = false; };
-  }, [isOpen, activeTheme, includeTashkeel, showReference, showTranslation, fontSize, textAlign, fullPassageText]);
+  }, [isOpen, activeTheme, includeTashkeel, showReference, fontSize, textAlign, fullPassageText, verseRefString]);
 
   if (!isOpen) return null;
 
@@ -435,16 +434,6 @@ export default function BibleImageGeneratorModal({
                   type="checkbox"
                   checked={showReference}
                   onChange={(e) => setShowReference(e.target.checked)}
-                  className="w-4 h-4 accent-amber-500 cursor-pointer"
-                />
-              </label>
-
-              <label className="flex items-center justify-between text-xs cursor-pointer p-2 rounded-lg hover:bg-slate-800/40 transition">
-                <span>إظهار اسم الترجمة الكنسية</span>
-                <input 
-                  type="checkbox"
-                  checked={showTranslation}
-                  onChange={(e) => setShowTranslation(e.target.checked)}
                   className="w-4 h-4 accent-amber-500 cursor-pointer"
                 />
               </label>

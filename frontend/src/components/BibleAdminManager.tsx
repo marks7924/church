@@ -138,7 +138,7 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-6" style={{ width: '100%', boxSizing: 'border-box' }}>
       {/* Sub-tab Navigation */}
       <div className="flex bg-slate-800/80 p-1 rounded-2xl border border-slate-700 w-fit">
         <button
@@ -163,7 +163,7 @@ export default function BibleAdminManager({ token }: BibleAdminManagerProps) {
 
       {/* VOTD Scheduler Form */}
       {activeSubTab === 'votd' && (
-        <form onSubmit={handleSaveVotd} className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-5">
+        <form onSubmit={handleSaveVotd} className="w-full p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-5" style={{ width: '100%', boxSizing: 'border-box' }}>
           <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
             <div>
               <h4 className="font-bold text-base text-amber-400">إدارة وجدولة آية اليوم والتأمل اليومي</h4>

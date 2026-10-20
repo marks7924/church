@@ -30,7 +30,14 @@ interface VerseOfDayData {
 
 interface BibleVerseOfDayViewProps {
   onNavigateToPassage: (bookSlug: string, chapter: number) => void;
-  onOpenImageForVerse: (verse: { verseNumber: number; text: string; translationName: string }) => void;
+  onOpenImageForVerse: (verse: {
+    verseNumber: number;
+    text: string;
+    reference?: string;
+    bookName?: string;
+    chapterNumber?: number;
+    translationName?: string;
+  }) => void;
   onToggleFavorite: (passageData: { verseNumber: number; text: string }) => void;
   isFavorite?: boolean;
 }
@@ -184,8 +191,10 @@ export default function BibleVerseOfDayView({
             <button
               type="button"
               onClick={() => onOpenImageForVerse({
-                verseNumber: votd.verseNumber,
+                verseNumber: Number(votd.verseNumber) || 1,
                 text: currentText || '',
+                reference: currentRef || (langTab === 'en' ? votd.referenceEn : votd.referenceAr),
+                chapterNumber: Number(votd.chapterNumber) || 1,
                 translationName: langTab === 'en' ? 'King James' : 'فاندايك (1865)'
               })}
               className="py-2 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition"

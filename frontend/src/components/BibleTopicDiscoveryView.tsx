@@ -22,7 +22,14 @@ interface BibleTopicItem {
 
 interface BibleTopicDiscoveryViewProps {
   onNavigateToPassage: (bookSlug: string, chapter: number) => void;
-  onOpenImageForVerse: (verse: { verseNumber: number; text: string; translationName: string }) => void;
+  onOpenImageForVerse: (verse: {
+    verseNumber: number;
+    text: string;
+    bookName?: string;
+    chapterNumber?: number;
+    reference?: string;
+    translationName?: string;
+  }) => void;
 }
 
 export default function BibleTopicDiscoveryView({
@@ -161,6 +168,8 @@ export default function BibleTopicDiscoveryView({
                             onClick={() => onOpenImageForVerse({
                               verseNumber: pass.verse || 1,
                               text: pass.textAr,
+                              reference: pass.referenceAr,
+                              chapterNumber: pass.chapter || 1,
                               translationName: 'فاندايك (1865)'
                             })}
                             className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition flex items-center gap-1 text-xs font-bold"
