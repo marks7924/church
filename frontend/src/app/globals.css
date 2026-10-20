@@ -338,7 +338,7 @@ a {
     min-height: 44px !important;
     display: flex !important;
     align-items: center !important;
-    justifyContent: center !important;
+    justify-content: center !important;
     box-sizing: border-box !important;
     flex-shrink: 1 !important;
   }
@@ -390,6 +390,25 @@ a {
   }
   .events-filter-pill-btn:first-child {
     flex: 1 1 100% !important;
+  }
+
+  /* Questions Cards Grid & Categories Track */
+  .questions-cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+    width: 100% !important;
+  }
+  .questions-categories-track {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    overflow-x: visible !important;
+    width: 100% !important;
+  }
+  .questions-category-btn {
+    padding: 6px 12px !important;
+    font-size: 0.78rem !important;
+    min-height: 34px !important;
   }
 }
 

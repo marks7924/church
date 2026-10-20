@@ -552,6 +552,19 @@ export default function QuestionsLibraryPage() {
               line-height: 1.25;
             }
           }
+          .questions-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: clamp(14px, 2vw, 20px);
+            width: 100%;
+            box-sizing: border-box;
+          }
+          @media (max-width: 768px) {
+            .questions-cards-grid {
+              grid-template-columns: 1fr !important;
+              gap: 14px !important;
+            }
+          }
         `}} />
         <div className="questions-categories-track">
           <button
@@ -597,7 +610,7 @@ export default function QuestionsLibraryPage() {
           <p>{isAr ? 'جاري تحميل الأسئلة المعتمدة...' : 'Loading verified questions...'}</p>
         </div>
       ) : questions.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: 'clamp(14px, 2vw, 20px)' }}>
+        <div className="questions-cards-grid">
           {questions.map((q: any) => (
             <div
               key={q.id}
@@ -605,7 +618,7 @@ export default function QuestionsLibraryPage() {
                 background: 'var(--card-bg, rgba(255, 255, 255, 0.03))',
                 border: '1px solid var(--border-color, rgba(255, 255, 255, 0.08))',
                 borderRadius: '14px',
-                padding: '1.5rem',
+                padding: 'clamp(1rem, 3vw, 1.5rem)',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
