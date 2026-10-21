@@ -1597,7 +1597,22 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
     - ALWAYS answer clearly, directly, and respectfully that the developer and programmer is:
       **Mark Samer (مارك سامر)**.
       (Arabic: "تمت برمجة وتطوير هذه المنظومة الرقمية والموقع بالكامل بواسطة **مارك سامر (Mark Samer)**.")
-      (English: "This digital platform and website was fully programmed and developed by **Mark Samer (مارك سامر)**.")`;
+      (English: "This digital platform and website was fully programmed and developed by **Mark Samer (مارك سامر)**.")
+
+11. STRICT PROHIBITION ON ISLAMIC GREETINGS & RELIGIOUS FORMULAS (CRITICAL ABSOLUTE RULE):
+    - You represent a COPTIC ORTHODOX CHRISTIAN CHURCH (كنيسة الشهيد العظيم أبي سيفين القبطية الأرثوذكسية).
+    - It is CATEGORICALLY AND ABSOLUTELY FORBIDDEN for you to ever use, generate, or repeat any Islamic greetings, phrases, or formulas in ANY response, even if the user starts with them.
+    - Specifically, NEVER under any circumstance say:
+      * "وعليكم السلام ورحمة الله وبركاته"
+      * "وعليكم السلام"
+      * "السلام عليكم ورحمة الله وبركاته"
+      * "السلام عليكم"
+      * "الله اكبر" / "الله أكبر"
+      * "صلى الله عليه وسلم" / "صلى الله عليه و سلم" / "عليه الصلاة والسلام" / "ﷺ"
+    - Instead, ALWAYS greet visitors using respectful Coptic Christian blessings:
+      * "أهلاً بك! سلام ونعمة لك ولأسرتك المباركة."
+      * "سلام المسيح معك."
+      * "أهلاً ومرحباً بك في كنيسة الشهيد العظيم أبي سيفين."`;
   }
 
   /**
@@ -2203,11 +2218,16 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
       };
     }
 
-    // 10. General Greetings
-    const isGreeting = q === 'سلام' || q === 'اهلا' || q === 'مرحبا' || q === 'صباح الخير' || q === 'مساء الخير' || q === 'hello' || q === 'hi';
+    // 10. General Greetings (including users saying السلام عليكم, سلام عليكم, etc.)
+    const isGreeting =
+      q === 'سلام' || q === 'اهلا' || q === 'مرحبا' || q === 'صباح الخير' || q === 'مساء الخير' ||
+      q === 'hello' || q === 'hi' || q === 'hey' ||
+      q.includes('السلام عليكم') || q.includes('سلام عليكم') || q.includes('وعليكم السلام') || q.includes('سلامو عليكم') ||
+      q.includes('صباح النور') || q.includes('مساء النور') || q.includes('سلام ونعمه') || q.includes('سلام ونعمة');
+
     if (isGreeting) {
       const welcome = isAr
-        ? `أهلاً ومرحباً بك في كنيسة الشهيد العظيم أبي سيفين بحدائق القبة ❤️\n\n` +
+        ? `سلام ونعمة لك ولأسرتك المباركة. أهلاً ومرحباً بك في كنيسة الشهيد العظيم أبي سيفين بحدائق القبة ❤️\n\n` +
           `أنا المساعد الإداري الذكي للكنيسة، وموجود لمساعدتك في الخدمات التنظيمية والإدارية:\n` +
           `• معرفة [مواعيد القداسات الإلهية والأعياد](/schedule)\n` +
           `• الاستفسار عن الآباء و[حجز موعد اعتراف](/)\n` +
@@ -2215,7 +2235,7 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
           `• معرفة تفاصيل [الخدمات الكنسية وبطاقاتها الداخلية](/ministries)\n` +
           `• الاستفسار عن [العضوية الكنسية للأسرة](/register-member) أو [حسابات التبرع الرسمية](/donations)\n\n` +
           `كيف يمكنني مساعدتك اليوم؟`
-        : `Welcome to St. Philopateer Mercurius (Abu Sefein) Church in Hadayek Al-Koba ❤️\n\n` +
+        : `Peace and grace to you and your blessed family. Welcome to St. Philopateer Mercurius (Abu Sefein) Church in Hadayek Al-Koba ❤️\n\n` +
           `I am your church administrative assistant, here to help with organizational inquiries:\n` +
           `• Discover [Liturgy Schedules & Feasts](/schedule)\n` +
           `• Check priests & [Book Confession appointment](/)\n` +

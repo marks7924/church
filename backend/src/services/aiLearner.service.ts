@@ -303,11 +303,31 @@ export class ChurchAiLearnerService {
         }
       });
 
+      // Permanent built-in forbidden rules (Coptic Orthodox Church identity guardrails)
+      const builtInForbidden: Array<{ phrase: string; note: string }> = [
+        { phrase: 'وعليكم السلام ورحمة الله وبركاته', note: 'ممنوع تماماً: تحية إسلامية غير مناسبة لكنيسة قبطية، البديل: سلام ونعمة لك' },
+        { phrase: 'وعليكم السلام', note: 'ممنوع تماماً: تحية إسلامية غير مناسبة لكنيسة قبطية، البديل: سلام ونعمة لك' },
+        { phrase: 'السلام عليكم ورحمة الله وبركاته', note: 'ممنوع تماماً: تحية إسلامية غير مناسبة لكنيسة قبطية، البديل: سلام ونعمة لك' },
+        { phrase: 'السلام عليكم', note: 'ممنوع تماماً: تحية إسلامية غير مناسبة لكنيسة قبطية، البديل: سلام ونعمة لك' },
+        { phrase: 'الله اكبر', note: 'ممنوع تماماً: صيغة دينية إسلامية' },
+        { phrase: 'الله أكبر', note: 'ممنوع تماماً: صيغة دينية إسلامية' },
+        { phrase: 'صلى الله عليه وسلم', note: 'ممنوع تماماً: صيغة دينية إسلامية' },
+        { phrase: 'صلى الله عليه و سلم', note: 'ممنوع تماماً: صيغة دينية إسلامية' },
+        { phrase: 'عليه الصلاة والسلام', note: 'ممنوع تماماً: صيغة دينية إسلامية' },
+        { phrase: 'عليه الصلاة و السلام', note: 'ممنوع تماماً: صيغة دينية إسلامية' }
+      ];
+
+      builtInForbidden.forEach(b => {
+        if (!forbiddenRules.some(f => f.phrase.trim().toLowerCase() === b.phrase.trim().toLowerCase())) {
+          forbiddenRules.push(b);
+        }
+      });
+
       return {
         qaRules,
         includeRules,
         forbiddenRules,
-        totalRules: items.length
+        totalRules: items.length + builtInForbidden.length
       };
     } catch (err) {
       console.error('Error fetching active learned context:', err);
@@ -318,20 +338,41 @@ export class ChurchAiLearnerService {
   /**
    * 6. Sanitize AI output to guarantee no forbidden words or phrases are leaked
    */
-  static sanitizeOutput(text: string, forbiddenRules: Array<{ phrase: string; note?: string }>): string {
-    if (!text || !forbiddenRules || forbiddenRules.length === 0) return text;
+  static sanitizeOutput(text: string, forbiddenRules: Array<{ phrase: string; note?: string }> = []): string {
+    if (!text) return '';
 
     let sanitized = text;
-    forbiddenRules.forEach(rule => {
-      const phrase = rule.phrase.trim();
-      if (!phrase) return;
-      // Replace case-insensitively
-      const regex = new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-      if (regex.test(sanitized)) {
-        sanitized = sanitized.replace(regex, '');
-      }
-    });
 
-    return sanitized.replace(/\s{2,}/g, ' ').trim();
+    // 1. Mandatory Coptic Church Guardrail Replacements (even if forbiddenRules is empty)
+    sanitized = sanitized.replace(/وعليكم\s+السلام\s+ورحمة\s+الله\s+وبركاته/gi, 'سلام ونعمة لك');
+    sanitized = sanitized.replace(/وعليكم\s+السلام/gi, 'سلام ونعمة لك');
+    sanitized = sanitized.replace(/السلام\s+عليكم\s+ورحمة\s+الله\s+وبركاته/gi, 'سلام ونعمة لك');
+    sanitized = sanitized.replace(/السلام\s+عليكم/gi, 'سلام ونعمة لك');
+    sanitized = sanitized.replace(/سلام\s+عليكم/gi, 'سلام ونعمة لك');
+    sanitized = sanitized.replace(/سلامو\s+عليكم/gi, 'سلام ونعمة لك');
+
+    sanitized = sanitized.replace(/الله\s+أكبر/gi, 'المجد لله');
+    sanitized = sanitized.replace(/الله\s+اكبر/gi, 'المجد لله');
+
+    sanitized = sanitized.replace(/صلى\s+الله\s+عليه\s+وسلم/gi, '');
+    sanitized = sanitized.replace(/صلى\s+الله\s+عليه\s+و\s*سلم/gi, '');
+    sanitized = sanitized.replace(/عليه\s+الصلاة\s+والسلام/gi, '');
+    sanitized = sanitized.replace(/عليه\s+الصلاة\s+و\s*السلام/gi, '');
+    sanitized = sanitized.replace(/ﷺ/g, '');
+    sanitized = sanitized.replace(/\bصلعم\b/gi, '');
+
+    // 2. Dynamic Learned Forbidden Rules
+    if (forbiddenRules && forbiddenRules.length > 0) {
+      forbiddenRules.forEach(rule => {
+        const phrase = rule.phrase.trim();
+        if (!phrase) return;
+        const regex = new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        if (regex.test(sanitized)) {
+          sanitized = sanitized.replace(regex, '');
+        }
+      });
+    }
+
+    return sanitized.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
   }
 }

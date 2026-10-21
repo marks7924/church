@@ -1,4 +1,5 @@
 import { ChurchAiService, ChurchKnowledgeRetriever, CHURCH_INFO } from '../services/ai.service';
+import { ChurchAiLearnerService } from '../services/aiLearner.service';
 import { isBudgetExceeded, recordTokenUsage, getBudgetStatus } from '../utils/aiBudget';
 import prisma from '../db';
 
@@ -284,6 +285,28 @@ async function runAiIntegrationTests() {
   assert(
     Boolean(shrineRes.attachedImage && shrineRes.attachedImage.url === '/images/0 (1).jpg'),
     'Abu Sefein shrine query attaches verified shrine photo'
+  );
+
+  // 25. STRICT PROHIBITION ON ISLAMIC GREETINGS & FORMULAS (SANITIZER TEST)
+  const testInputWithForbidden = 'وعليكم السلام ورحمة الله وبركاته، نحمد الله، والله اكبر و صلى الله عليه وسلم، كيف حالكم؟';
+  const sanitizedOutput = ChurchAiLearnerService.sanitizeOutput(testInputWithForbidden);
+  assert(
+    !sanitizedOutput.includes('وعليكم السلام') &&
+    !sanitizedOutput.includes('الله اكبر') &&
+    !sanitizedOutput.includes('الله أكبر') &&
+    !sanitizedOutput.includes('صلى الله عليه وسلم'),
+    'ChurchAiLearnerService.sanitizeOutput strictly purges all forbidden religious phrases'
+  );
+
+  // 26. GREETING WITH ISLAMIC SALUTATION TEST (USER SAYS السلام عليكم or وعليكم السلام)
+  const salamRes = await ChurchAiService.processChat('السلام عليكم ورحمة الله وبركاته', [], 'ar');
+  assert(
+    !salamRes.response.includes('وعليكم السلام') &&
+    !salamRes.response.includes('الله اكبر') &&
+    !salamRes.response.includes('الله أكبر') &&
+    !salamRes.response.includes('صلى الله عليه وسلم') &&
+    (salamRes.response.includes('سلام ونعمة') || salamRes.response.includes('أهلاً ومرحباً بك')),
+    'AI greeting response replaces Islamic greeting with Coptic Christian blessings and contains no forbidden phrases'
   );
 
   console.log(`\n=== TEST RESULTS: ${passedTests}/${totalTests} TESTS PASSED ===`);
