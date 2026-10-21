@@ -8,9 +8,11 @@ import Link from 'next/link';
 import { API_URL } from '../config';
 import { formatTimeSlot } from '../utils/format';
 import AuthLockedSection from '../components/AuthLockedSection';
+import PriestDetailsModal from '../components/PriestDetailsModal';
 
 interface Priest {
   id: string;
+  userId?: string;
   nameAr: string;
   nameEn: string;
   titleAr: string;
@@ -21,6 +23,7 @@ interface Priest {
   confessionStatus?: 'ACTIVE' | 'TRAVELING' | 'INACTIVE';
   confessionStatusNote?: string | null;
   noFixedSchedule?: boolean;
+  details?: any;
 }
 
 interface Sermon {
@@ -80,6 +83,8 @@ export default function Home() {
 
   // Booking Modal States
   const [selectedPriest, setSelectedPriest] = useState<Priest | null>(null);
+  const [selectedPriestForDetails, setSelectedPriestForDetails] = useState<Priest | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [bookingDate, setBookingDate] = useState<string>('');
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string>('');
@@ -107,6 +112,12 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setUserToken(localStorage.getItem('church-token'));
+      const uStr = localStorage.getItem('church-user');
+      if (uStr) {
+        try {
+          setCurrentUser(JSON.parse(uStr));
+        } catch (e) {}
+      }
     }
   }, []);
 
@@ -538,7 +549,48 @@ export default function Home() {
           <h2 className={styles.rowTitle}>{language === 'ar' ? 'الآباء الكهنة والأجلاء' : 'Reverend Fathers & Bishops'}</h2>
           <div className={styles.netflixGrid}>
             {priests.map(p => (
-              <div key={p.id} className={styles.priestCard}>
+              <div 
+                key={p.id} 
+                className={styles.priestCard}
+                onClick={() => setSelectedPriestForDetails(p)}
+                style={{ cursor: 'pointer', position: 'relative' }}
+              >
+                {/* Jubilee Badge if achieved */}
+                {p.details?.isGoldenJubilee && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '10px',
+                    [language === 'ar' ? 'left' : 'right']: '10px',
+                    background: 'rgba(241, 196, 15, 0.2)',
+                    border: '1px solid #f1c40f',
+                    color: '#f1c40f',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    zIndex: 2
+                  }}>
+                    🥇 {language === 'ar' ? 'اليوبيل الذهبي' : 'Golden Jubilee'}
+                  </span>
+                )}
+                {p.details?.isSilverJubilee && !p.details?.isGoldenJubilee && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '10px',
+                    [language === 'ar' ? 'left' : 'right']: '10px',
+                    background: 'rgba(189, 195, 199, 0.2)',
+                    border: '1px solid #bdc3c7',
+                    color: '#bdc3c7',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    zIndex: 2
+                  }}>
+                    🥈 {language === 'ar' ? 'اليوبيل الفضي' : 'Silver Jubilee'}
+                  </span>
+                )}
+
                 <div 
                   className={styles.priestAvatar} 
                   style={{ backgroundImage: `url(${p.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200'})` }}
@@ -549,6 +601,20 @@ export default function Home() {
                 <span className={styles.priestRole}>
                   {p.role === 'BISHOP' ? (language === 'ar' ? 'الاسقف العام لحدائق القبه' : 'General Bishop of Hadayek Al Koba') : (language === 'ar' ? 'كاهن الكنيسة' : 'Priest')}
                 </span>
+
+                {/* Quick Hint: View Full Details & Jubilee */}
+                <div style={{
+                  margin: '4px 0 8px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.76rem',
+                  color: 'var(--accent-gold)',
+                  fontWeight: 700
+                }}>
+                  <span>{language === 'ar' ? 'سيرة الأب وتاريخ الرسامة ℹ️' : 'Pastoral Bio & Jubilee ℹ️'}</span>
+                </div>
+
                 <p className={styles.priestDays}>
                   <b>{language === 'ar' ? 'أيام التواجد:' : 'Available Days:'}</b><br />
                   {p.confessionStatus === 'TRAVELING' 
@@ -560,15 +626,15 @@ export default function Home() {
                     : (p.availability && Object.keys(p.availability).length > 0 ? Object.keys(p.availability).join(', ') : (language === 'ar' ? 'مواعيد بالتنسيق' : 'By appointment'))}
                 </p>
                 {p.confessionStatus === 'TRAVELING' ? (
-                  <button className={styles.bookBtn} style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#555' }} disabled>
+                  <button className={styles.bookBtn} style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#555' }} disabled onClick={(e) => e.stopPropagation()}>
                     ✈️ {language === 'ar' ? 'خارج مصر' : 'Traveling Abroad'}
                   </button>
                 ) : p.confessionStatus === 'INACTIVE' ? (
-                  <button className={styles.bookBtn} style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#555' }} disabled>
+                  <button className={styles.bookBtn} style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#555' }} disabled onClick={(e) => e.stopPropagation()}>
                     ⏸️ {language === 'ar' ? 'غير متاح للاعترافات' : 'Unavailable'}
                   </button>
                 ) : (
-                  <button className={styles.bookBtn} onClick={() => openBookingModal(p)}>
+                  <button className={styles.bookBtn} onClick={(e) => { e.stopPropagation(); openBookingModal(p); }}>
                     {p.role === 'BISHOP' ? t('meet_bishop') : (p.noFixedSchedule ? (language === 'ar' ? 'طلب ميعاد اعتراف' : 'Request Confession') : t('book_confession'))}
                   </button>
                 )}
@@ -1125,6 +1191,24 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Priest Details, Jubilee & Photos Modal */}
+      <PriestDetailsModal
+        isOpen={Boolean(selectedPriestForDetails)}
+        onClose={() => setSelectedPriestForDetails(null)}
+        priest={selectedPriestForDetails}
+        currentUser={currentUser}
+        token={userToken}
+        language={language}
+        onOpenBooking={(p: any) => {
+          setSelectedPriestForDetails(null);
+          openBookingModal(p);
+        }}
+        onProfileUpdated={(updated: any) => {
+          setPriests(prev => prev.map(pr => pr.id === updated.id ? { ...pr, ...updated } : pr));
+          setSelectedPriestForDetails(updated);
+        }}
+      />
     </div>
   );
 }

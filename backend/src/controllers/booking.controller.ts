@@ -6,6 +6,8 @@ import { sendEmail, sendSMS, sendPushNotification } from '../services/notificati
 import { Role, AppointmentStatus, MembershipStatus } from '@prisma/client';
 import { logAction } from '../utils/logger';
 
+import { extractPriestDetails } from './priest.controller';
+
 const router = Router();
 
 // 1. Get Priests list (emails omitted for security)
@@ -25,6 +27,7 @@ router.get('/priests', async (req: AuthRequest, res: Response) => {
 
     const formatted = priests.map(p => ({
       id: p.id,
+      userId: p.userId,
       nameAr: p.nameAr,
       nameEn: p.nameEn,
       titleAr: p.titleAr,
@@ -36,7 +39,8 @@ router.get('/priests', async (req: AuthRequest, res: Response) => {
       role: p.user.role, // PRIEST or BISHOP
       confessionStatus: p.confessionStatus || 'ACTIVE',
       confessionStatusNote: p.confessionStatusNote || null,
-      noFixedSchedule: p.noFixedSchedule || false
+      noFixedSchedule: p.noFixedSchedule || false,
+      details: extractPriestDetails(p.availabilityJson, p.nameAr)
     }));
 
     const priestOrder = [

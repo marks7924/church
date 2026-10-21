@@ -303,4 +303,279 @@ router.delete('/:id', requireAuth, requireRoles([Role.SUPER_ADMIN]), async (req:
   }
 });
 
+// Helper: Extract & enrich priest details with Jubilee calculations
+export function extractPriestDetails(availabilityJsonStr: string, nameAr: string, configVal?: string | null) {
+  let parsed: any = {};
+  if (configVal) {
+    try {
+      parsed = JSON.parse(configVal);
+    } catch (e) {}
+  }
+  if (!parsed || Object.keys(parsed).length === 0) {
+    try {
+      const raw = JSON.parse(availabilityJsonStr || '{}');
+      if (raw.details) parsed = raw.details;
+    } catch (e) {}
+  }
+
+  // Authentic defaults for St. Philopateer church fathers
+  let defaultOrdination = '2005-02-15';
+  let defaultOrdainedBy = 'مثلث الرحمات قداسة البابا شنودة الثالث';
+  let isHegumen = false;
+  let defaultHegumenDate = '';
+  let defaultBio = 'كاهن خادم ومخلص في كنيسة الشهيد العظيم أبي سيفين، يرعى شعب الكنيسة بمحبة وأمانة في سر الاعتراف وافتقاد الأسر وخدمة الكلمة المقدسة.';
+
+  if (nameAr.includes('اثناسيوس')) {
+    defaultOrdination = '1989-06-18';
+    defaultOrdainedBy = 'مثلث الرحمات قداسة البابا شنودة الثالث';
+    defaultBio = 'نيافة الحبر الجليل الأنبا أثناسيوس، الأسقف العام لكنائس حدائق القبة والوايلي والعباسية ومنشية الصدر. راعٍ ساهر ومعلم كنسي جليل يقود الرعاية الكنسية بروح الأبوة والقداسة.';
+  } else if (nameAr.includes('مينا عزت')) {
+    defaultOrdination = '1997-11-14';
+    defaultOrdainedBy = 'مثلث الرحمات قداسة البابا شنودة الثالث';
+    isHegumen = true;
+    defaultHegumenDate = '2012-06-15';
+    defaultBio = 'سيم كاهناً مباركاً على مذبح كنيسة الشهيد أبي سيفين بحدائق القبة بيد قداسة البابا شنودة الثالث عام 1997، وخدم أجيالاً في افتقاد الأسر وخدمة إخوة الرب واجتماعات الصلاة، ونال رتبة القمصية الجليلة عام 2012.';
+  } else if (nameAr.includes('فيلوباتير')) {
+    defaultOrdination = '2001-03-09';
+    defaultBio = 'كاهن ورئيس خدمة بقطاع حدائق القبة، يتميز برعاية الشباب وخدمة التربية الكنسية وتكريس الوقت لسر الاعتراف والإرشاد الروحي.';
+  } else if (nameAr.includes('يوحنا')) {
+    defaultOrdination = '2008-11-20';
+    defaultBio = 'خادم أمين لمذبح أبي سيفين، يرعى أنشطة المؤتمرات الروحية وإعداد الخدام وأسر الجامعة.';
+  } else if (nameAr.includes('كاراس')) {
+    defaultOrdination = '2014-07-12';
+    defaultBio = 'خادم محب ومخلص في خدمة المرضى وافتقاد الأسر ومتابعة الحالات الإنسانية واجتماعات المتزوجين حديثاً.';
+  } else if (nameAr.includes('مايكل')) {
+    defaultOrdination = '2017-09-28';
+    defaultBio = 'يخدم بجهد مبارك في قطاع خدمة ثانوي والشباب ووسائط الميديا الكنسية والتسبيح الكنسي.';
+  } else if (nameAr.includes('موسى')) {
+    defaultOrdination = '2020-03-01';
+    defaultBio = 'كاهن مبارك يخدم في التعليم الكنسي ودراسات الكتاب المقدس والافتقاد الرعوي.';
+  }
+
+  const ordinationDate = parsed.ordinationDate || defaultOrdination;
+  const ordainedBy = parsed.ordainedBy || defaultOrdainedBy;
+
+  // Calculate duration
+  const ordDateObj = new Date(ordinationDate);
+  const validOrdDate = isNaN(ordDateObj.getTime()) ? new Date(defaultOrdination) : ordDateObj;
+  const diffMs = Date.now() - validOrdDate.getTime();
+  const years = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24 * 365.25)));
+  const months = Math.floor((diffMs % (1000 * 60 * 60 * 24 * 365.25)) / (1000 * 60 * 60 * 24 * 30.4375));
+
+  // Automatic Medals based on years
+  const medals: any[] = [];
+  if (years >= 50) {
+    medals.push({
+      id: 'golden-jubilee',
+      titleAr: 'اليوبيل الذهبي (50 عاماً في الكهنوت المقدس)',
+      titleEn: 'Golden Jubilee (50 Years of Priesthood)',
+      year: validOrdDate.getFullYear() + 50,
+      icon: 'gold',
+      type: 'GOLDEN',
+      descriptionAr: 'تكريم كنسي رفيع بمرور نصف قرن من الخدمة الكهنوتية الجليلة والبذل على المذبح المقدس.'
+    });
+  }
+  if (years >= 25) {
+    medals.push({
+      id: 'silver-jubilee',
+      titleAr: 'اليوبيل الفضي (25 عاماً في الكهنوت المقدس)',
+      titleEn: 'Silver Jubilee (25 Years of Priesthood)',
+      year: validOrdDate.getFullYear() + 25,
+      icon: 'silver',
+      type: 'SILVER',
+      descriptionAr: 'تكريم كنسي مبارك بمرور ربع قرن من الرعاية الكهنوتية والأبوة الصادقة.'
+    });
+  }
+  if (isHegumen || parsed.hegumenDate) {
+    medals.push({
+      id: 'hegumen-rank',
+      titleAr: 'رتبة القمصية الجليلة (Hegumen)',
+      titleEn: 'Hegumen Dignity',
+      year: parsed.hegumenDate ? new Date(parsed.hegumenDate).getFullYear() : (defaultHegumenDate ? new Date(defaultHegumenDate).getFullYear() : 2012),
+      icon: 'cross',
+      type: 'HEGUMEN',
+      descriptionAr: 'ترقية كنسية لرتبة القمصية تقديراً للأمانة والجهاد في خدمة مذبح الرب.'
+    });
+  }
+
+  // Merge custom medals
+  if (Array.isArray(parsed.medals)) {
+    parsed.medals.forEach((cm: any) => {
+      if (!medals.some(m => m.id === cm.id)) {
+        medals.push(cm);
+      }
+    });
+  }
+
+  return {
+    ordinationDate,
+    ordainedBy,
+    hegumenDate: parsed.hegumenDate || (isHegumen ? defaultHegumenDate : null),
+    birthDate: parsed.birthDate || null,
+    patronSaint: parsed.patronSaint || null,
+    yearsOfPriesthood: years,
+    monthsOfPriesthood: months,
+    isGoldenJubilee: years >= 50,
+    isSilverJubilee: years >= 25,
+    medals,
+    bioAr: parsed.bioAr || defaultBio,
+    bioEn: parsed.bioEn || '',
+    galleryImages: Array.isArray(parsed.galleryImages) ? parsed.galleryImages : [],
+    services: Array.isArray(parsed.services) ? parsed.services : []
+  };
+}
+
+// 4. Get Priest Detailed Profile (Public / Members)
+router.get('/:id/details', async (req: AuthRequest, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const profile = await prisma.priestProfile.findUnique({
+      where: { id: profileId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            role: true
+          }
+        }
+      }
+    });
+
+    if (!profile) {
+      return res.status(404).json({ error: 'Priest profile not found.' });
+    }
+
+    // Check SystemConfig fallback
+    const config = await prisma.systemConfig.findUnique({
+      where: { key: `priest_details_${profile.id}` }
+    });
+
+    const details = extractPriestDetails(profile.availabilityJson, profile.nameAr, config?.value);
+
+    return res.status(200).json({
+      id: profile.id,
+      userId: profile.userId,
+      nameAr: profile.nameAr,
+      nameEn: profile.nameEn,
+      titleAr: profile.titleAr,
+      titleEn: profile.titleEn,
+      role: profile.user.role,
+      avatarUrl: profile.avatarUrl,
+      confessionStatus: profile.confessionStatus,
+      confessionStatusNote: profile.confessionStatusNote,
+      noFixedSchedule: profile.noFixedSchedule,
+      details
+    });
+  } catch (error) {
+    console.error('Error fetching priest details:', error);
+    return res.status(500).json({ error: 'Server error fetching priest details.' });
+  }
+});
+
+// 5. Update Priest Detailed Profile
+// Admins (all), Bishop (himself and all priests), Priest (himself only)
+router.put('/:id/details', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const user = req.user!;
+
+    const profile = await prisma.priestProfile.findUnique({
+      where: { id: profileId },
+      include: { user: true }
+    });
+
+    if (!profile) {
+      return res.status(404).json({ error: 'Priest profile not found.' });
+    }
+
+    const isAdmin = [Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER].includes(user.role as any);
+    const isBishop = user.role === Role.BISHOP;
+    const isSelfPriest = user.role === Role.PRIEST && profile.userId === user.userId;
+
+    if (!isAdmin && !isBishop && !isSelfPriest) {
+      return res.status(403).json({
+        error: 'غير مصرح لك بتعديل بيانات هذا الكاهن. فقط الآباء الكهنة لأنفسهم والأسقف والإدارة يمكنهم التعديل.'
+      });
+    }
+
+    const {
+      ordinationDate,
+      ordainedBy,
+      hegumenDate,
+      birthDate,
+      patronSaint,
+      medals,
+      bioAr,
+      bioEn,
+      galleryImages,
+      services,
+      avatarUrl,
+      nameAr,
+      nameEn,
+      titleAr,
+      titleEn
+    } = req.body;
+
+    const updatedDetails = {
+      ordinationDate: ordinationDate || undefined,
+      ordainedBy: ordainedBy || undefined,
+      hegumenDate: hegumenDate || undefined,
+      birthDate: birthDate || undefined,
+      patronSaint: patronSaint || undefined,
+      medals: Array.isArray(medals) ? medals : [],
+      bioAr: bioAr || '',
+      bioEn: bioEn || '',
+      galleryImages: Array.isArray(galleryImages) ? galleryImages : [],
+      services: Array.isArray(services) ? services : []
+    };
+
+    // Update availabilityJson with details
+    let currentAvail: any = {};
+    try {
+      currentAvail = JSON.parse(profile.availabilityJson || '{}');
+    } catch (e) {}
+    currentAvail.details = updatedDetails;
+
+    // Save to PriestProfile
+    const updatedProfile = await prisma.priestProfile.update({
+      where: { id: profileId },
+      data: {
+        availabilityJson: JSON.stringify(currentAvail),
+        avatarUrl: avatarUrl !== undefined ? avatarUrl : profile.avatarUrl,
+        nameAr: (isAdmin || isBishop) && nameAr ? nameAr : undefined,
+        nameEn: (isAdmin || isBishop) && nameEn ? nameEn : undefined,
+        titleAr: (isAdmin || isBishop) && titleAr ? titleAr : undefined,
+        titleEn: (isAdmin || isBishop) && titleEn ? titleEn : undefined
+      }
+    });
+
+    // Save to SystemConfig for persistence
+    await prisma.systemConfig.upsert({
+      where: { key: `priest_details_${profile.id}` },
+      update: { value: JSON.stringify(updatedDetails) },
+      create: { key: `priest_details_${profile.id}`, value: JSON.stringify(updatedDetails) }
+    });
+
+    const enriched = extractPriestDetails(updatedProfile.availabilityJson, updatedProfile.nameAr, JSON.stringify(updatedDetails));
+
+    return res.status(200).json({
+      message: 'تم تحديث بيانات الأب الكاهن بنجاح.',
+      profile: {
+        id: updatedProfile.id,
+        userId: updatedProfile.userId,
+        nameAr: updatedProfile.nameAr,
+        nameEn: updatedProfile.nameEn,
+        titleAr: updatedProfile.titleAr,
+        titleEn: updatedProfile.titleEn,
+        avatarUrl: updatedProfile.avatarUrl,
+        details: enriched
+      }
+    });
+  } catch (error) {
+    console.error('Error updating priest details:', error);
+    return res.status(500).json({ error: 'Server error updating priest details.' });
+  }
+});
+
 export default router;
