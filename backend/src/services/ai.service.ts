@@ -1562,7 +1562,14 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
 
 9. TONE & PRIVACY:
    - Warm, respectful Christian language (${userLanguage === 'ar' ? 'Arabic / Egyptian Colloquial' : 'English'}).
-   - NEVER ask for or allow 14-digit National IDs or payment cards in chat.`;
+   - NEVER ask for or allow 14-digit National IDs or payment cards in chat.
+
+10. WEBSITE DEVELOPER & CREATOR:
+    - If a user asks who programmed, developed, created, or made this website or platform (e.g., "مين برمج الموقع؟", "مين عمل الموقع ده؟", "من هو المبرمج؟", "من المطور؟", "who programmed this website?", "who is the developer?", "who made this site?"):
+    - ALWAYS answer clearly, directly, and respectfully that the developer and programmer is:
+      **Mark Samer (مارك سامر)**.
+      (Arabic: "تمت برمجة وتطوير هذه المنظومة الرقمية والموقع بالكامل بواسطة **مارك سامر (Mark Samer)**.")
+      (English: "This digital platform and website was fully programmed and developed by **Mark Samer (مارك سامر)**.")`;
   }
 
   /**
@@ -1715,6 +1722,26 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
     const q = normalizeQuery(query);
     const isAr = language === 'ar';
     const userGreeting = user?.name ? ` يا ${user.name.trim().split(' ')[0]}` : '';
+
+    // 0. Website Developer / Programmer Inquiry
+    const isDevQuery =
+      (q.includes('مين') || q.includes('من') || q.includes('who')) &&
+      (q.includes('برمج') || q.includes('عمل') || q.includes('طور') || q.includes('صمم') || q.includes('مطور') || q.includes('مبرمج') || q.includes('developer') || q.includes('programmer') || q.includes('created') || q.includes('built') || q.includes('programmed') || q.includes('made')) ||
+      q.includes('مين برمج') || q.includes('مين عمل الموقع') || q.includes('who programmed') || q.includes('who developed') || q.includes('who is the developer');
+
+    if (isDevQuery) {
+      const devText = isAr
+        ? `سلام ونعمة${userGreeting}. تمت برمجة وتطوير هذه المنظومة الرقمية والموقع بالكامل بواسطة **مارك سامر (Mark Samer)**.`
+        : `Peace and grace${userGreeting}. This digital platform and website was fully programmed and developed by **Mark Samer (مارك سامر)**.`;
+
+      return {
+        text: devText,
+        matchedSources: [{ title: isAr ? 'عن المنظومة' : 'About Platform', url: '/', type: 'general' }],
+        suggested: isAr
+          ? ['مواعيد القداسات هذا الأسبوع', 'كيف أحجز موعد اعتراف مع أبونا؟', 'ما هي رحلات ومؤتمرات الكنيسة؟']
+          : ['This week\'s liturgy schedule', 'How to book confession?', 'What upcoming trips are available?']
+      };
+    }
 
     // 0. Reference Tracking Inquiry (e.g. REQ-2026-XXXX)
     const refMatch = query.match(/REQ-\d{4}-[A-Za-z0-9]+/i) || query.match(/REQ-[A-Za-z0-9-]+/i);
@@ -2468,9 +2495,33 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
       };
     }
 
+    // 0.05 Website Developer / Programmer Inquiry
+    const normUserMsg = normalizeQuery(userMessage);
+    const isDeveloperQuery =
+      (normUserMsg.includes('مين') || normUserMsg.includes('من') || normUserMsg.includes('who')) &&
+      (normUserMsg.includes('برمج') || normUserMsg.includes('عمل') || normUserMsg.includes('طور') || normUserMsg.includes('صمم') || normUserMsg.includes('مطور') || normUserMsg.includes('مبرمج') || normUserMsg.includes('developer') || normUserMsg.includes('programmer') || normUserMsg.includes('created') || normUserMsg.includes('built') || normUserMsg.includes('programmed') || normUserMsg.includes('made')) ||
+      normUserMsg.includes('مين برمج') || normUserMsg.includes('مين عمل الموقع') || normUserMsg.includes('who programmed') || normUserMsg.includes('who developed') || normUserMsg.includes('who is the developer');
+
+    if (isDeveloperQuery) {
+      const devResponse = lang === 'ar'
+        ? `سلام ونعمة. تمت برمجة وتطوير هذه المنظومة الرقمية والموقع بالكامل بواسطة **مارك سامر (Mark Samer)**.`
+        : `Peace and grace. This digital platform and website was fully programmed and developed by **Mark Samer (مارك سامر)**.`;
+
+      return {
+        response: devResponse,
+        sources: [{ title: lang === 'ar' ? 'عن المنظومة' : 'About Platform', url: '/', type: 'general' }],
+        suggestedQuestions: lang === 'ar'
+          ? ['مواعيد القداسات هذا الأسبوع', 'كيف أحجز موعد اعتراف مع أبونا؟', 'ما هي رحلات ومؤتمرات الكنيسة؟']
+          : ['This week\'s liturgy schedule', 'How to book confession?', 'What upcoming trips are available?'],
+        latencyMs: Date.now() - startTime,
+        tokensUsed: 0,
+        provider: 'authoritative-knowledge',
+        model: 'church-grounded-v1'
+      };
+    }
+
     // 0.1 Church Events & Official Invitation Passes (Hidden Guard)
     const isEventsPublic = await ChurchKnowledgeRetriever.getEventsNavbarPublicEnabled();
-    const normUserMsg = normalizeQuery(userMessage);
     const isEventsQuery =
       normUserMsg.includes('فعالي') || normUserMsg.includes('تصريح') || normUserMsg.includes('تصاريح') ||
       normUserMsg.includes('دعوة') || normUserMsg.includes('دعوات') || normUserMsg.includes('invitation') ||

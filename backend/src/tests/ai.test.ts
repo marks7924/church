@@ -164,6 +164,19 @@ async function runAiIntegrationTests() {
     'Bishop Anba Athanasius returns bishopric office coordination'
   );
 
+  // 17. DEVELOPER INQUIRY TEST
+  const devResAr = await ChurchAiService.processChat('مين برمج الموقع ده؟', [], 'ar');
+  assert(
+    devResAr.response.includes('مارك سامر') && devResAr.response.includes('Mark Samer'),
+    'Developer inquiry in Arabic returns Mark Samer (مارك سامر)'
+  );
+
+  const devResEn = await ChurchAiService.processChat('who programmed this website?', [], 'en');
+  assert(
+    devResEn.response.includes('Mark Samer') && devResEn.response.includes('مارك سامر'),
+    'Developer inquiry in English returns Mark Samer (مارك سامر)'
+  );
+
   // 17. OUR HISTORY TESTS (1955, Popes, 8 Bishops in exact order)
   const historyRes = await ChurchAiService.processChat('ما هو تاريخ الكنيسة ومن هم الآباء الأساقفة؟', [], 'ar');
   assert(
