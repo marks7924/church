@@ -9,8 +9,10 @@ import {
   History, Calendar, Users, Eye, EyeOff, Edit3, Plus, Trash2, 
   CheckCircle, AlertTriangle, ChevronRight, ChevronLeft, Search, 
   Sparkles, BookOpen, Image as ImageIcon, FileText, ArrowUpRight,
-  Shield, Download, ExternalLink, X, RefreshCw, Camera, ArrowUp, ArrowDown
+  Shield, Download, ExternalLink, X, RefreshCw, Camera, ArrowUp, ArrowDown,
+  Scissors, GripVertical, ChevronDown, ChevronUp
 } from 'lucide-react';
+import ImageCropModal from '../../components/ImageCropModal';
 
 interface HistorySettings {
   id: string;
@@ -79,6 +81,8 @@ interface HistoryPopeRecord {
   papalNumber?: number | null;
   papacyPeriod: string;
   isDeceased: boolean;
+  isLocumTenens?: boolean;
+  locumContextAr?: string | null;
   avatarUrl?: string | null;
   bioAr?: string | null;
   bioEn?: string | null;
@@ -94,6 +98,8 @@ interface HistoryBishopRecord {
   titleEn?: string | null;
   episcopalPeriod: string;
   isDeceased?: boolean;
+  bishopStatus?: string; // 'CURRENT' | 'OTHER_DIOCESE' | 'DECEASED'
+  currentDioceseOrService?: string | null;
   avatarUrl?: string | null;
   bioAr?: string | null;
   bioEn?: string | null;
@@ -199,6 +205,9 @@ function ImageUploadField({
   isCircular?: boolean;
   fallbackIcon?: string;
 }) {
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [tempCropUrl, setTempCropUrl] = useState('');
+
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -208,9 +217,20 @@ function ImageUploadField({
     }
     const reader = new FileReader();
     reader.onloadend = () => {
-      onChange(reader.result as string);
+      const result = reader.result as string;
+      setTempCropUrl(result);
+      setCropModalOpen(true);
     };
     reader.readAsDataURL(file);
+  };
+
+  const openCropper = () => {
+    if (!value) {
+      alert('يرجى اختيار صورة أولاً أو وضع رابط صالح لقصها');
+      return;
+    }
+    setTempCropUrl(value);
+    setCropModalOpen(true);
   };
 
   return (
@@ -278,6 +298,31 @@ function ImageUploadField({
                 onChange={handleFile}
               />
             </label>
+
+            {value && (
+              <button
+                type="button"
+                onClick={openCropper}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  background: 'rgba(226, 183, 20, 0.15)',
+                  border: '1px solid var(--accent-gold)',
+                  color: 'var(--accent-gold)',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+                title="قص وضبط أبعاد الصورة والموضع الدائري"
+              >
+                <Scissors size={13} />
+                <span>قص وضبط</span>
+              </button>
+            )}
+
             {value && (
               <button
                 type="button"
@@ -298,6 +343,19 @@ function ImageUploadField({
           </div>
         </div>
       </div>
+
+      {cropModalOpen && (
+        <ImageCropModal
+          isOpen={cropModalOpen}
+          imageUrl={tempCropUrl}
+          aspectRatioPreset={isCircular ? 'circle' : 'free'}
+          onClose={() => setCropModalOpen(false)}
+          onCropComplete={(croppedDataUrl) => {
+            onChange(croppedDataUrl);
+            setCropModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -597,7 +655,65 @@ export default function HistoryPage() {
     return false;
   });
 
-  // Reorder Popes
+  // Collapsible Sections State (Every section can be collapsed / expanded)
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const toggleSection = (sectionKey: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey]
+    }));
+  };
+
+  // Drag and Drop State & Handlers for Popes / Locum Tenens
+  const [draggedPopeId, setDraggedPopeId] = useState<string | null>(null);
+  const [dragOverPopeId, setDragOverPopeId] = useState<string | null>(null);
+
+  const handlePopeDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedPopeId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+
+  const handlePopeDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverPopeId !== id) {
+      setDragOverPopeId(id);
+    }
+  };
+
+  const handlePopeDrop = async (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    setDragOverPopeId(null);
+    const sourceId = draggedPopeId || e.dataTransfer.getData('text/plain');
+    setDraggedPopeId(null);
+    if (!sourceId || sourceId === targetId) return;
+
+    const sourceIdx = popes.findIndex(p => p.id === sourceId);
+    const targetIdx = popes.findIndex(p => p.id === targetId);
+    if (sourceIdx === -1 || targetIdx === -1) return;
+
+    const newPopes = [...popes];
+    const [removed] = newPopes.splice(sourceIdx, 1);
+    newPopes.splice(targetIdx, 0, removed);
+
+    const items = newPopes.map((p, idx) => ({ id: p.id, orderIndex: idx + 1 }));
+    setPopes(newPopes.map((p, idx) => ({ ...p, orderIndex: idx + 1 })));
+
+    try {
+      const token = localStorage.getItem('church-token');
+      await fetch(`${API_URL}/history/popes/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ items })
+      });
+      showToast(language === 'ar' ? 'تم حفظ الترتيب الجديد بالسحب والإفلات ✨' : 'Order saved via drag & drop ✨');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Reorder Popes (fallback button method)
   const handleMovePope = async (index: number, direction: 'up' | 'down') => {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= popes.length) return;
@@ -622,7 +738,56 @@ export default function HistoryPage() {
     }
   };
 
-  // Reorder Bishops
+  // Drag and Drop State & Handlers for Supervising Bishops
+  const [draggedBishopId, setDraggedBishopId] = useState<string | null>(null);
+  const [dragOverBishopId, setDragOverBishopId] = useState<string | null>(null);
+
+  const handleBishopDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedBishopId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+
+  const handleBishopDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverBishopId !== id) {
+      setDragOverBishopId(id);
+    }
+  };
+
+  const handleBishopDrop = async (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    setDragOverBishopId(null);
+    const sourceId = draggedBishopId || e.dataTransfer.getData('text/plain');
+    setDraggedBishopId(null);
+    if (!sourceId || sourceId === targetId) return;
+
+    const sourceIdx = bishops.findIndex(b => b.id === sourceId);
+    const targetIdx = bishops.findIndex(b => b.id === targetId);
+    if (sourceIdx === -1 || targetIdx === -1) return;
+
+    const newBishops = [...bishops];
+    const [removed] = newBishops.splice(sourceIdx, 1);
+    newBishops.splice(targetIdx, 0, removed);
+
+    const items = newBishops.map((b, idx) => ({ id: b.id, orderIndex: idx + 1 }));
+    setBishops(newBishops.map((b, idx) => ({ ...b, orderIndex: idx + 1 })));
+
+    try {
+      const token = localStorage.getItem('church-token');
+      await fetch(`${API_URL}/history/bishops/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ items })
+      });
+      showToast(language === 'ar' ? 'تم حفظ ترتيب الآباء الأساقفة بالسحب والإفلات ✨' : 'Bishops order saved via drag & drop ✨');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Reorder Bishops (fallback button method)
   const handleMoveBishop = async (index: number, direction: 'up' | 'down') => {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= bishops.length) return;
@@ -932,18 +1097,31 @@ export default function HistoryPage() {
                 : 'Explore our church history through 8 core chapters with interactive audio narration and archival media.'}
             </p>
           </div>
-          {inlineEditMode && (
-            <button 
-              className={styles.btnSecondary}
-              onClick={() => setIsCreatingChapter(true)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {inlineEditMode && (
+              <button 
+                className={styles.btnSecondary}
+                onClick={() => setIsCreatingChapter(true)}
+              >
+                <Plus size={16} />
+                <span>{language === 'ar' ? 'إضافة فصل تاريخي جديد' : 'Add Chapter'}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.collapseToggleBtn}
+              onClick={() => toggleSection('chapters')}
+              title={collapsedSections['chapters'] ? (language === 'ar' ? 'توسيع القسم' : 'Expand') : (language === 'ar' ? 'طي القسم' : 'Collapse')}
             >
-              <Plus size={16} />
-              <span>{language === 'ar' ? 'إضافة فصل تاريخي جديد' : 'Add Chapter'}</span>
+              {collapsedSections['chapters'] ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+              <span>{collapsedSections['chapters'] ? (language === 'ar' ? 'توسيع' : 'Expand') : (language === 'ar' ? 'طي' : 'Collapse')}</span>
             </button>
-          )}
+          </div>
         </div>
 
-        {/* Chapter Scrubber Bar */}
+        {!collapsedSections['chapters'] && (
+          <div className={styles.sectionCollapsibleBody}>
+            {/* Chapter Scrubber Bar */}
         <div className={styles.chapterScrubberBar}>
           {chapters.map((ch, idx) => {
             const isActive = ch.slug === activeChapterSlug;
@@ -1221,140 +1399,272 @@ export default function HistoryPage() {
             </div>
           </article>
         )}
+          </div>
+        )}
       </section>
 
-      {/* SECTION — POPES OF ALEXANDRIA (الآباء البطاركة المعاصرون) */}
+      {/* SECTION — POPES OF ALEXANDRIA & LOCUM TENENS (الآباء البطاركة وقائم مقام) */}
       <section id="popes-section" className={styles.contentSection}>
         <div className={styles.sectionHeader}>
           <div>
             <h2 className={styles.sectionTitle}>
               <Shield size={24} color="var(--accent-gold)" />
-              <span>{language === 'ar' ? 'الآباء البطاركة — باباوات الكنيسة القبطية الأرثوذكسية المعاصرون' : 'Popes of Alexandria & Patriarchs'}</span>
+              <span>{language === 'ar' ? 'الآباء البطاركة — باباوات الكنيسة القبطية الأرثوذكسية المعاصرون وقائم مقام' : 'Popes of Alexandria & Locum Tenens'}</span>
             </h2>
             <p className={styles.sectionSubtitle}>
               {language === 'ar'
-                ? 'توثيق لمسيرة الرعاية الرسولية المباركة لقداسة باباوات الإسكندرية الذين قادوا الكنيسة في عصر تأسيس ونمو كنيستنا المباركة.'
-                : 'Honoring the Holy Patriarchs of the See of St. Mark during our church history.'}
+                ? 'توثيق لمسيرة الرعاية الرسولية المباركة لقداسة باباوات الإسكندرية الذين قادوا الكنيسة، مع توثيق الآباء المطارنة القائم مقام البطريركي بعد نياحة البابا.'
+                : 'Honoring the Holy Patriarchs of the See of St. Mark and the Locum Tenens who shepherded during transitions.'}
             </p>
           </div>
-          {inlineEditMode && (
-            <button 
-              className={styles.btnPrimary}
-              onClick={() => setIsCreatingPope(true)}
-            >
-              <Plus size={16} />
-              <span>{language === 'ar' ? 'إضافة قداسة بابا' : 'Add Pope'}</span>
-            </button>
-          )}
-        </div>
-
-        <div className={styles.popesGrid}>
-          {popes.map((p, idx) => {
-            const isDeceased = Boolean(p.isDeceased);
-            return (
-              <div 
-                key={p.id} 
-                className={`${styles.popeCard} ${isDeceased ? styles.deceasedCard : styles.popeGoldenFrame}`}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {inlineEditMode && (
+              <button 
+                className={styles.btnPrimary}
+                onClick={() => setIsCreatingPope(true)}
               >
-                {/* Admin Controls (Reordering & Edit / Delete) */}
-                {inlineEditMode && (
-                  <>
-                    <div className={styles.orderControls}>
-                      <button
-                        className={styles.orderBtn}
-                        onClick={() => handleMovePope(idx, 'up')}
-                        disabled={idx === 0}
-                        title="تحريك لأعلى"
-                      >
-                        <ArrowUp size={13} />
-                      </button>
-                      <button
-                        className={styles.orderBtn}
-                        onClick={() => handleMovePope(idx, 'down')}
-                        disabled={idx === popes.length - 1}
-                        title="تحريك لأسفل"
-                      >
-                        <ArrowDown size={13} />
-                      </button>
-                    </div>
-                    <div style={{ position: 'absolute', top: '12px', [language === 'ar' ? 'left' : 'right']: '12px', display: 'flex', gap: '6px', zIndex: 10 }}>
-                      <button
-                        onClick={() => setEditingPope(p)}
-                        style={{ background: 'rgba(226, 183, 20, 0.2)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
-                        title="تعديل"
-                      >
-                        <Edit3 size={13} />
-                      </button>
-                      <button
-                        onClick={() => handleDeletePope(p.id)}
-                        style={{ background: 'rgba(231, 76, 60, 0.2)', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
-                        title="حذف"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {/* Avatar with Monochrome Filter if Deceased */}
-                <div 
-                  className={`${styles.popeAvatar} ${isDeceased ? styles.deceasedAvatar : ''}`}
-                  style={{
-                    backgroundImage: p.avatarUrl ? `url(${p.avatarUrl})` : undefined,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  {!p.avatarUrl && <span style={{ fontSize: '3rem', color: isDeceased ? '#888' : 'var(--accent-gold)' }}>👑</span>}
-                </div>
-
-                {/* Deceased / Living Badge */}
-                {isDeceased ? (
-                  <div className={styles.deceasedMourningBadge}>
-                    <span>🖤 🎗️</span>
-                    <span>{language === 'ar' ? 'مثلث الرحمات — في فردوس النعيم 🕊️' : 'Departed to Paradise 🕊️'}</span>
-                  </div>
-                ) : (
-                  <div className={styles.activeLivingBadge}>
-                    <span>🕊️</span>
-                    <span>{language === 'ar' ? 'أطال الله لنا حياته ورعايته' : 'May the Lord preserve his life'}</span>
-                  </div>
-                )}
-
-                {/* Papal Number Badge */}
-                {p.papalNumber && (
-                  <span className={styles.popeNumberBadge}>
-                    {language === 'ar' ? `البابا رقم ${p.papalNumber}` : `Pope #${p.papalNumber}`}
-                  </span>
-                )}
-
-                {/* Title */}
-                <span className={styles.bishopTitleBadge} style={{ borderColor: isDeceased ? '#666' : undefined, color: isDeceased ? '#ccc' : undefined }}>
-                  {language === 'ar' ? p.titleAr : (p.titleEn || p.titleAr)}
-                </span>
-
-                {/* Pope Name */}
-                <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', margin: '4px 0 8px' }}>
-                  {language === 'ar' ? p.nameAr : (p.nameEn || p.nameAr)}
-                </h3>
-
-                {/* Papacy Period */}
-                <div className={styles.bishopPeriodBadge}>
-                  <span>📅 {language === 'ar' ? 'سنوات الحبرية:' : 'Papacy:'}</span>
-                  <b>{p.papacyPeriod}</b>
-                </div>
-
-                {/* Bio / Impact */}
-                {p.bioAr && (
-                  <p className={styles.bishopBioText}>
-                    {language === 'ar' ? p.bioAr : (p.bioEn || p.bioAr)}
-                  </p>
-                )}
-              </div>
-            );
-          })}
+                <Plus size={16} />
+                <span>{language === 'ar' ? 'إضافة بطريرك / قائم مقام' : 'Add Pope / Locum'}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.collapseToggleBtn}
+              onClick={() => toggleSection('popes')}
+              title={collapsedSections['popes'] ? (language === 'ar' ? 'توسيع القسم' : 'Expand') : (language === 'ar' ? 'طي القسم' : 'Collapse')}
+            >
+              {collapsedSections['popes'] ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+              <span>{collapsedSections['popes'] ? (language === 'ar' ? 'توسيع' : 'Expand') : (language === 'ar' ? 'طي' : 'Collapse')}</span>
+            </button>
+          </div>
         </div>
+
+        {!collapsedSections['popes'] && (
+          <div className={styles.sectionCollapsibleBody}>
+            {/* 1. Canonical Popes Grid */}
+            <div className={styles.popesGrid}>
+              {popes.filter(p => !p.isLocumTenens).map((p, idx) => {
+                const isDeceased = Boolean(p.isDeceased);
+                return (
+                  <div 
+                    key={p.id} 
+                    className={`${styles.popeCard} ${isDeceased ? styles.deceasedCard : styles.popeGoldenFrame} ${draggedPopeId === p.id ? styles.isDragging : ''} ${dragOverPopeId === p.id ? styles.draggedOver : ''}`}
+                    draggable={inlineEditMode}
+                    onDragStart={(e) => handlePopeDragStart(e, p.id)}
+                    onDragOver={(e) => handlePopeDragOver(e, p.id)}
+                    onDrop={(e) => handlePopeDrop(e, p.id)}
+                  >
+                    {/* Admin Controls (Drag Handle, Reordering & Edit / Delete) */}
+                    {inlineEditMode && (
+                      <>
+                        <div className={styles.dragHandle} title="اسحب بالماوس لتغيير الترتيب (Drag & Drop)">
+                          <GripVertical size={16} />
+                          <span>سحب للترتيب</span>
+                        </div>
+                        <div className={styles.orderControls}>
+                          <button
+                            className={styles.orderBtn}
+                            onClick={() => handleMovePope(idx, 'up')}
+                            disabled={idx === 0}
+                            title="تحريك لأعلى"
+                          >
+                            <ArrowUp size={13} />
+                          </button>
+                          <button
+                            className={styles.orderBtn}
+                            onClick={() => handleMovePope(idx, 'down')}
+                            disabled={idx === popes.length - 1}
+                            title="تحريك لأسفل"
+                          >
+                            <ArrowDown size={13} />
+                          </button>
+                        </div>
+                        <div style={{ position: 'absolute', top: '12px', [language === 'ar' ? 'left' : 'right']: '12px', display: 'flex', gap: '6px', zIndex: 10 }}>
+                          <button
+                            onClick={() => setEditingPope(p)}
+                            style={{ background: 'rgba(226, 183, 20, 0.2)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                            title="تعديل بيانات أو صورة البابا"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDeletePope(p.id)}
+                            style={{ background: 'rgba(231, 76, 60, 0.2)', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                            title="حذف"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Avatar with Monochrome Filter if Deceased */}
+                    <div 
+                      className={`${styles.popeAvatar} ${isDeceased ? styles.deceasedAvatar : ''}`}
+                      style={{
+                        backgroundImage: p.avatarUrl ? `url(${p.avatarUrl})` : undefined,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {!p.avatarUrl && <span style={{ fontSize: '3rem', color: isDeceased ? '#888' : 'var(--accent-gold)' }}>👑</span>}
+                    </div>
+
+                    {/* Deceased / Living Badge */}
+                    {isDeceased ? (
+                      <div className={styles.deceasedMourningBadge}>
+                        <span>🖤 🎗️</span>
+                        <span>{language === 'ar' ? 'مثلث الرحمات — في فردوس النعيم 🕊️' : 'Departed to Paradise 🕊️'}</span>
+                      </div>
+                    ) : (
+                      <div className={styles.activeLivingBadge}>
+                        <span>🕊️</span>
+                        <span>{language === 'ar' ? 'أطال الله لنا حياته ورعايته' : 'May the Lord preserve his life'}</span>
+                      </div>
+                    )}
+
+                    {/* Papal Number Badge */}
+                    {p.papalNumber && (
+                      <span className={styles.popeNumberBadge}>
+                        {language === 'ar' ? `البابا رقم ${p.papalNumber}` : `Pope #${p.papalNumber}`}
+                      </span>
+                    )}
+
+                    {/* Title */}
+                    <span className={styles.bishopTitleBadge} style={{ borderColor: isDeceased ? '#666' : undefined, color: isDeceased ? '#ccc' : undefined }}>
+                      {language === 'ar' ? p.titleAr : (p.titleEn || p.titleAr)}
+                    </span>
+
+                    {/* Pope Name */}
+                    <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', margin: '4px 0 8px' }}>
+                      {language === 'ar' ? p.nameAr : (p.nameEn || p.nameAr)}
+                    </h3>
+
+                    {/* Papacy Period */}
+                    <div className={styles.bishopPeriodBadge}>
+                      <span>📅 {language === 'ar' ? 'سنوات الحبرية:' : 'Papacy:'}</span>
+                      <b>{p.papacyPeriod}</b>
+                    </div>
+
+                    {/* Bio / Impact */}
+                    {p.bioAr && (
+                      <p className={styles.bishopBioText}>
+                        {language === 'ar' ? p.bioAr : (p.bioEn || p.bioAr)}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 2. Locum Tenens (قائم مقام) Dedicated Subsection Under Popes */}
+            {popes.filter(p => p.isLocumTenens).length > 0 && (
+              <div className={styles.locumTenensSection}>
+                <div className={styles.locumTenensHeader}>
+                  <div className={styles.locumTenensTitleWrap}>
+                    <h3 className={styles.locumTenensTitle}>
+                      <span>⚖️</span>
+                      <span>{language === 'ar' ? 'الآباء الأساقفة والمطارنة — قائم مقام بطريركي' : 'Locum Tenens of the Papal See'}</span>
+                    </h3>
+                    <p className={styles.locumTenensSubtitle}>
+                      {language === 'ar'
+                        ? 'الآباء المطارنة الأجلاء الذين أداروا الكنيسة القبطية الأرثوذكسية كقائم مقام بعد نياحة قداسة البابا وحتى إقامة القرعة الهيكلية وتجليس البابا الجديد.'
+                        : 'Reverend Metropolitans and Bishops who served as Locum Tenens following the departure of the Holy Pope until the enthronement of the successor.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className={styles.locumTenensGrid}>
+                  {popes.filter(p => p.isLocumTenens).map((locum) => {
+                    const isDeceased = Boolean(locum.isDeceased);
+                    return (
+                      <div
+                        key={locum.id}
+                        className={`${styles.locumCard} ${draggedPopeId === locum.id ? styles.isDragging : ''} ${dragOverPopeId === locum.id ? styles.draggedOver : ''}`}
+                        draggable={inlineEditMode}
+                        onDragStart={(e) => handlePopeDragStart(e, locum.id)}
+                        onDragOver={(e) => handlePopeDragOver(e, locum.id)}
+                        onDrop={(e) => handlePopeDrop(e, locum.id)}
+                      >
+                        {inlineEditMode && (
+                          <>
+                            <div className={styles.dragHandle} title="اسحب لإعادة الترتيب">
+                              <GripVertical size={14} />
+                              <span>سحب للترتيب</span>
+                            </div>
+                            <div style={{ position: 'absolute', top: '10px', [language === 'ar' ? 'left' : 'right']: '10px', display: 'flex', gap: '6px', zIndex: 10 }}>
+                              <button
+                                onClick={() => setEditingPope(locum)}
+                                style={{ background: 'rgba(226, 183, 20, 0.2)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                                title="تعديل بيانات القائم مقام"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button
+                                onClick={() => handleDeletePope(locum.id)}
+                                style={{ background: 'rgba(231, 76, 60, 0.2)', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                                title="حذف"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </>
+                        )}
+
+                        <div
+                          className={`${styles.popeAvatar} ${isDeceased ? styles.deceasedAvatar : ''}`}
+                          style={{
+                            backgroundImage: locum.avatarUrl ? `url(${locum.avatarUrl})` : undefined,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '92px',
+                            height: '92px',
+                            margin: '0 auto 12px'
+                          }}
+                        >
+                          {!locum.avatarUrl && <span style={{ fontSize: '2rem' }}>⚖️</span>}
+                        </div>
+
+                        <div className={styles.locumBadge}>
+                          <span>⚖️</span>
+                          <span>{locum.locumContextAr || (language === 'ar' ? 'قائم مقام بطريركي' : 'Locum Tenens')}</span>
+                        </div>
+
+                        {isDeceased && (
+                          <div className={styles.deceasedMourningBadge} style={{ padding: '2px 8px', fontSize: '0.72rem', margin: '4px auto 8px' }}>
+                            <span>🖤 🎗️</span>
+                            <span>{language === 'ar' ? 'متنيح في الرب 🕊️' : 'Departed in Christ 🕊️'}</span>
+                          </div>
+                        )}
+
+                        <span className={styles.bishopTitleBadge} style={{ borderColor: 'rgba(243, 156, 18, 0.4)', color: '#f39c12', fontSize: '0.74rem' }}>
+                          {language === 'ar' ? locum.titleAr : (locum.titleEn || locum.titleAr)}
+                        </span>
+
+                        <h4 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff', margin: '6px 0 4px' }}>
+                          {language === 'ar' ? locum.nameAr : (locum.nameEn || locum.nameAr)}
+                        </h4>
+
+                        <div className={styles.bishopPeriodBadge} style={{ fontSize: '0.78rem' }}>
+                          <span>📅 {language === 'ar' ? 'فترة القائم مقام:' : 'Period:'}</span>
+                          <b>{locum.papacyPeriod}</b>
+                        </div>
+
+                        {locum.bioAr && (
+                          <p className={styles.bishopBioText} style={{ fontSize: '0.82rem', marginTop: '8px' }}>
+                            {language === 'ar' ? locum.bioAr : (locum.bioEn || locum.bioAr)}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       {/* SECTION — SUPERVISING BISHOPS (الآباء الأساقفة المسؤولون عن الكنيسة) */}
@@ -1367,116 +1677,165 @@ export default function HistoryPage() {
             </h2>
             <p className={styles.sectionSubtitle}>
               {language === 'ar'
-                ? 'توثيق مبارك لآبائنا الأحبار الأجلاء الذين شملوا كنيسة الشهيد العظيم أبي سيفين برعايتهم الرسولية وصلواتهم المباركة.'
+                ? 'توثيق مبارك لآبائنا الأحبار الأجلاء الذين شملوا كنيسة الشهيد العظيم أبي سيفين برعايتهم الرسولية وصلواتهم المباركة منذ التأسيس وحتى اليوم.'
                 : 'Honoring the reverend general and diocesan bishops who shepherded this church with pastoral devotion.'}
             </p>
           </div>
-          {inlineEditMode && (
-            <button 
-              className={styles.btnPrimary}
-              onClick={() => setIsCreatingBishop(true)}
-            >
-              <Plus size={16} />
-              <span>{language === 'ar' ? 'إضافة حبر جليل' : 'Add Bishop'}</span>
-            </button>
-          )}
-        </div>
-
-        <div className={styles.bishopsGrid}>
-          {bishops.map((b, idx) => {
-            const isDeceased = Boolean(b.isDeceased);
-            return (
-              <div 
-                key={b.id} 
-                className={`${styles.bishopCard} ${isDeceased ? styles.deceasedCard : styles.bishopGoldenFrame}`}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {inlineEditMode && (
+              <button 
+                className={styles.btnPrimary}
+                onClick={() => setIsCreatingBishop(true)}
               >
-                {/* Admin Controls (Reordering & Edit / Delete) */}
-                {inlineEditMode && (
-                  <>
-                    <div className={styles.orderControls}>
-                      <button
-                        className={styles.orderBtn}
-                        onClick={() => handleMoveBishop(idx, 'up')}
-                        disabled={idx === 0}
-                        title="تحريك لأعلى"
-                      >
-                        <ArrowUp size={13} />
-                      </button>
-                      <button
-                        className={styles.orderBtn}
-                        onClick={() => handleMoveBishop(idx, 'down')}
-                        disabled={idx === bishops.length - 1}
-                        title="تحريك لأسفل"
-                      >
-                        <ArrowDown size={13} />
-                      </button>
-                    </div>
-                    <div style={{ position: 'absolute', top: '12px', [language === 'ar' ? 'left' : 'right']: '12px', display: 'flex', gap: '6px', zIndex: 10 }}>
-                      <button
-                        onClick={() => setEditingBishop(b)}
-                        style={{ background: 'rgba(226, 183, 20, 0.2)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
-                        title="تعديل"
-                      >
-                        <Edit3 size={13} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteBishop(b.id)}
-                        style={{ background: 'rgba(231, 76, 60, 0.2)', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
-                        title="حذف"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                {/* Avatar with Golden Episcopal Frame & Monochrome if Deceased */}
-                <div 
-                  className={`${styles.bishopAvatar} ${isDeceased ? styles.deceasedAvatar : ''}`}
-                  style={{
-                    backgroundImage: b.avatarUrl ? `url(${b.avatarUrl})` : undefined,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  {!b.avatarUrl && <span style={{ fontSize: '2.5rem', color: isDeceased ? '#888' : 'var(--accent-gold)' }}>👑</span>}
-                </div>
-
-                {/* Deceased Mourning Badge if Bishop is dead */}
-                {isDeceased && (
-                  <div className={styles.deceasedMourningBadge}>
-                    <span>🖤 🎗️</span>
-                    <span>{language === 'ar' ? 'متنيح في الرب 🕊️' : 'Departed in Christ 🕊️'}</span>
-                  </div>
-                )}
-
-                {/* Title Badge */}
-                <span className={styles.bishopTitleBadge} style={{ borderColor: isDeceased ? '#666' : undefined, color: isDeceased ? '#ccc' : undefined }}>
-                  {language === 'ar' ? b.titleAr : (b.titleEn || b.titleAr)}
-                </span>
-
-                {/* Bishop Name */}
-                <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', marginBottom: '6px' }}>
-                  {language === 'ar' ? b.nameAr : (b.nameEn || b.nameAr)}
-                </h3>
-
-                {/* Episcopal Pastoral Period Badge */}
-                <div className={styles.bishopPeriodBadge}>
-                  <span>🕊️ {language === 'ar' ? 'فترة الرعاية الكنسية:' : 'Period:'}</span>
-                  <b>{b.episcopalPeriod}</b>
-                </div>
-
-                {/* Biography */}
-                {b.bioAr && (
-                  <p className={styles.bishopBioText}>
-                    {language === 'ar' ? b.bioAr : (b.bioEn || b.bioAr)}
-                  </p>
-                )}
-              </div>
-            );
-          })}
+                <Plus size={16} />
+                <span>{language === 'ar' ? 'إضافة حبر جليل' : 'Add Bishop'}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.collapseToggleBtn}
+              onClick={() => toggleSection('bishops')}
+              title={collapsedSections['bishops'] ? (language === 'ar' ? 'توسيع القسم' : 'Expand') : (language === 'ar' ? 'طي القسم' : 'Collapse')}
+            >
+              {collapsedSections['bishops'] ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+              <span>{collapsedSections['bishops'] ? (language === 'ar' ? 'توسيع' : 'Expand') : (language === 'ar' ? 'طي' : 'Collapse')}</span>
+            </button>
+          </div>
         </div>
+
+        {!collapsedSections['bishops'] && (
+          <div className={styles.sectionCollapsibleBody}>
+            <div className={styles.bishopsGrid}>
+              {bishops.map((b, idx) => {
+                const isDeceased = b.bishopStatus === 'DECEASED' || Boolean(b.isDeceased);
+                const isCurrent = b.bishopStatus === 'CURRENT';
+                const isOtherDiocese = b.bishopStatus === 'OTHER_DIOCESE' && !isDeceased;
+
+                return (
+                  <div 
+                    key={b.id} 
+                    className={`${styles.bishopCard} ${
+                      isDeceased ? styles.deceasedCard : isCurrent ? styles.currentBishopCard : styles.servingElsewhereBishopCard
+                    } ${draggedBishopId === b.id ? styles.isDragging : ''} ${dragOverBishopId === b.id ? styles.draggedOver : ''}`}
+                    draggable={inlineEditMode}
+                    onDragStart={(e) => handleBishopDragStart(e, b.id)}
+                    onDragOver={(e) => handleBishopDragOver(e, b.id)}
+                    onDrop={(e) => handleBishopDrop(e, b.id)}
+                  >
+                    {/* Admin Controls (Drag Handle, Reordering & Edit / Delete) */}
+                    {inlineEditMode && (
+                      <>
+                        <div className={styles.dragHandle} title="اسحب لتغيير ترتيب الأساقفة">
+                          <GripVertical size={16} />
+                          <span>سحب للترتيب</span>
+                        </div>
+                        <div className={styles.orderControls}>
+                          <button
+                            className={styles.orderBtn}
+                            onClick={() => handleMoveBishop(idx, 'up')}
+                            disabled={idx === 0}
+                            title="تحريك لأعلى"
+                          >
+                            <ArrowUp size={13} />
+                          </button>
+                          <button
+                            className={styles.orderBtn}
+                            onClick={() => handleMoveBishop(idx, 'down')}
+                            disabled={idx === bishops.length - 1}
+                            title="تحريك لأسفل"
+                          >
+                            <ArrowDown size={13} />
+                          </button>
+                        </div>
+                        <div style={{ position: 'absolute', top: '12px', [language === 'ar' ? 'left' : 'right']: '12px', display: 'flex', gap: '6px', zIndex: 10 }}>
+                          <button
+                            onClick={() => setEditingBishop(b)}
+                            style={{ background: 'rgba(226, 183, 20, 0.2)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                            title="تعديل بيانات الحبر الجليل"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteBishop(b.id)}
+                            style={{ background: 'rgba(231, 76, 60, 0.2)', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                            title="حذف"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Avatar with Golden Episcopal Frame & Monochrome if Deceased (Regular colors if Current or Other Diocese, NO NEON) */}
+                    <div 
+                      className={`${styles.bishopAvatar} ${isDeceased ? styles.deceasedAvatar : ''}`}
+                      style={{
+                        backgroundImage: b.avatarUrl ? `url(${b.avatarUrl})` : undefined,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {!b.avatarUrl && <span style={{ fontSize: '2.5rem', color: isDeceased ? '#888' : 'var(--accent-gold)' }}>👑</span>}
+                    </div>
+
+                    {/* 3-Way Status Badges */}
+                    {isCurrent && (
+                      <div className={styles.currentBishopBadge}>
+                        <span>👑</span>
+                        <span>{language === 'ar' ? 'راعي وأسقف الكنيسة الحالي' : 'Current Bishop & Shepherd'}</span>
+                      </div>
+                    )}
+
+                    {isOtherDiocese && (
+                      <div className={styles.servingElsewhereBadge}>
+                        <span>⛪</span>
+                        <span>{language === 'ar' ? 'يخدم حاليا في إيبارشية / كنيسة أخرى' : 'Serving in Another Diocese'}</span>
+                      </div>
+                    )}
+
+                    {isDeceased && (
+                      <div className={styles.deceasedMourningBadge}>
+                        <span>🖤 🎗️</span>
+                        <span>{language === 'ar' ? 'متنيح في الرب 🕊️' : 'Departed in Christ 🕊️'}</span>
+                      </div>
+                    )}
+
+                    {/* Title Badge */}
+                    <span className={styles.bishopTitleBadge} style={{ borderColor: isDeceased ? '#666' : isCurrent ? 'var(--accent-gold)' : '#3b82f6', color: isDeceased ? '#ccc' : isCurrent ? 'var(--accent-gold)' : '#93c5fd' }}>
+                      {language === 'ar' ? b.titleAr : (b.titleEn || b.titleAr)}
+                    </span>
+
+                    {/* Bishop Name */}
+                    <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', marginBottom: '6px' }}>
+                      {language === 'ar' ? b.nameAr : (b.nameEn || b.nameAr)}
+                    </h3>
+
+                    {/* Episcopal Pastoral Period Badge */}
+                    <div className={styles.bishopPeriodBadge}>
+                      <span>🕊️ {language === 'ar' ? 'فترة الرعاية الكنسية:' : 'Period:'}</span>
+                      <b>{b.episcopalPeriod}</b>
+                    </div>
+
+                    {/* Current Diocese / Location if Serving Elsewhere */}
+                    {isOtherDiocese && b.currentDioceseOrService && (
+                      <div style={{ fontSize: '0.8rem', color: '#93c5fd', background: 'rgba(59, 130, 246, 0.1)', padding: '4px 10px', borderRadius: '6px', margin: '4px 0 8px', fontWeight: 600 }}>
+                        📍 {language === 'ar' ? 'الخدمة الحالية:' : 'Current Service:'} {b.currentDioceseOrService}
+                      </div>
+                    )}
+
+                    {/* Biography */}
+                    {b.bioAr && (
+                      <p className={styles.bishopBioText}>
+                        {language === 'ar' ? b.bioAr : (b.bioEn || b.bioAr)}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* SECTION 7 & 8 — CLERGY DIRECTORY (THE 15 HISTORICAL RECORDS) */}
@@ -1493,16 +1852,30 @@ export default function HistoryPage() {
                 : 'The historical directory of the reverend fathers who served our church altar across the decades.'}
             </p>
           </div>
-          {inlineEditMode && (
-            <button 
-              className={styles.btnPrimary}
-              onClick={() => setIsCreatingClergy(true)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {inlineEditMode && (
+              <button 
+                className={styles.btnPrimary}
+                onClick={() => setIsCreatingClergy(true)}
+              >
+                <Plus size={16} />
+                <span>{language === 'ar' ? 'إضافة سجل أب كاهن' : 'Add Clergy Record'}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.collapseToggleBtn}
+              onClick={() => toggleSection('clergy')}
+              title={collapsedSections['clergy'] ? (language === 'ar' ? 'توسيع القسم' : 'Expand') : (language === 'ar' ? 'طي القسم' : 'Collapse')}
             >
-              <Plus size={16} />
-              <span>{language === 'ar' ? 'إضافة سجل أب كاهن' : 'Add Clergy Record'}</span>
+              {collapsedSections['clergy'] ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+              <span>{collapsedSections['clergy'] ? (language === 'ar' ? 'توسيع' : 'Expand') : (language === 'ar' ? 'طي' : 'Collapse')}</span>
             </button>
-          )}
+          </div>
         </div>
+
+        {!collapsedSections['clergy'] && (
+          <div className={styles.sectionCollapsibleBody}>
 
         {/* Search & Filter Bar */}
         <div className={styles.filterRow}>
@@ -1668,6 +2041,8 @@ export default function HistoryPage() {
             );
           })}
         </div>
+          </div>
+        )}
       </section>
 
       {/* SECTION — CHURCH DEACONS & SERVANTS HONOR ROLL (ثمار الخدمة المباركة) */}
@@ -1684,16 +2059,30 @@ export default function HistoryPage() {
                 : 'Honoring deacons, priests, monks, and servants who were nurtured in this church and called into sacred service.'}
             </p>
           </div>
-          {inlineEditMode && (
-            <button 
-              className={styles.btnPrimary}
-              onClick={() => setIsCreatingServantFruit(true)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {inlineEditMode && (
+              <button 
+                className={styles.btnPrimary}
+                onClick={() => setIsCreatingServantFruit(true)}
+              >
+                <Plus size={16} />
+                <span>{language === 'ar' ? 'إضافة خادم / شماس مبارك' : 'Add Servant / Deacon'}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.collapseToggleBtn}
+              onClick={() => toggleSection('servants')}
+              title={collapsedSections['servants'] ? (language === 'ar' ? 'توسيع القسم' : 'Expand') : (language === 'ar' ? 'طي القسم' : 'Collapse')}
             >
-              <Plus size={16} />
-              <span>{language === 'ar' ? 'إضافة خادم / شماس مبارك' : 'Add Servant / Deacon'}</span>
+              {collapsedSections['servants'] ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+              <span>{collapsedSections['servants'] ? (language === 'ar' ? 'توسيع' : 'Expand') : (language === 'ar' ? 'طي' : 'Collapse')}</span>
             </button>
-          )}
+          </div>
         </div>
+
+        {!collapsedSections['servants'] && (
+          <div className={styles.sectionCollapsibleBody}>
 
         {/* Servants Dynamic Role Filter Track */}
         <div className={styles.servantsFilterRow}>
@@ -1811,6 +2200,8 @@ export default function HistoryPage() {
             </div>
           ))}
         </div>
+          </div>
+        )}
       </section>
 
       {/* SECTION 9 — HISTORICAL TIMELINE */}
@@ -1827,75 +2218,90 @@ export default function HistoryPage() {
                 : 'Connected historical timeline from the 1955 foundation through 2026.'}
             </p>
           </div>
-          {inlineEditMode && (
-            <button 
-              className={styles.btnPrimary}
-              onClick={() => setIsCreatingEvent(true)}
-            >
-              <Plus size={16} />
-              <span>{language === 'ar' ? 'إضافة حدث بالخط الزمني' : 'Add Event'}</span>
-            </button>
-          )}
-        </div>
-
-        {/* Decade Selector */}
-        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '1.5rem' }}>
-          {['ALL', '1930', '1950', '1960', '1970', '1980', '1990', '2000', '2010', '2020'].map(dec => (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {inlineEditMode && (
+              <button 
+                className={styles.btnPrimary}
+                onClick={() => setIsCreatingEvent(true)}
+              >
+                <Plus size={16} />
+                <span>{language === 'ar' ? 'إضافة حدث بالخط الزمني' : 'Add Event'}</span>
+              </button>
+            )}
             <button
-              key={dec}
-              className={`${styles.chapterChip} ${selectedDecade === dec ? styles.active : ''}`}
-              onClick={() => setSelectedDecade(dec)}
+              type="button"
+              className={styles.collapseToggleBtn}
+              onClick={() => toggleSection('timeline')}
+              title={collapsedSections['timeline'] ? (language === 'ar' ? 'توسيع القسم' : 'Expand') : (language === 'ar' ? 'طي القسم' : 'Collapse')}
             >
-              {dec === 'ALL' ? (language === 'ar' ? 'جميع السنوات' : 'All Decades') : `${dec}s`}
+              {collapsedSections['timeline'] ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+              <span>{collapsedSections['timeline'] ? (language === 'ar' ? 'توسيع' : 'Expand') : (language === 'ar' ? 'طي' : 'Collapse')}</span>
             </button>
-          ))}
+          </div>
         </div>
 
-        {/* Timeline Items Track */}
-        <div className={styles.timelineTrack}>
-          {filteredEvents.map((evt) => (
-            <div key={evt.id} className={styles.timelineItem}>
-              <div className={styles.timelineMarker}></div>
-              <div className={styles.timelineCard}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className={styles.timelineYear}>{evt.year}</span>
-                  <span style={{ fontSize: '0.74rem', color: 'var(--accent-gold)', background: 'rgba(226, 183, 20, 0.1)', padding: '2px 8px', borderRadius: '4px' }}>
-                    {evt.category}
-                  </span>
-                </div>
-                <h3 className={styles.timelineTitle}>
-                  {language === 'ar' ? evt.titleAr : (evt.titleEn || evt.titleAr)}
-                </h3>
-                <p className={styles.timelineDesc}>
-                  {language === 'ar' ? evt.descriptionAr : (evt.descriptionEn || evt.descriptionAr)}
-                </p>
-                {evt.sources && (
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '6px' }}>
-                    📖 {language === 'ar' ? 'المصدر:' : 'Source:'} {evt.sources}
-                  </div>
-                )}
-                {inlineEditMode && (
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                    <button 
-                      onClick={() => setEditingEvent(evt)}
-                      className={styles.btnSecondary} 
-                      style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                    >
-                      <Edit3 size={12} /> {language === 'ar' ? 'تعديل' : 'Edit'}
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteEvent(evt.id)}
-                      className={styles.btnSecondary} 
-                      style={{ padding: '4px 10px', fontSize: '0.75rem', color: '#e74c3c', borderColor: '#e74c3c' }}
-                    >
-                      <Trash2 size={12} /> {language === 'ar' ? 'حذف' : 'Delete'}
-                    </button>
-                  </div>
-                )}
-              </div>
+        {!collapsedSections['timeline'] && (
+          <div className={styles.sectionCollapsibleBody}>
+            {/* Decade Selector */}
+            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '1.5rem' }}>
+              {['ALL', '1930', '1950', '1960', '1970', '1980', '1990', '2000', '2010', '2020'].map(dec => (
+                <button
+                  key={dec}
+                  className={`${styles.chapterChip} ${selectedDecade === dec ? styles.active : ''}`}
+                  onClick={() => setSelectedDecade(dec)}
+                >
+                  {dec === 'ALL' ? (language === 'ar' ? 'جميع السنوات' : 'All Decades') : `${dec}s`}
+                </button>
+              ))}
             </div>
-          ))}
-        </div>
+
+            {/* Timeline Items Track */}
+            <div className={styles.timelineTrack}>
+              {filteredEvents.map((evt) => (
+                <div key={evt.id} className={styles.timelineItem}>
+                  <div className={styles.timelineMarker}></div>
+                  <div className={styles.timelineCard}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span className={styles.timelineYear}>{evt.year}</span>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--accent-gold)', background: 'rgba(226, 183, 20, 0.1)', padding: '2px 8px', borderRadius: '4px' }}>
+                        {evt.category}
+                      </span>
+                    </div>
+                    <h3 className={styles.timelineTitle}>
+                      {language === 'ar' ? evt.titleAr : (evt.titleEn || evt.titleAr)}
+                    </h3>
+                    <p className={styles.timelineDesc}>
+                      {language === 'ar' ? evt.descriptionAr : (evt.descriptionEn || evt.descriptionAr)}
+                    </p>
+                    {evt.sources && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '6px' }}>
+                        📖 {language === 'ar' ? 'المصدر:' : 'Source:'} {evt.sources}
+                      </div>
+                    )}
+                    {inlineEditMode && (
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                        <button 
+                          onClick={() => setEditingEvent(evt)}
+                          className={styles.btnSecondary} 
+                          style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                        >
+                          <Edit3 size={12} /> {language === 'ar' ? 'تعديل' : 'Edit'}
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteEvent(evt.id)}
+                          className={styles.btnSecondary} 
+                          style={{ padding: '4px 10px', fontSize: '0.75rem', color: '#e74c3c', borderColor: '#e74c3c' }}
+                        >
+                          <Trash2 size={12} /> {language === 'ar' ? 'حذف' : 'Delete'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* SECTION 10 — PAPAL & EPISCOPAL VISITS */}
@@ -1912,102 +2318,117 @@ export default function HistoryPage() {
                 : 'Documented historical visits by the Pope and revered Bishops to our church.'}
             </p>
           </div>
-          {inlineEditMode && (
-            <button 
-              className={styles.btnPrimary}
-              onClick={() => setIsCreatingVisit(true)}
-            >
-              <Plus size={16} />
-              <span>{language === 'ar' ? 'إضافة زيارة تاريخية' : 'Add Historic Visit'}</span>
-            </button>
-          )}
-        </div>
-
-        {visits.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px dashed var(--border-color)' }}>
-            <p style={{ fontSize: '1.05rem', marginBottom: '8px' }}>
-              🕊️ {language === 'ar' ? 'جاري توثيق وإدراج الزيارات البابوية والأسقفية من الأرشيف التاريخي...' : 'Archival records of papal visits are being curated.'}
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {inlineEditMode && (
-              <button className={styles.btnPrimary} onClick={() => setIsCreatingVisit(true)} style={{ marginTop: '10px' }}>
-                + {language === 'ar' ? 'إضافة أول زيارة تاريخية' : 'Add First Visit'}
+              <button 
+                className={styles.btnPrimary}
+                onClick={() => setIsCreatingVisit(true)}
+              >
+                <Plus size={16} />
+                <span>{language === 'ar' ? 'إضافة زيارة تاريخية' : 'Add Historic Visit'}</span>
               </button>
             )}
+            <button
+              type="button"
+              className={styles.collapseToggleBtn}
+              onClick={() => toggleSection('visits')}
+              title={collapsedSections['visits'] ? (language === 'ar' ? 'توسيع القسم' : 'Expand') : (language === 'ar' ? 'طي القسم' : 'Collapse')}
+            >
+              {collapsedSections['visits'] ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+              <span>{collapsedSections['visits'] ? (language === 'ar' ? 'توسيع' : 'Expand') : (language === 'ar' ? 'طي' : 'Collapse')}</span>
+            </button>
           </div>
-        ) : (
-          <div className={styles.clergyGrid}>
-            {visits.map(v => {
-              let visitGallery: string[] = [];
-              try {
-                if (v.galleryJson) visitGallery = JSON.parse(v.galleryJson);
-              } catch (e) {}
+        </div>
 
-              return (
-                <div key={v.id} className={styles.clergyCard} style={{ textAlign: 'start', alignItems: 'stretch' }}>
-                  {v.mainImageUrl && (
-                    <div 
-                      onClick={() => setLightboxImage({ url: v.mainImageUrl!, title: v.visitTitleAr, caption: v.narrativeAr })}
-                      style={{
-                        height: '180px',
-                        backgroundImage: `url(${v.mainImageUrl})`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        borderRadius: '10px',
-                        marginBottom: '12px',
-                        cursor: 'pointer'
-                      }}
-                    />
-                  )}
+        {!collapsedSections['visits'] && (
+          <div className={styles.sectionCollapsibleBody}>
+            {visits.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px dashed var(--border-color)' }}>
+                <p style={{ fontSize: '1.05rem', marginBottom: '8px' }}>
+                  🕊️ {language === 'ar' ? 'جاري توثيق وإدراج الزيارات البابوية والأسقفية من الأرشيف التاريخي...' : 'Archival records of papal visits are being curated.'}
+                </p>
+                {inlineEditMode && (
+                  <button className={styles.btnPrimary} onClick={() => setIsCreatingVisit(true)} style={{ marginTop: '10px' }}>
+                    + {language === 'ar' ? 'إضافة أول زيارة تاريخية' : 'Add First Visit'}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className={styles.clergyGrid}>
+                {visits.map(v => {
+                  let visitGallery: string[] = [];
+                  try {
+                    if (v.galleryJson) visitGallery = JSON.parse(v.galleryJson);
+                  } catch (e) {}
 
-                  <span className={styles.clergyRoleBadge} style={{ alignSelf: 'flex-start' }}>
-                    {language === 'ar' ? v.ecclesiasticalTitleAr : (v.ecclesiasticalTitleEn || v.ecclesiasticalTitleAr)}
-                  </span>
-                  <h3 className={styles.clergyEcclesiasticalName} style={{ fontSize: '1.25rem' }}>
-                    {language === 'ar' ? v.visitorNameAr : (v.visitorNameEn || v.visitorNameAr)}
-                  </h3>
-                  <h4 style={{ fontSize: '1rem', color: 'var(--accent-gold)', marginBottom: '8px' }}>
-                    {language === 'ar' ? v.visitTitleAr : (v.visitTitleEn || v.visitTitleAr)}
-                  </h4>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                    📅 {v.visitDate} {v.locationAr && `📍 ${v.locationAr}`}
-                  </div>
-                  <p style={{ fontSize: '0.9rem', lineHeight: 1.7, color: 'var(--text-primary)' }}>
-                    {language === 'ar' ? v.narrativeAr : (v.narrativeEn || v.narrativeAr)}
-                  </p>
+                  return (
+                    <div key={v.id} className={styles.clergyCard} style={{ textAlign: 'start', alignItems: 'stretch' }}>
+                      {v.mainImageUrl && (
+                        <div 
+                          onClick={() => setLightboxImage({ url: v.mainImageUrl!, title: v.visitTitleAr, caption: v.narrativeAr })}
+                          style={{
+                            height: '180px',
+                            backgroundImage: `url(${v.mainImageUrl})`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                            borderRadius: '10px',
+                            marginBottom: '12px',
+                            cursor: 'pointer'
+                          }}
+                        />
+                      )}
 
-                  {/* Multi-Photo Gallery for Visit */}
-                  {visitGallery.length > 0 && (
-                    <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-gold)', marginBottom: '6px' }}>
-                        📸 {language === 'ar' ? `صور توثيقية للزيارة (${visitGallery.length} صور):` : `Visit Photos (${visitGallery.length}):`}
+                      <span className={styles.clergyRoleBadge} style={{ alignSelf: 'flex-start' }}>
+                        {language === 'ar' ? v.ecclesiasticalTitleAr : (v.ecclesiasticalTitleEn || v.ecclesiasticalTitleAr)}
+                      </span>
+                      <h3 className={styles.clergyEcclesiasticalName} style={{ fontSize: '1.25rem' }}>
+                        {language === 'ar' ? v.visitorNameAr : (v.visitorNameEn || v.visitorNameAr)}
+                      </h3>
+                      <h4 style={{ fontSize: '1rem', color: 'var(--accent-gold)', marginBottom: '8px' }}>
+                        {language === 'ar' ? v.visitTitleAr : (v.visitTitleEn || v.visitTitleAr)}
+                      </h4>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                        📅 {v.visitDate} {v.locationAr && `📍 ${v.locationAr}`}
                       </div>
-                      <div className={styles.photoGalleryGrid}>
-                        {visitGallery.map((img, i) => (
-                          <img
-                            key={i}
-                            src={img}
-                            alt=""
-                            className={styles.photoThumb}
-                            onClick={() => setLightboxImage({ url: img, title: `${v.visitTitleAr} - صورة ${i + 1}` })}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                      <p style={{ fontSize: '0.9rem', lineHeight: 1.7, color: 'var(--text-primary)' }}>
+                        {language === 'ar' ? v.narrativeAr : (v.narrativeEn || v.narrativeAr)}
+                      </p>
 
-                  {inlineEditMode && (
-                    <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
-                      <button onClick={() => setEditingVisit(v)} className={styles.btnSecondary} style={{ padding: '4px 10px', fontSize: '0.78rem' }}>
-                        <Edit3 size={13} /> {language === 'ar' ? 'تعديل' : 'Edit'}
-                      </button>
-                      <button onClick={() => handleDeleteVisit(v.id)} className={styles.btnSecondary} style={{ padding: '4px 10px', fontSize: '0.78rem', color: '#e74c3c', borderColor: '#e74c3c' }}>
-                        <Trash2 size={13} /> {language === 'ar' ? 'حذف' : 'Delete'}
-                      </button>
+                      {/* Multi-Photo Gallery for Visit */}
+                      {visitGallery.length > 0 && (
+                        <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-gold)', marginBottom: '6px' }}>
+                            📸 {language === 'ar' ? `صور توثيقية للزيارة (${visitGallery.length} صور):` : `Visit Photos (${visitGallery.length}):`}
+                          </div>
+                          <div className={styles.photoGalleryGrid}>
+                            {visitGallery.map((img, i) => (
+                              <img
+                                key={i}
+                                src={img}
+                                alt=""
+                                className={styles.photoThumb}
+                                onClick={() => setLightboxImage({ url: img, title: `${v.visitTitleAr} - صورة ${i + 1}` })}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {inlineEditMode && (
+                        <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                          <button onClick={() => setEditingVisit(v)} className={styles.btnSecondary} style={{ padding: '4px 10px', fontSize: '0.78rem' }}>
+                            <Edit3 size={13} /> {language === 'ar' ? 'تعديل' : 'Edit'}
+                          </button>
+                          <button onClick={() => handleDeleteVisit(v.id)} className={styles.btnSecondary} style={{ padding: '4px 10px', fontSize: '0.78rem', color: '#e74c3c', borderColor: '#e74c3c' }}>
+                            <Trash2 size={13} /> {language === 'ar' ? 'حذف' : 'Delete'}
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -2026,16 +2447,30 @@ export default function HistoryPage() {
                 : 'Archival gallery of historic photographs, albums, foundational documents, and ceremonies.'}
             </p>
           </div>
-          {inlineEditMode && (
-            <button 
-              className={styles.btnPrimary}
-              onClick={() => setIsCreatingMedia(true)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {inlineEditMode && (
+              <button 
+                className={styles.btnPrimary}
+                onClick={() => setIsCreatingMedia(true)}
+              >
+                <Plus size={16} />
+                <span>{language === 'ar' ? 'رفع وثيقة أو ألبوم صور للأرشيف' : 'Add Photo / Album'}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.collapseToggleBtn}
+              onClick={() => toggleSection('archive')}
+              title={collapsedSections['archive'] ? (language === 'ar' ? 'توسيع القسم' : 'Expand') : (language === 'ar' ? 'طي القسم' : 'Collapse')}
             >
-              <Plus size={16} />
-              <span>{language === 'ar' ? 'رفع وثيقة أو ألبوم صور للأرشيف' : 'Add Photo / Album'}</span>
+              {collapsedSections['archive'] ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+              <span>{collapsedSections['archive'] ? (language === 'ar' ? 'توسيع' : 'Expand') : (language === 'ar' ? 'طي' : 'Collapse')}</span>
             </button>
-          )}
+          </div>
         </div>
+
+        {!collapsedSections['archive'] && (
+          <div className={styles.sectionCollapsibleBody}>
 
         {mediaItems.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px dashed var(--border-color)' }}>
@@ -2108,6 +2543,8 @@ export default function HistoryPage() {
                 </div>
               );
             })}
+          </div>
+        )}
           </div>
         )}
       </section>
@@ -3418,6 +3855,8 @@ function PopeFormModal({ pope, onClose, onSaved }: { pope: HistoryPopeRecord | n
   const [papacyPeriod, setPapacyPeriod] = useState(pope?.papacyPeriod || '');
   const [papalNumber, setPapalNumber] = useState<number | ''>(pope?.papalNumber || '');
   const [isDeceased, setIsDeceased] = useState<boolean>(pope ? Boolean(pope.isDeceased) : true);
+  const [isLocumTenens, setIsLocumTenens] = useState<boolean>(pope ? Boolean(pope.isLocumTenens) : false);
+  const [locumContextAr, setLocumContextAr] = useState<string>(pope?.locumContextAr || '');
   const [avatarUrl, setAvatarUrl] = useState(pope?.avatarUrl || '');
   const [bioAr, setBioAr] = useState(pope?.bioAr || '');
   const [saving, setSaving] = useState(false);
@@ -3441,6 +3880,8 @@ function PopeFormModal({ pope, onClose, onSaved }: { pope: HistoryPopeRecord | n
           papacyPeriod,
           papalNumber: papalNumber ? Number(papalNumber) : null,
           isDeceased,
+          isLocumTenens,
+          locumContextAr: isLocumTenens ? (locumContextAr.trim() || null) : null,
           avatarUrl: avatarUrl.trim() || null,
           bioAr: bioAr.trim() || null
         })
@@ -3460,31 +3901,70 @@ function PopeFormModal({ pope, onClose, onSaved }: { pope: HistoryPopeRecord | n
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalHeader}>
           <h3 className={styles.modalTitle}>
-            {isEdit ? '👑 تعديل بيانات قداسة البابا' : '👑 إضافة بطريرك (بابا الإسكندرية)'}
+            {isEdit 
+              ? (isLocumTenens ? '⚖️ تعديل بيانات القائم مقام' : '👑 تعديل بيانات قداسة البابا') 
+              : '👑 إضافة بطريرك أو قائم مقام بطريركي'}
           </h3>
           <button className={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSave}>
+          {/* Locum Tenens Toggle */}
+          <div style={{ background: isLocumTenens ? 'rgba(243, 156, 18, 0.12)' : 'rgba(255, 255, 255, 0.03)', border: isLocumTenens ? '1.5px solid #f39c12' : '1px solid var(--border-color)', borderRadius: '8px', padding: '12px', marginBottom: '1.25rem' }}>
+            <label className={styles.formCheckboxLabel}>
+              <input 
+                type="checkbox" 
+                checked={isLocumTenens} 
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setIsLocumTenens(checked);
+                  if (checked && !locumContextAr) {
+                    setLocumContextAr('قائم مقام بطريركي');
+                  }
+                  if (checked && titleAr.includes('بابا')) {
+                    setTitleAr('قائم مقام بطريركي ومطران');
+                  }
+                }} 
+              />
+              <span style={{ fontWeight: 700, color: isLocumTenens ? '#f39c12' : 'var(--accent-gold)' }}>
+                ⚖️ هل هذا السجل لحبر جليل شغل منصب "قائم مقام بطريركي" بعد نياحة البابا؟
+              </span>
+            </label>
+            {isLocumTenens && (
+              <div style={{ marginTop: '10px' }}>
+                <label className={styles.formLabel}>مناسبة وظرف فترة القائم مقام (عربي):</label>
+                <input 
+                  type="text" 
+                  className={styles.formInput} 
+                  placeholder="مثال: قائم مقام بعد نياحة البابا كيرلس السادس (من 1971/3/9 - 1971/11/14)"
+                  value={locumContextAr} 
+                  onChange={(e) => setLocumContextAr(e.target.value)} 
+                />
+              </div>
+            )}
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>اللقب الكنسي (عربي):</label>
               <input type="text" className={styles.formInput} value={titleAr} onChange={(e) => setTitleAr(e.target.value)} required />
             </div>
             <div className={styles.formGroup}>
-              <label className={styles.formLabel}>اسم قداسة البابا (عربي):</label>
-              <input type="text" className={styles.formInput} placeholder="مثال: البابا شنوده الثالث" value={nameAr} onChange={(e) => setNameAr(e.target.value)} required />
+              <label className={styles.formLabel}>{isLocumTenens ? 'اسم الحبر الجليل القائم مقام (عربي):' : 'اسم قداسة البابا (عربي):'}</label>
+              <input type="text" className={styles.formInput} placeholder="مثال: الأنبا أنطونيوس / البابا شنوده الثالث" value={nameAr} onChange={(e) => setNameAr(e.target.value)} required />
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
             <div className={styles.formGroup}>
-              <label className={styles.formLabel}>سنوات الحبرية (Papacy Period):</label>
-              <input type="text" className={styles.formInput} placeholder="مثال: 1971 - 2012 أو 2012 - حتى الآن" value={papacyPeriod} onChange={(e) => setPapacyPeriod(e.target.value)} required />
+              <label className={styles.formLabel}>{isLocumTenens ? 'فترة القائم مقام التوثيقية:' : 'سنوات الحبرية (Papacy Period):'}</label>
+              <input type="text" className={styles.formInput} placeholder="مثال: 1971/3/9 - 1971/11/14 أو 1971 - 2012" value={papacyPeriod} onChange={(e) => setPapacyPeriod(e.target.value)} required />
             </div>
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>رقم البابا في تاريخ الكرازة (اختياري):</label>
-              <input type="number" className={styles.formInput} placeholder="مثال: 116، 117، 118" value={papalNumber} onChange={(e) => setPapalNumber(e.target.value ? Number(e.target.value) : '')} />
-            </div>
+            {!isLocumTenens && (
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>رقم البابا في تاريخ الكرازة (اختياري):</label>
+                <input type="number" className={styles.formInput} placeholder="مثال: 116، 117، 118" value={papalNumber} onChange={(e) => setPapalNumber(e.target.value ? Number(e.target.value) : '')} />
+              </div>
+            )}
           </div>
 
           {/* Living vs Deceased Selection */}
@@ -3503,21 +3983,21 @@ function PopeFormModal({ pope, onClose, onSaved }: { pope: HistoryPopeRecord | n
 
           {/* Image Upload Field (Normal Priests pattern) */}
           <ImageUploadField
-            label="صورة قداسة البابا (رفع صورة من جهازك أو وضع رابط):"
+            label={isLocumTenens ? 'صورة الحبر الجليل القائم مقام (رفع من جهازك أو رابط مع إمكانية القص):' : 'صورة قداسة البابا (رفع من جهازك أو رابط مع إمكانية القص):'}
             value={avatarUrl}
             onChange={setAvatarUrl}
-            fallbackIcon="👑"
+            fallbackIcon={isLocumTenens ? '⚖️' : '👑'}
           />
 
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>نبذة الرعاية والأثر الروحي والبابوي:</label>
+            <label className={styles.formLabel}>نبذة الرعاية والأثر الروحي والكنسي:</label>
             <textarea rows={3} className={styles.formTextarea} value={bioAr} onChange={(e) => setBioAr(e.target.value)} />
           </div>
 
           <div className={styles.modalActions}>
             <button type="button" className={styles.btnSecondary} onClick={onClose}>إلغاء</button>
             <button type="submit" className={styles.btnPrimary} disabled={saving}>
-              {saving ? 'جاري الحفظ...' : 'حفظ سجل قداسة البابا'}
+              {saving ? 'جاري الحفظ...' : 'حفظ السجل'}
             </button>
           </div>
         </form>
@@ -3533,7 +4013,10 @@ function BishopFormModal({ bishop, onClose, onSaved }: { bishop: HistoryBishopRe
   const [titleAr, setTitleAr] = useState(bishop?.titleAr || 'الأسقف العام');
   const [titleEn, setTitleEn] = useState(bishop?.titleEn || 'General Bishop');
   const [episcopalPeriod, setEpiscopalPeriod] = useState(bishop?.episcopalPeriod || '');
-  const [isDeceased, setIsDeceased] = useState<boolean>(bishop ? Boolean(bishop.isDeceased) : false);
+  const [bishopStatus, setBishopStatus] = useState<string>(
+    bishop?.bishopStatus || (bishop?.isDeceased ? 'DECEASED' : 'OTHER_DIOCESE')
+  );
+  const [currentDioceseOrService, setCurrentDioceseOrService] = useState<string>(bishop?.currentDioceseOrService || '');
   const [avatarUrl, setAvatarUrl] = useState(bishop?.avatarUrl || '');
   const [bioAr, setBioAr] = useState(bishop?.bioAr || '');
   const [saving, setSaving] = useState(false);
@@ -3555,7 +4038,9 @@ function BishopFormModal({ bishop, onClose, onSaved }: { bishop: HistoryBishopRe
           titleAr,
           titleEn: titleEn.trim() || null,
           episcopalPeriod,
-          isDeceased,
+          isDeceased: bishopStatus === 'DECEASED',
+          bishopStatus,
+          currentDioceseOrService: bishopStatus === 'OTHER_DIOCESE' ? (currentDioceseOrService.trim() || null) : null,
           avatarUrl: avatarUrl.trim() || null,
           bioAr: bioAr.trim() || null
         })
@@ -3587,7 +4072,7 @@ function BishopFormModal({ bishop, onClose, onSaved }: { bishop: HistoryBishopRe
             </div>
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>اسم الحبر الجليل (عربي):</label>
-              <input type="text" className={styles.formInput} placeholder="مثال: الأنبا أثناسيوس" value={nameAr} onChange={(e) => setNameAr(e.target.value)} required />
+              <input type="text" className={styles.formInput} placeholder="مثال: نيافة الأنبا أثناسيوس" value={nameAr} onChange={(e) => setNameAr(e.target.value)} required />
             </div>
           </div>
 
@@ -3596,23 +4081,63 @@ function BishopFormModal({ bishop, onClose, onSaved }: { bishop: HistoryBishopRe
             <input type="text" className={styles.formInput} placeholder="مثال: 2021 - حتى الآن أو 2001 - 2021" value={episcopalPeriod} onChange={(e) => setEpiscopalPeriod(e.target.value)} required />
           </div>
 
-          {/* Living vs Deceased Selection */}
-          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '12px', marginBottom: '1.25rem' }}>
-            <label className={styles.formCheckboxLabel}>
-              <input 
-                type="checkbox" 
-                checked={isDeceased} 
-                onChange={(e) => setIsDeceased(e.target.checked)} 
-              />
-              <span style={{ fontWeight: 700, color: isDeceased ? '#ccc' : 'var(--accent-gold)' }}>
-                {isDeceased ? '🖤 حبر جليل متنيح في الرب 🕊️ (يعرض بالأبيض والأسود مع شارة حداد)' : '🕊️ رعاية حالية مباركة ومستمرة بالصحة والسلام'}
-              </span>
+          {/* 3-Way Status Selection (CURRENT vs OTHER_DIOCESE vs DECEASED) */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '14px', marginBottom: '1.25rem' }}>
+            <label className={styles.formLabel} style={{ marginBottom: '10px' }}>
+              الحالة الكنسية والخدمية الحالية للحبر الجليل (تحديد دقيق):
             </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: bishopStatus === 'CURRENT' ? 'var(--accent-gold)' : '#fff', fontWeight: bishopStatus === 'CURRENT' ? 700 : 400 }}>
+                <input 
+                  type="radio" 
+                  name="bishopStatus" 
+                  value="CURRENT" 
+                  checked={bishopStatus === 'CURRENT'} 
+                  onChange={() => setBishopStatus('CURRENT')} 
+                />
+                <span>👑 راعي وأسقف الكنيسة الحالي (الأسقف المشرف والراعي لكنيستنا حالياً)</span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: bishopStatus === 'OTHER_DIOCESE' ? '#60a5fa' : '#fff', fontWeight: bishopStatus === 'OTHER_DIOCESE' ? 700 : 400 }}>
+                <input 
+                  type="radio" 
+                  name="bishopStatus" 
+                  value="OTHER_DIOCESE" 
+                  checked={bishopStatus === 'OTHER_DIOCESE'} 
+                  onChange={() => setBishopStatus('OTHER_DIOCESE')} 
+                />
+                <span>⛪ يخدم حاليا في إيبارشية / كنيسة أخرى (ليس أسقف كنيستنا حالياً ويعرض بألوانه الطبيعية)</span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: bishopStatus === 'DECEASED' ? '#bbb' : '#fff', fontWeight: bishopStatus === 'DECEASED' ? 700 : 400 }}>
+                <input 
+                  type="radio" 
+                  name="bishopStatus" 
+                  value="DECEASED" 
+                  checked={bishopStatus === 'DECEASED'} 
+                  onChange={() => setBishopStatus('DECEASED')} 
+                />
+                <span>🖤 🎗️ متنيح في الرب 🕊️ (يعرض بالأبيض والأسود مع شارة حداد)</span>
+              </label>
+            </div>
+
+            {bishopStatus === 'OTHER_DIOCESE' && (
+              <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
+                <label className={styles.formLabel}>مكان ومسؤولية الخدمة الحالية (إيبارشية / قطاع):</label>
+                <input 
+                  type="text" 
+                  className={styles.formInput} 
+                  placeholder="مثال: أسقف عام لكنائس شرق السكة الحديد بالقاهرة / أسقف إيبارشية حلوان والمعصرة"
+                  value={currentDioceseOrService} 
+                  onChange={(e) => setCurrentDioceseOrService(e.target.value)} 
+                />
+              </div>
+            )}
           </div>
 
           {/* Image Upload Field (Normal Priests pattern) */}
           <ImageUploadField
-            label="صورة الحبر الجليل (رفع صورة من جهازك أو وضع رابط):"
+            label="صورة الحبر الجليل (رفع صورة من جهازك أو وضع رابط مع إمكانية القص الدائري):"
             value={avatarUrl}
             onChange={setAvatarUrl}
             fallbackIcon="👑"

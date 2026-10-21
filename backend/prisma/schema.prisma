@@ -1013,44 +1013,50 @@ model HistoryMediaItem {
 }
 
 model HistoryPopeRecord {
-  id           String   @id @default(uuid())
-  nameAr       String
-  nameEn       String?
-  titleAr      String   @default("قداسة البابا المعظم")
-  titleEn      String?  @default("H.H. Pope")
-  papalNumber  Int?     // 116, 117, 118
-  papacyPeriod String   // e.g. "1959 - 1971"
-  isDeceased   Boolean  @default(true)
-  avatarUrl    String?
-  bioAr        String?
-  bioEn        String?
-  orderIndex   Int      @default(0)
-  status       String   @default("PUBLISHED")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(uuid())
+  nameAr         String
+  nameEn         String?
+  titleAr        String   @default("قداسة البابا المعظم")
+  titleEn        String?  @default("H.H. Pope")
+  papalNumber    Int?     // 116, 117, 118
+  papacyPeriod   String   // e.g. "1959 - 1971"
+  isDeceased     Boolean  @default(true)
+  isLocumTenens  Boolean  @default(false)
+  locumContextAr String?
+  avatarUrl      String?
+  bioAr          String?
+  bioEn          String?
+  orderIndex     Int      @default(0)
+  status         String   @default("PUBLISHED")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([orderIndex])
   @@index([status])
+  @@index([isLocumTenens])
 }
 
 model HistoryBishopRecord {
-  id              String   @id @default(uuid())
-  nameAr          String
-  nameEn          String?
-  titleAr         String   @default("الأسقف العام")
-  titleEn         String?  @default("General Bishop")
-  episcopalPeriod String   // e.g. "2013 - حتى الآن"
-  isDeceased      Boolean  @default(false)
-  avatarUrl       String?
-  bioAr           String?
-  bioEn           String?
-  orderIndex      Int      @default(0)
-  status          String   @default("PUBLISHED")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                      String   @id @default(uuid())
+  nameAr                  String
+  nameEn                  String?
+  titleAr                 String   @default("الأسقف العام")
+  titleEn                 String?  @default("General Bishop")
+  episcopalPeriod         String   // e.g. "2013 - حتى الآن"
+  isDeceased              Boolean  @default(false)
+  bishopStatus            String   @default("OTHER_DIOCESE") // 'CURRENT', 'OTHER_DIOCESE', 'DECEASED'
+  currentDioceseOrService String?
+  avatarUrl               String?
+  bioAr                   String?
+  bioEn                   String?
+  orderIndex              Int      @default(0)
+  status                  String   @default("PUBLISHED")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   @@index([orderIndex])
   @@index([status])
+  @@index([bishopStatus])
 }
 
 model HistoryServantCategory {

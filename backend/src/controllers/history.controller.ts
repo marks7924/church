@@ -62,7 +62,7 @@ router.get('/', async (req: Request, res: Response) => {
     });
 
     // Enforce server-side secular-name privacy for public visitors
-    const clergy = rawClergy.map(record => {
+    const clergy = rawClergy.map((record: any) => {
       if (isAdmin) {
         return record;
       }
@@ -864,6 +864,8 @@ router.post('/popes', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRe
       papalNumber,
       papacyPeriod,
       isDeceased,
+      isLocumTenens,
+      locumContextAr,
       avatarUrl,
       bioAr,
       bioEn,
@@ -879,11 +881,13 @@ router.post('/popes', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRe
       data: {
         nameAr,
         nameEn,
-        titleAr: titleAr || 'قداسة البابا المعظم',
-        titleEn: titleEn || 'H.H. Pope',
+        titleAr: titleAr || (isLocumTenens ? 'قائم مقام البطريرك' : 'قداسة البابا المعظم'),
+        titleEn: titleEn || (isLocumTenens ? 'Locum Tenens' : 'H.H. Pope'),
         papalNumber: papalNumber !== undefined && papalNumber !== null ? parseInt(papalNumber, 10) : null,
         papacyPeriod,
         isDeceased: isDeceased !== undefined ? Boolean(isDeceased) : true,
+        isLocumTenens: Boolean(isLocumTenens),
+        locumContextAr,
         avatarUrl,
         bioAr,
         bioEn,
@@ -892,7 +896,7 @@ router.post('/popes', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRe
       }
     });
 
-    return res.status(201).json({ message: 'تمت إضافة قداسة البابا بنجاح', pope: created });
+    return res.status(201).json({ message: 'تمت إضافة السجل بنجاح', pope: created });
   } catch (error: any) {
     console.error('Error creating pope record:', error);
     return res.status(500).json({ error: 'Failed to create pope record.' });
@@ -928,6 +932,8 @@ router.put('/popes/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: Aut
       papalNumber,
       papacyPeriod,
       isDeceased,
+      isLocumTenens,
+      locumContextAr,
       avatarUrl,
       bioAr,
       bioEn,
@@ -945,6 +951,8 @@ router.put('/popes/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: Aut
         papalNumber: papalNumber !== undefined ? (papalNumber !== null ? parseInt(papalNumber, 10) : null) : undefined,
         papacyPeriod,
         isDeceased: isDeceased !== undefined ? Boolean(isDeceased) : undefined,
+        isLocumTenens: isLocumTenens !== undefined ? Boolean(isLocumTenens) : undefined,
+        locumContextAr,
         avatarUrl,
         bioAr,
         bioEn,
@@ -953,7 +961,7 @@ router.put('/popes/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: Aut
       }
     });
 
-    return res.status(200).json({ message: 'تم تحديث بيانات قداسة البابا بنجاح', pope: updated });
+    return res.status(200).json({ message: 'تم تحديث البيانات بنجاح', pope: updated });
   } catch (error: any) {
     console.error('Error updating pope record:', error);
     return res.status(500).json({ error: 'Failed to update pope record.' });
@@ -964,7 +972,7 @@ router.delete('/popes/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: 
   try {
     const { id } = req.params;
     await prisma.historyPopeRecord.delete({ where: { id } });
-    return res.status(200).json({ message: 'تم حذف سجل قداسة البابا بنجاح' });
+    return res.status(200).json({ message: 'تم حذف السجل بنجاح' });
   } catch (error: any) {
     console.error('Error deleting pope record:', error);
     return res.status(500).json({ error: 'Failed to delete pope record.' });
@@ -983,6 +991,8 @@ router.post('/bishops', requireAuth, requireRoles(ADMIN_ROLES), async (req: Auth
       titleEn,
       episcopalPeriod,
       isDeceased,
+      bishopStatus,
+      currentDioceseOrService,
       avatarUrl,
       bioAr,
       bioEn,
@@ -994,6 +1004,17 @@ router.post('/bishops', requireAuth, requireRoles(ADMIN_ROLES), async (req: Auth
       return res.status(400).json({ error: 'اسم الحبر الجليل وفترة الرعاية الكنسية مطلوبان.' });
     }
 
+    const calculatedStatus = bishopStatus || (isDeceased ? 'DECEASED' : 'OTHER_DIOCESE');
+    const calculatedDeceased = calculatedStatus === 'DECEASED' || Boolean(isDeceased);
+
+    // If marking as CURRENT bishop, ensure only 1 bishop is current in our timeline
+    if (calculatedStatus === 'CURRENT') {
+      await prisma.historyBishopRecord.updateMany({
+        where: { bishopStatus: 'CURRENT' },
+        data: { bishopStatus: 'OTHER_DIOCESE' }
+      });
+    }
+
     const created = await prisma.historyBishopRecord.create({
       data: {
         nameAr,
@@ -1001,7 +1022,9 @@ router.post('/bishops', requireAuth, requireRoles(ADMIN_ROLES), async (req: Auth
         titleAr: titleAr || 'الأسقف العام',
         titleEn: titleEn || 'General Bishop',
         episcopalPeriod,
-        isDeceased: Boolean(isDeceased),
+        isDeceased: calculatedDeceased,
+        bishopStatus: calculatedStatus,
+        currentDioceseOrService,
         avatarUrl,
         bioAr,
         bioEn,
@@ -1045,12 +1068,25 @@ router.put('/bishops/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: A
       titleEn,
       episcopalPeriod,
       isDeceased,
+      bishopStatus,
+      currentDioceseOrService,
       avatarUrl,
       bioAr,
       bioEn,
       status,
       orderIndex
     } = req.body;
+
+    const calculatedStatus = bishopStatus !== undefined ? bishopStatus : (isDeceased ? 'DECEASED' : undefined);
+    const calculatedDeceased = calculatedStatus ? (calculatedStatus === 'DECEASED') : (isDeceased !== undefined ? Boolean(isDeceased) : undefined);
+
+    // If setting as CURRENT, demote any previous current bishop
+    if (calculatedStatus === 'CURRENT') {
+      await prisma.historyBishopRecord.updateMany({
+        where: { id: { not: id }, bishopStatus: 'CURRENT' },
+        data: { bishopStatus: 'OTHER_DIOCESE' }
+      });
+    }
 
     const updated = await prisma.historyBishopRecord.update({
       where: { id },
@@ -1060,7 +1096,9 @@ router.put('/bishops/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: A
         titleAr,
         titleEn,
         episcopalPeriod,
-        isDeceased: isDeceased !== undefined ? Boolean(isDeceased) : undefined,
+        isDeceased: calculatedDeceased,
+        bishopStatus: calculatedStatus,
+        currentDioceseOrService,
         avatarUrl,
         bioAr,
         bioEn,

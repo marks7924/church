@@ -481,19 +481,55 @@ async function seedHistory() {
       bioAr: 'بابا المحبة والتطوير المؤسسي، يقود الكنيسة القبطية المعاصرة بروح الأبوة والحكمة والتنظيم الكنسي ورعاية الأجيال والشباب في مصر والمهجر.',
       bioEn: 'Current Shepherd of the Coptic Orthodox Church, 118th Patriarch of Alexandria.',
       orderIndex: 3,
+      isLocumTenens: false,
+      status: 'PUBLISHED'
+    },
+    // 2 Locum Tenens (قائم مقام البطريرك)
+    {
+      nameAr: 'المتنيح الأنبا أنطونيوس',
+      nameEn: 'Metropolitan Anba Antonios (Locum Tenens)',
+      titleAr: 'قائم مقام البطريرك — مطران سوهاج والمنشاة',
+      titleEn: 'Locum Tenens of the See of St. Mark',
+      papalNumber: null,
+      papacyPeriod: '1971/3/9 — 1971/11/14',
+      isDeceased: true,
+      isLocumTenens: true,
+      locumContextAr: 'قائم مقام بعد نياحة البابا كيرلس السادس حتى تجليس البابا شنوده الثالث',
+      avatarUrl: '',
+      bioAr: 'تولى رعاية الكرازة المرقسية كقائم مقام البطريرك بحكمة وهدوء وأمانة كنسية فائقة عقب نياحة مثلث الرحمات القديس البابا كيرلس السادس حتى إجراء القرعة الهيكلية المباركة وتجليس البابا شنوده الثالث.',
+      bioEn: 'Locum Tenens shepherding the Coptic See after the departure of Pope Cyril VI until the enthronement of Pope Shenouda III.',
+      orderIndex: 4,
+      status: 'PUBLISHED'
+    },
+    {
+      nameAr: 'المتنيح الأنبا باخوميوس',
+      nameEn: 'Metropolitan Anba Pachomius (Locum Tenens)',
+      titleAr: 'قائم مقام البطريرك — مطران البحيرة ومطروح والخمس مدن الغربية',
+      titleEn: 'Locum Tenens of the See of St. Mark',
+      papalNumber: null,
+      papacyPeriod: '2012/3/17 — 2013/11/18',
+      isDeceased: true,
+      isLocumTenens: true,
+      locumContextAr: 'قائم مقام بعد نياحة البابا شنوده الثالث حتى تجليس البابا تواضروس الثاني',
+      avatarUrl: '',
+      bioAr: 'أدار المرحلة الانتقالية التاريخية بعد نياحة معلم الأجيال مثلث الرحمات البابا شنوده الثالث بحكمة ونزاهة روحية مشهودة نالت تقدير الكنيسة والعالم أجمع حتى تجليس صاحب الغبطة والقداسة البابا تواضروس الثاني.',
+      bioEn: 'Locum Tenens shepherding the Coptic See with widely acknowledged wisdom and prayer after Pope Shenouda III.',
+      orderIndex: 5,
       status: 'PUBLISHED'
     }
   ];
 
   for (const p of popes) {
-    const existing = await prisma.historyPopeRecord.findFirst({ where: { papalNumber: p.papalNumber } });
+    const existing = await prisma.historyPopeRecord.findFirst({ 
+      where: p.papalNumber ? { papalNumber: p.papalNumber } : { nameAr: p.nameAr } 
+    });
     if (existing) {
       await prisma.historyPopeRecord.update({ where: { id: existing.id }, data: p });
     } else {
       await prisma.historyPopeRecord.create({ data: p });
     }
   }
-  console.log('✓ Seeded 3 Popes of Alexandria');
+  console.log('✓ Seeded 3 Popes & 2 Locum Tenens (قائم مقام)');
 
   // 6. Seed Supervising Bishops (الآباء الأساقفة المسؤولون عن الكنيسة)
   const bishops = [
@@ -504,8 +540,10 @@ async function seedHistory() {
       titleEn: 'General Bishop of Hadayek Al Koba & El Wayli',
       episcopalPeriod: '2021 — حتى الآن',
       isDeceased: false,
-      bioAr: 'راعي الإيبارشية الجليل، رُسم أسقفاً عاماً بيد صاحب الغبطة والقداسة البابا المعظم الأنبا تواضروس الثاني في 7 مارس 2021، ويقود الخدمة والرعاية الروحية بكل أمانة وتفانٍ وتطوير شامل لمباني وأنشطة الكنيسة.',
-      bioEn: 'General Bishop consecrated by Pope Tawadros II in 2021, shepherding the diocesan congregation with dedicated leadership.',
+      bishopStatus: 'CURRENT', // أسقفنا الحالي!
+      currentDioceseOrService: 'أسقف ورعاية قطاع حدائق القبة والوايلي ومنشية الصدر',
+      bioAr: 'راعي الإيبارشية وأسقفنا الجليل الحالي، رُسم أسقفاً عاماً بيد صاحب الغبطة والقداسة البابا المعظم الأنبا تواضروس الثاني في 7 مارس 2021، ويقود الخدمة والرعاية الروحية بكل أمانة وتفانٍ وتطوير شامل لمباني وأنشطة الكنيسة.',
+      bioEn: 'General Bishop consecrated by Pope Tawadros II in 2021, currently shepherding our church congregation.',
       orderIndex: 1,
       status: 'PUBLISHED'
     },
@@ -516,8 +554,10 @@ async function seedHistory() {
       titleEn: 'General Bishop of East Railway Churches (Former Pastoral Period)',
       episcopalPeriod: '2001 — 2021',
       isDeceased: false,
-      bioAr: 'تولى رعاية كنائس القطاع ومن بينها كنيسة الشهيد أبي سيفين لسنوات طويلة زاخرة بالتعليم والتثبيت العقيدي والنهضات الروحية المباركة.',
-      bioEn: 'Shepherded the district churches including St. Philopater with rich spiritual teaching and theological heritage.',
+      bishopStatus: 'OTHER_DIOCESE', // حي ويخدم في إيبارشية / قطاع آخر
+      currentDioceseOrService: 'الأسقف العام لكنائس شرق السكة الحديد',
+      bioAr: 'تولى رعاية كنائس القطاع ومن بينها كنيسة الشهيد أبي سيفين لسنوات طويلة زاخرة بالتعليم والتثبيت العقيدي والنهضات الروحية المباركة، وهو حي بالجسد يواصل خدمته المباركة في كرم الرب.',
+      bioEn: 'Former overseeing bishop who shepherded the church across two blessed decades, currently serving in Christ.',
       orderIndex: 2,
       status: 'PUBLISHED'
     }
@@ -531,7 +571,7 @@ async function seedHistory() {
       await prisma.historyBishopRecord.create({ data: b });
     }
   }
-  console.log('✓ Seeded Supervising Bishops');
+  console.log('✓ Seeded Supervising Bishops with 3-way statuses');
 
   // 7. Seed Servant Categories for Filtering
   const servantCategories = [

@@ -233,7 +233,13 @@ const statements = [
   `ALTER TABLE "HistoryServantFruit" ADD COLUMN IF NOT EXISTS "categoryKey" TEXT DEFAULT 'DEACON';`,
 
   // 12. Media Item Album/Gallery
-  `ALTER TABLE "HistoryMediaItem" ADD COLUMN IF NOT EXISTS "galleryJson" TEXT DEFAULT '[]';`
+  `ALTER TABLE "HistoryMediaItem" ADD COLUMN IF NOT EXISTS "galleryJson" TEXT DEFAULT '[]';`,
+
+  // 13. Locum Tenens (قائم مقام البطريرك) & Bishop 3-Way Status
+  `ALTER TABLE "HistoryPopeRecord" ADD COLUMN IF NOT EXISTS "isLocumTenens" BOOLEAN DEFAULT false;`,
+  `ALTER TABLE "HistoryPopeRecord" ADD COLUMN IF NOT EXISTS "locumContextAr" TEXT;`,
+  `ALTER TABLE "HistoryBishopRecord" ADD COLUMN IF NOT EXISTS "bishopStatus" TEXT DEFAULT 'OTHER_DIOCESE';`,
+  `ALTER TABLE "HistoryBishopRecord" ADD COLUMN IF NOT EXISTS "currentDioceseOrService" TEXT;`
 ];
 
 async function run() {
