@@ -404,9 +404,15 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
     // Dispatch official Church invitation pass email
     if (cleanEmail) {
       const passesListHtml = result.issuedPasses.map((p, idx) => `
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
-          <div style="font-weight: bold; color: #1e293b;">بطاقة #${idx + 1}: ${p.recipientName}</div>
-          <div style="font-size: 13px; color: #64748b; margin-top: 4px;">رمز الدخول (Pass Token): <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-family: monospace;">${p.qrToken.substring(0, 20)}...</code></div>
+        <div style="background-color: #ffffff; border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 16px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+          <div style="font-weight: bold; font-size: 16px; color: #1e293b; margin-bottom: 12px;">بطاقة حضور #${idx + 1}: ${p.recipientName}</div>
+          <div style="display: inline-block; padding: 10px; background-color: #ffffff; border: 2px solid #cbd5e1; border-radius: 12px; margin-bottom: 12px;">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=2&data=${encodeURIComponent(p.qrToken)}" width="180" height="180" alt="رمز QR للدخول" style="display: block; margin: 0 auto; border-radius: 4px;" />
+          </div>
+          <div style="font-size: 13px; color: #475569; margin-top: 4px;">
+            رمز البطاقة الإلكتروني: <code style="background: #f1f5f9; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 12px; color: #0f172a;">${p.qrToken.substring(0, 24)}...</code>
+          </div>
+          <p style="font-size: 12px; color: #64748b; margin: 6px 0 0;">قم بإبراز هذا الرمز عند البوابة للمسح السريع وتأكيد الدخول</p>
         </div>
       `).join('');
 
@@ -863,11 +869,16 @@ router.post(
                 <p style="margin: 4px 0;"><b>المكان:</b> ${location.nameAr}</p>
                 <p style="margin: 4px 0;"><b>اسم صاحب الدعوة:</b> ${inv.recipientName}</p>
               </div>
-              <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; text-align: center; margin: 16px 0;">
-                <div style="font-size: 13px; color: #64748b; margin-bottom: 4px;">رمز الدخول الإلكتروني (Pass Code):</div>
-                <code style="font-size: 15px; font-weight: bold; color: #0f172a; font-family: monospace;">${inv.qrToken.substring(0, 24)}...</code>
+              <div style="background-color: #ffffff; border: 2px solid ${isVipPass ? '#d97706' : '#cbd5e1'}; border-radius: 12px; padding: 20px; margin: 16px 0; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+                <div style="font-weight: bold; font-size: 15px; color: #1e293b; margin-bottom: 12px;">${isVipPass ? 'بطاقة دعوة VIP خاصة (Scannable QR Pass)' : 'بطاقة الدخول الإلكترونية الرسمية'}</div>
+                <div style="display: inline-block; padding: 10px; background-color: #ffffff; border: 2px solid #cbd5e1; border-radius: 12px; margin-bottom: 12px;">
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=2&data=${encodeURIComponent(inv.qrToken)}" width="180" height="180" alt="رمز QR للدخول" style="display: block; margin: 0 auto; border-radius: 4px;" />
+                </div>
+                <div style="font-size: 13px; color: #475569; margin-top: 4px;">
+                  رمز البطاقة الإلكتروني: <code style="background: #f1f5f9; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 12px; color: #0f172a;">${inv.qrToken.substring(0, 24)}...</code>
+                </div>
+                <p style="font-size: 12px; color: #64748b; margin: 6px 0 0;">قم بإبراز هذا الرمز عند بوابات الدخول للمسح السريع والتأكيد الفوري</p>
               </div>
-              <p style="font-size: 13px; color: #64748b;">يرجى إبراز هذه الدعوة عند بوابات الدخول لتأكيد الحضور.</p>
             `
           });
 
