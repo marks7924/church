@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import prisma from '../db';
-import { sendEmail } from '../services/notification.service';
+import { sendEmail, formatChurchEmailHtml } from '../services/notification.service';
 import { requireAuth } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types';
 
@@ -10,6 +10,14 @@ const router = Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_church_jwt_secret_key';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'super_secret_church_jwt_refresh_secret_key';
+
+async function isEmailVerificationRequired(): Promise<boolean> {
+  const config = await prisma.systemConfig.findUnique({
+    where: { key: 'require_email_verification' }
+  });
+  // Default to true (mandatory email verification)
+  return config ? config.value === 'true' : true;
+}
 
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -49,37 +57,80 @@ router.post('/register', async (req: Request, res: Response) => {
     }
 
     const passwordHash = bcrypt.hashSync(password, 10);
+    const requireVerification = await isEmailVerificationRequired();
     const otpCode = generateOTP();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
     const user = await prisma.user.create({
       data: {
-        email,
+        email: email.trim().toLowerCase(),
         passwordHash,
-        fullName,
-        phone,
-        nationalId,
+        fullName: fullName.trim(),
+        phone: phone ? phone.trim() : null,
+        nationalId: nationalId.trim(),
         role: 'MEMBER',
-        isVerified: true,
+        isVerified: !requireVerification,
         otpCode,
         otpExpiry
       }
     });
 
-    // Send welcome email in background (without await) to prevent connection hangs
-    sendEmail(
-      email,
-      'Welcome to Coptic Church Platform',
-      `<p>Welcome to our Church Platform, <b>${fullName}</b>.</p>
-       <p>Your account has been successfully created. You can now login using your credentials.</p>`
-    ).catch(err => {
-      console.error('Background email dispatch failed during registration:', err);
-    });
+    if (requireVerification) {
+      // Send email verification with OTP
+      const emailHtml = formatChurchEmailHtml({
+        titleAr: 'تأكيد وتفعيل بريدك الإلكتروني',
+        titleEn: 'Email Verification Code',
+        badge: 'رمز التفعيل',
+        badgeColor: '#b45309',
+        contentHtml: `
+          <p>أهلاً بك يا <b>${fullName}</b> في المنظومة الرقمية لكنيسة الشهيد العظيم أبي سيفين بحدائق القبة.</p>
+          <p>لإتمام عملية التسجيل وتفعيل حسابك بنجاح، يرجى إدخال رمز التحقق التالي:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <div style="display: inline-block; background-color: #f8fafc; border: 2px dashed #d97706; padding: 14px 28px; border-radius: 12px;">
+              <span style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #b45309; font-family: monospace;">${otpCode}</span>
+            </div>
+          </div>
+          <p style="font-size: 13px; color: #64748b; text-align: center;">صلاحية هذا الرمز هي <b>15 دقيقة</b> من وقت إرساله.</p>
+        `
+      });
 
-    return res.status(201).json({
-      message: 'Registration successful.',
-      email: user.email
-    });
+      sendEmail(
+        email,
+        'كود تفعيل حسابك — كنيسة الشهيد أبي سيفين',
+        emailHtml
+      ).catch(err => {
+        console.error('Background verification email failed during registration:', err);
+      });
+
+      return res.status(201).json({
+        message: 'Registration successful. Verification required.',
+        messageAr: 'تم إنشاء الحساب بنجاح! تم إرسال كود التحقق لبريدك الإلكتروني (يرجى مراجعة صندوق الوارد أو مجلد Spam).',
+        email: user.email,
+        requireVerification: true
+      });
+    } else {
+      // Direct welcome email
+      const emailHtml = formatChurchEmailHtml({
+        titleAr: 'مرحباً بك في كنيسة الشهيد العظيم أبي سيفين',
+        titleEn: 'Welcome to Church Platform',
+        badge: 'حساب مفعل',
+        badgeColor: '#16a34a',
+        contentHtml: `
+          <p>مرحباً بك يا <b>${fullName}</b> في منظومة الكنيسة الرقمية.</p>
+          <p>تم تسجيل وتفعيل حسابك بنجاح، ويمكنك الآن تسجيل الدخول مباشرة.</p>
+        `
+      });
+      sendEmail(email, 'مرحباً بك في كنيسة الشهيد أبي سيفين', emailHtml).catch(err => {
+        console.error('Welcome email dispatch failed:', err);
+      });
+
+      return res.status(201).json({
+        message: 'Registration successful.',
+        messageAr: 'تم إنشاء الحساب وتفعيله بنجاح! يمكنك الآن تسجيل الدخول.',
+        email: user.email,
+        requireVerification: false
+      });
+    }
   } catch (error: any) {
     console.error('Registration error:', error);
     return res.status(500).json({ error: 'Server error during registration.' });
@@ -193,6 +244,50 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
+    // Check if email verification is mandatory
+    const requireVerification = await isEmailVerificationRequired();
+    const isExemptRole = ['SUPER_ADMIN', 'DEVELOPER', 'PRIEST', 'BISHOP'].includes(user.role);
+    
+    if (!user.isVerified && requireVerification && !isExemptRole) {
+      // Re-generate OTP code and send to user
+      const otpCode = generateOTP();
+      const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { otpCode, otpExpiry }
+      });
+
+      const verifyEmailHtml = formatChurchEmailHtml({
+        titleAr: 'تأكيد وتفعيل بريدك الإلكتروني',
+        titleEn: 'Account Verification Code',
+        badge: 'رمز التفعيل',
+        badgeColor: '#b45309',
+        contentHtml: `
+          <p>أهلاً بك يا <b>${user.fullName}</b>،</p>
+          <p>يرجى إدخال رمز التحقق (OTP) التالي لتفعيل بريدك الإلكتروني والتمكن من الدخول إلى حسابك:</p>
+          <div style="text-align: center; margin: 24px 0;">
+            <div style="display: inline-block; background-color: #f8fafc; border: 2px dashed #d97706; padding: 14px 28px; border-radius: 12px;">
+              <span style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #b45309; font-family: monospace;">${otpCode}</span>
+            </div>
+          </div>
+          <p style="font-size: 13px; color: #64748b; text-align: center;">صلاحية هذا الرمز هي <b>15 دقيقة</b> من وقت إرساله.</p>
+        `
+      });
+
+      sendEmail(user.email, 'كود تفعيل حسابك — كنيسة الشهيد أبي سيفين', verifyEmailHtml).catch(err => {
+        console.error('Failed to send login verification email:', err);
+      });
+
+      return res.status(403).json({
+        error: 'EMAIL_NOT_VERIFIED',
+        errorAr: 'يرجى تفعيل بريدك الإلكتروني أولاً برمز التحقق (تم إرسال كود لبريدك الإلكتروني، يرجى مراجعة صندوق الوارد أو مجلد Spam).',
+        errorEn: 'Please verify your email address first using the verification code sent to your email (check Inbox or Spam folder).',
+        email: user.email,
+        requireVerification: true
+      });
+    }
+
     const tokens = generateTokens(user);
     await prisma.user.update({
       where: { id: user.id },
@@ -260,34 +355,105 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
   }
 
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (!user) {
-      // Security rule: don't reveal if user exists, but we are a closed church system,
-      // let's return success message regardless or warning. Let's return success for security.
-      return res.status(200).json({ message: 'If this email exists, a password reset code was sent.' });
+      return res.status(200).json({
+        message: 'If this email exists, a password reset code was sent.',
+        messageAr: 'إذا كان هذا البريد مسجلاً لدينا، فقد تم إرسال كود الاستعادة (يرجى فحص صندوق الوارد أو مجلد Spam).'
+      });
     }
 
     const otpCode = generateOTP();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
     await prisma.user.update({
-      where: { email },
+      where: { email: cleanEmail },
       data: { otpCode, otpExpiry }
     });
 
+    const resetHtml = formatChurchEmailHtml({
+      titleAr: 'طلب استعادة وإعادة تعيين كلمة المرور',
+      titleEn: 'Password Reset Request',
+      badge: 'استعادة الحساب',
+      badgeColor: '#dc2626',
+      contentHtml: `
+        <p>مرحباً بك يا <b>${user.fullName}</b>،</p>
+        <p>لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك في المنظومة الرقمية لكنيسة الشهيد أبي سيفين.</p>
+        <p>رمز التأكيد الخاص بك هو:</p>
+        <div style="text-align: center; margin: 24px 0;">
+          <div style="display: inline-block; background-color: #fef2f2; border: 2px dashed #dc2626; padding: 14px 28px; border-radius: 12px;">
+            <span style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #dc2626; font-family: monospace;">${otpCode}</span>
+          </div>
+        </div>
+        <p style="font-size: 13px; color: #64748b; text-align: center;">صلاحية هذا الرمز هي <b>15 دقيقة</b> فقط.</p>
+        <p style="font-size: 12px; color: #94a3b8; text-align: center;">إذا لم تكن قد طلبت استعادة كلمة المرور بنفسك، يمكنك تجاهل هذا الإيميل ولن يتم تعديل أي بيانات في حسابك.</p>
+      `
+    });
+
     await sendEmail(
-      email,
-      'Church Platform — Reset Password Code',
-      `<p>Hello,</p>
-       <p>You requested a password reset for your Church Platform account.</p>
-       <p>Your reset OTP is: <h2 style="color: #c1121f; letter-spacing: 2px;">${otpCode}</h2></p>
-       <p>If you did not request this, please ignore this email.</p>`
+      cleanEmail,
+      'كود استعادة كلمة المرور — كنيسة الشهيد أبي سيفين',
+      resetHtml
     );
 
-    return res.status(200).json({ message: 'If this email exists, a password reset code was sent.' });
+    return res.status(200).json({
+      message: 'If this email exists, a password reset code was sent.',
+      messageAr: 'تم إرسال كود استعادة كلمة المرور إلى بريدك الإلكتروني (يرجى مراجعة صندوق الوارد أو مجلد Spam).'
+    });
   } catch (error) {
     console.error('Forgot password error:', error);
     return res.status(500).json({ error: 'Server error during forgot password process.' });
+  }
+});
+
+// 5b. Resend OTP Code
+router.post('/resend-otp', async (req: Request, res: Response) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required.' });
+  }
+
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.', errorAr: 'المستخدم غير موجود.' });
+    }
+
+    const otpCode = generateOTP();
+    const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { email: cleanEmail },
+      data: { otpCode, otpExpiry }
+    });
+
+    const emailHtml = formatChurchEmailHtml({
+      titleAr: 'رمز التحقق الجديد لحسابك',
+      titleEn: 'New Verification Code',
+      badge: 'رمز جديد',
+      badgeColor: '#b45309',
+      contentHtml: `
+        <p>أهلاً بك يا <b>${user.fullName}</b>،</p>
+        <p>طلبك لرمز تحقق جديد تم تنفيذه بنجاح. رمزك الجديد هو:</p>
+        <div style="text-align: center; margin: 24px 0;">
+          <div style="display: inline-block; background-color: #f8fafc; border: 2px dashed #d97706; padding: 14px 28px; border-radius: 12px;">
+            <span style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #b45309; font-family: monospace;">${otpCode}</span>
+          </div>
+        </div>
+        <p style="font-size: 13px; color: #64748b; text-align: center;">صلاحية هذا الرمز هي <b>15 دقيقة</b>.</p>
+      `
+    });
+
+    await sendEmail(cleanEmail, 'كود تحقق جديد — كنيسة الشهيد أبي سيفين', emailHtml);
+
+    return res.status(200).json({
+      success: true,
+      messageAr: 'تم إرسال كود تحقق جديد بنجاح (يرجى التحقق من Inbox أو Spam).'
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to resend code.' });
   }
 });
 

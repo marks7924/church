@@ -28,7 +28,7 @@ function getEmailTransporter() {
 
 /**
  * GET /api/email-center/provider-status
- * Check outbound Brevo SMTP and inbound route status
+ * Check outbound SMTP and inbound route status with live connection diagnostics
  */
 router.get(
   '/provider-status',
@@ -38,17 +38,117 @@ router.get(
     try {
       const host = process.env.SMTP_HOST || 'smtp-relay.brevo.com';
       const port = parseInt(process.env.SMTP_PORT || '587', 10);
+      const user = process.env.SMTP_USER || '';
       const isConfigured = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+      // Fetch email verification requirement from SystemConfig
+      const verifyConfig = await prisma.systemConfig.findUnique({
+        where: { key: 'require_email_verification' }
+      });
+      // Default to true (mandatory email verification)
+      const requireEmailVerification = verifyConfig ? verifyConfig.value === 'true' : true;
 
       return res.status(200).json({
         status: isConfigured ? 'ONLINE' : 'CONFIGURED',
-        outboundProvider: 'Brevo SMTP',
+        outboundProvider: host.includes('gmail') ? 'Google Gmail SMTP' : (host.includes('brevo') ? 'Brevo SMTP' : 'Custom SMTP Relay'),
         inboundStatus: 'Webhooks Active',
         host,
-        port
+        port,
+        senderEmail: user,
+        requireEmailVerification
       });
     } catch (error: any) {
       return res.status(500).json({ error: 'Failed to check email provider status.' });
+    }
+  }
+);
+
+/**
+ * POST /api/email-center/toggle-verification
+ * Admin: Toggle mandatory email verification for new accounts
+ */
+router.post(
+  '/toggle-verification',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { enabled } = req.body;
+      const newValue = enabled ? 'true' : 'false';
+
+      await prisma.systemConfig.upsert({
+        where: { key: 'require_email_verification' },
+        create: { key: 'require_email_verification', value: newValue },
+        update: { value: newValue }
+      });
+
+      logAction(
+        req.user!.userId,
+        req.user!.email,
+        req.user!.fullName || 'Admin',
+        'SETTINGS_UPDATE',
+        `Toggled mandatory email verification to: ${newValue}`
+      );
+
+      return res.status(200).json({
+        success: true,
+        requireEmailVerification: enabled,
+        messageAr: enabled ? 'تم تفعيل التحقق الإجباري من البريد الإلكتروني بنجاح.' : 'تم إيقاف التحقق الإجباري من البريد الإلكتروني بنجاح.',
+        messageEn: enabled ? 'Email verification enabled successfully.' : 'Email verification disabled successfully.'
+      });
+    } catch (error: any) {
+      console.error('Error toggling email verification:', error);
+      return res.status(500).json({ error: 'Failed to update email verification setting.' });
+    }
+  }
+);
+
+/**
+ * POST /api/email-center/test-connection
+ * Send a live test email to verify credentials and delivery
+ */
+router.post(
+  '/test-connection',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { targetEmail } = req.body;
+      const recipient = targetEmail || req.user?.email || 'churchsplatform@gmail.com';
+
+      const transporter = getEmailTransporter();
+      const senderEmail = process.env.SMTP_USER || 'churchsplatform@gmail.com';
+      const from = process.env.SMTP_FROM || `كنيسة الشهيد أبي سيفين <${senderEmail}>`;
+
+      const testResult = await transporter.sendMail({
+        from,
+        to: recipient,
+        subject: 'اختبار خادم البريد الرسمي | Official Church SMTP Connection Test',
+        html: `
+          <div style="font-family: Arial, sans-serif; direction: rtl; text-align: right; padding: 24px; border: 2px solid #eab308; border-radius: 12px; background: #ffffff;">
+            <h2 style="color: #b45309; margin: 0 0 12px;">اختبار خادم البريد الرسمي لكنيسة الشهيد أبي سيفين</h2>
+            <p>هذا إيميل تجريبي لتأكيد نجاح إرسال الرسائل الرسمية من منظومة الكنيسة الرقمية.</p>
+            <p><b>وقت الإرسال:</b> ${new Date().toLocaleString('ar-EG')}</p>
+            <div style="background-color: #fefce8; border-right: 4px solid #eab308; padding: 10px; margin-top: 15px; font-size: 13px; color: #854d0e;">
+              ⚠️ <b>تنبيه:</b> إذا ظهرت هذه الرسالة في مجلد Spam، يرجى نقلها إلى البريد الوارد (Inbox) لضمان استلام رسائل الكنيسة.
+            </div>
+          </div>
+        `
+      });
+
+      return res.status(200).json({
+        success: true,
+        messageAr: `تم إرسال إيميل تجريبي بنجاح إلى: ${recipient}`,
+        messageEn: `Test email sent successfully to ${recipient}`,
+        messageId: testResult.messageId
+      });
+    } catch (testErr: any) {
+      console.error('SMTP test error:', testErr);
+      return res.status(500).json({
+        success: false,
+        error: testErr.message || 'SMTP Connection Error',
+        errorAr: `فشل إرسال الإيميل التجريبي: ${testErr.message}`
+      });
     }
   }
 );

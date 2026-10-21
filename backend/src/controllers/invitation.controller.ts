@@ -5,7 +5,7 @@ import { requireAuth, requireRoles } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types';
 import { Role } from '@prisma/client';
 import { logAction } from '../utils/logger';
-import { sendEmail } from '../services/notification.service';
+import { sendEmail, formatChurchEmailHtml } from '../services/notification.service';
 
 // System 3: Events, VIP Invitations & Continuous QR Check-in
 const router = Router();
@@ -401,6 +401,45 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
       };
     });
 
+    // Dispatch official Church invitation pass email
+    if (cleanEmail) {
+      const passesListHtml = result.issuedPasses.map((p, idx) => `
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+          <div style="font-weight: bold; color: #1e293b;">بطاقة #${idx + 1}: ${p.recipientName}</div>
+          <div style="font-size: 13px; color: #64748b; margin-top: 4px;">رمز الدخول (Pass Token): <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-family: monospace;">${p.qrToken.substring(0, 20)}...</code></div>
+        </div>
+      `).join('');
+
+      const inviteEmailHtml = formatChurchEmailHtml({
+        titleAr: `تأكيد حجز بطاقة الدعوة: ${event.titleAr}`,
+        titleEn: 'Official Event Invitation Pass',
+        badge: 'دعوة رسمية مؤكدة',
+        badgeColor: '#16a34a',
+        contentHtml: `
+          <p>سلام ونعمة يا <b>${fullName}</b>،</p>
+          <p>يسر إدارة كنيسة الشهيد العظيم أبي سيفين بحدائق القبة تأكيد حجزك لحضور فعالية <b>"${event.titleAr}"</b> بنجاح.</p>
+          <div style="background-color: #f1f5f9; border-right: 4px solid #3b82f6; border-radius: 8px; padding: 14px 18px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><b>الفعالية:</b> ${event.titleAr}</p>
+            <p style="margin: 4px 0;"><b>التاريخ:</b> ${new Date(event.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            ${event.timeSlot ? `<p style="margin: 4px 0;"><b>الموعد:</b> ${event.timeSlot}</p>` : ''}
+            <p style="margin: 4px 0;"><b>مكان الحضور والقاعة:</b> ${loc.nameAr}</p>
+            <p style="margin: 4px 0;"><b>عدد المقاعد المحجوزة:</b> ${result.seatsGranted}</p>
+          </div>
+          <h3 style="font-size: 15px; color: #1e293b; margin: 16px 0 8px;">تفاصيل بطاقات الحضور الصادرة:</h3>
+          ${passesListHtml}
+          <p style="font-size: 13px; color: #64748b; margin-top: 12px;">يمكنك إبراز بطاقة الدعوة ورمز الدخول الخاص بك عبر حسابك في المنظومة الرقمية للكنيسة عند الدخول.</p>
+        `
+      });
+
+      sendEmail(
+        cleanEmail,
+        `تأكيد حجز دعوتك لفعالية: ${event.titleAr}`,
+        inviteEmailHtml
+      ).catch(err => {
+        console.error('Failed to send event invitation confirmation email:', err);
+      });
+    }
+
     const isPlural = result.seatsGranted > 1;
     const messageAr = result.isPartial
       ? 'عذرًا، كان متبقيًا مقعد واحد فقط في هذا المكان وتم حجزه لك بنجاح!'
@@ -605,6 +644,30 @@ router.post('/my-invitations/:id/cancel', requireAuth, async (req: AuthRequest, 
       }
     }
 
+    // Send cancellation confirmation email to user
+    const targetEmail = req.user?.email || (toCancel[0]?.recipientEmail);
+    if (targetEmail && toCancel.length > 0) {
+      const firstInv = toCancel[0];
+      const cancelEmailHtml = formatChurchEmailHtml({
+        titleAr: `تأكيد إلغاء حجز دعوتك: ${firstInv.event.titleAr}`,
+        titleEn: 'Invitation Cancellation Confirmation',
+        badge: 'تم الإلغاء',
+        badgeColor: '#dc2626',
+        contentHtml: `
+          <p>سلام ونعمة،</p>
+          <p>نحيطك علماً بأنه بناءً على طلبك، تم بنجاح إلغاء حجز دعوتك لفعالية <b>"${firstInv.event.titleAr}"</b> المقررة بتاريخ ${new Date(firstInv.event.date).toLocaleDateString('ar-EG')}.</p>
+          <p><b>عدد المقاعد الملغاة:</b> ${toCancel.length}</p>
+          <p style="color: #64748b; font-size: 13px;">تم إبطال بطاقة الدعوة ورمز الدخول (QR Code) المرتبط بها، وتم إتاحة المقعد لخدمة إخوانك في الكنيسة.</p>
+        `
+      });
+
+      sendEmail(
+        targetEmail,
+        `تأكيد إلغاء دعوتك لفعالية: ${firstInv.event.titleAr}`,
+        cancelEmailHtml
+      ).catch(err => console.error('Failed to send user cancellation confirmation email:', err));
+    }
+
     return res.status(200).json({
       success: true,
       messageAr: `تم إلغاء ${toCancel.length === 1 ? 'الدعوة' : `جميع الدعوات (${toCancel.length})`} وإعادة المقعد بنجاح.`,
@@ -708,12 +771,13 @@ router.post(
         });
       }
 
-      const location = await prisma.eventLocation.findUnique({
-        where: { id: locationId }
-      });
+      const [location, event] = await Promise.all([
+        prisma.eventLocation.findUnique({ where: { id: locationId } }),
+        prisma.event.findUnique({ where: { id: eventId } })
+      ]);
 
-      if (!location) {
-        return res.status(404).json({ error: 'Event location not found.' });
+      if (!location || !event) {
+        return res.status(404).json({ error: 'Event or Event location not found.' });
       }
 
       // Admin choice: Deduct from capacity or issue unlimited VIP passes
@@ -776,6 +840,42 @@ router.post(
             where: { id: locationId },
             data: { isFull: true }
           });
+        }
+      }
+
+      // Send invitations via email
+      for (const inv of issuedInvitations) {
+        if (inv.recipientEmail && !inv.recipientEmail.includes('@church.org')) {
+          const isVipPass = inv.type === 'VIP';
+          const emailHtml = formatChurchEmailHtml({
+            titleAr: `بطاقة دعوة رسمية: ${event.titleAr}`,
+            titleEn: isVipPass ? 'Official VIP Invitation Pass' : 'Official Event Invitation Pass',
+            badge: isVipPass ? 'دعوة VIP شرفية خاصة' : 'بطاقة حضور رسمية',
+            badgeColor: isVipPass ? '#d97706' : '#2563eb',
+            contentHtml: `
+              <p>سلام ونعمة يا <b>${inv.recipientName}</b>،</p>
+              <p>تتشرف كنيسة الشهيد العظيم أبي سيفين بحدائق القبة بدعوتكم الكريمة لحضور فعالية <b>"${event.titleAr}"</b>.</p>
+              <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-right: 4px solid ${isVipPass ? '#d97706' : '#2563eb'}; border-radius: 8px; padding: 14px 18px; margin: 16px 0;">
+                <p style="margin: 4px 0;"><b>نوع الدعوة:</b> ${isVipPass ? '🌟 دعوة VIP خاصة' : 'بطاقة حضور قياسية'}</p>
+                <p style="margin: 4px 0;"><b>الفعالية:</b> ${event.titleAr}</p>
+                <p style="margin: 4px 0;"><b>التاريخ:</b> ${new Date(event.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                ${event.timeSlot ? `<p style="margin: 4px 0;"><b>الموعد:</b> ${event.timeSlot}</p>` : ''}
+                <p style="margin: 4px 0;"><b>المكان:</b> ${location.nameAr}</p>
+                <p style="margin: 4px 0;"><b>اسم صاحب الدعوة:</b> ${inv.recipientName}</p>
+              </div>
+              <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; text-align: center; margin: 16px 0;">
+                <div style="font-size: 13px; color: #64748b; margin-bottom: 4px;">رمز الدخول الإلكتروني (Pass Code):</div>
+                <code style="font-size: 15px; font-weight: bold; color: #0f172a; font-family: monospace;">${inv.qrToken.substring(0, 24)}...</code>
+              </div>
+              <p style="font-size: 13px; color: #64748b;">يرجى إبراز هذه الدعوة عند بوابات الدخول لتأكيد الحضور.</p>
+            `
+          });
+
+          sendEmail(
+            inv.recipientEmail,
+            `دعوة رسمية ${isVipPass ? 'VIP ' : ''}لحضور فعالية: ${event.titleAr}`,
+            emailHtml
+          ).catch(err => console.error('Failed to send issued invitation email:', err));
         }
       }
 
@@ -1433,19 +1533,27 @@ router.post(
       // Collect emails and send apology notices
       const uniqueEmails = Array.from(new Set(activeInvs.map(i => i.recipientEmail).filter(Boolean)));
       for (const email of uniqueEmails) {
+        const cancelEventHtml = formatChurchEmailHtml({
+          titleAr: `إشعار إلغاء فعالية: ${event.titleAr}`,
+          titleEn: 'Official Event Cancellation Notice',
+          badge: 'فعالية ملغاة',
+          badgeColor: '#dc2626',
+          contentHtml: `
+            <p>أحباءنا في كنيسة الشهيد العظيم أبي سيفين بحدائق القبة،</p>
+            <p>نحيطكم علماً بأنه قد تقرر رسمياً إلغاء فعالية <b>"${event.titleAr}"</b> التي كان مقرراً إقامتها بتاريخ ${new Date(event.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.</p>
+            <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-right: 4px solid #dc2626; border-radius: 8px; padding: 14px 18px; margin: 16px 0;">
+              <b style="color: #991b1b;">سبب الإلغاء الرسمي:</b>
+              <p style="margin: 6px 0 0; color: #7f1d1d;">${reason.trim()}</p>
+            </div>
+            <p style="color: #64748b; font-size: 13.5px;">نعتذر بشدة عن أي إزعاج، ونحيطكم علماً بأن جميع بطاقات الدخول الإلكترونية (QR Codes) المرتبطة بهذه الفعالية أصبحت ملغاة وغير صالحة.</p>
+            <p style="color: #1e293b; font-weight: 500;">دمتم في رعاية المسيح ومحبته وشفاعة الشهيد أبي سيفين.</p>
+          `
+        });
+
         await sendEmail(
           email,
           `نعتذر عن إلغاء فعالية: ${event.titleAr}`,
-          `<div style="font-family: sans-serif; direction: rtl; text-align: right; padding: 20px;">
-            <h2 style="color: #c0392b;">إشعار إلغاء فعالية رسمية</h2>
-            <p>أحباءنا في كنيسة العذراء،</p>
-            <p>نحيطكم علماً بأنه قد تقرر إلغاء فعالية <b>${event.titleAr}</b> المقررة بتاريخ ${new Date(event.date).toLocaleDateString('ar-EG')}.</p>
-            <div style="background: #fbeee6; border-right: 4px solid #e74c3c; padding: 12px; margin: 16px 0;">
-              <b>سبب الإلغاء:</b> ${reason.trim()}
-            </div>
-            <p style="color: #7f8c8d;">نعتذر بشدة عن أي إزعاج، ونحيطكم علماً بأن جميع بطاقات الدخول (QR Codes) المرتبطة بهذه الفعالية أصبحت ملغاة وغير صالحة.</p>
-            <p>دمتم في رعاية المسيح ومحبته.</p>
-          </div>`
+          cancelEventHtml
         ).catch(err => console.error('Failed to send event cancellation email to:', email, err));
       }
 
@@ -1652,18 +1760,26 @@ router.post(
 
       // Send cancellation email to recipient
       if (invitation.recipientEmail) {
+        const cancelEmailHtml = formatChurchEmailHtml({
+          titleAr: `إشعار إلغاء دعوتك: ${invitation.event.titleAr}`,
+          titleEn: 'Invitation Cancellation Notice',
+          badge: 'دعوة ملغاة',
+          badgeColor: '#dc2626',
+          contentHtml: `
+            <p>سلام ونعمة يا <b>${invitation.recipientName}</b>،</p>
+            <p>نحيطك علماً بأنه قد تم إلغاء حجز دعوتك لفعالية <b>"${invitation.event.titleAr}"</b> المقررة بتاريخ ${new Date(invitation.event.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.</p>
+            <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-right: 4px solid #dc2626; border-radius: 8px; padding: 14px 18px; margin: 16px 0;">
+              <b style="color: #991b1b;">سبب الإلغاء من إدارة الكنيسة:</b>
+              <p style="margin: 6px 0 0; color: #7f1d1d;">${reason.trim()}</p>
+            </div>
+            <p style="color: #64748b; font-size: 13px;">لمزيد من التفاصيل أو الاستفسارات، يمكنك التواصل مع سكرتارية الكنيسة أو زيارة مقر الأمانة.</p>
+          `
+        });
+
         await sendEmail(
           invitation.recipientEmail,
           `إلغاء دعوتك لفعالية: ${invitation.event.titleAr}`,
-          `<div style="font-family: sans-serif; direction: rtl; text-align: right; padding: 20px;">
-            <h2 style="color: #c0392b;">إشعار إلغاء دعوة لحضور فعالية</h2>
-            <p>عزيزنا/عزيزتنا <b>${invitation.recipientName}</b>،</p>
-            <p>نحيطك علماً بأنه قد تم إلغاء حجز دعوتك لفعالية <b>${invitation.event.titleAr}</b> المقررة بتاريخ ${new Date(invitation.event.date).toLocaleDateString('ar-EG')}.</p>
-            <div style="background: #fbeee6; border-right: 4px solid #e74c3c; padding: 12px; margin: 16px 0;">
-              <b>سبب الإلغاء من إدارة الكنيسة:</b> ${reason.trim()}
-            </div>
-            <p style="color: #7f8c8d;">لمزيد من التفاصيل أو الاستفسار، يرجى التواصل مع أمانة الكنيسة.</p>
-          </div>`
+          cancelEmailHtml
         ).catch(err => console.error('Error sending cancellation email to attendee:', err));
       }
 

@@ -24,6 +24,9 @@ export default function AdminEmailCenter({ token }: AdminEmailCenterProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [providerStatus, setProviderStatus] = useState<any>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [requireVerification, setRequireVerification] = useState<boolean>(true);
+  const [togglingVerification, setTogglingVerification] = useState<boolean>(false);
+  const [testingSmtp, setTestingSmtp] = useState<boolean>(false);
 
   // Compose Modal states
   const [showComposeModal, setShowComposeModal] = useState<boolean>(false);
@@ -63,8 +66,71 @@ export default function AdminEmailCenter({ token }: AdminEmailCenterProps) {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => res.json())
-      .then(data => setProviderStatus(data))
+      .then(data => {
+        setProviderStatus(data);
+        if (data.requireEmailVerification !== undefined) {
+          setRequireVerification(Boolean(data.requireEmailVerification));
+        }
+      })
       .catch(err => console.error('Error fetching provider status:', err));
+  };
+
+  const handleToggleVerification = async () => {
+    if (!token) return;
+    setTogglingVerification(true);
+    try {
+      const res = await fetch(`${API_URL}/email-center/toggle-verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ enabled: !requireVerification })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRequireVerification(data.requireEmailVerification);
+        setActionMsg(data.messageAr || 'تم تحديث إعداد التحقق من البريد بنجاح.');
+        setTimeout(() => setActionMsg(null), 4000);
+      }
+    } catch {
+      alert('Failed to update verification setting.');
+    } finally {
+      setTogglingVerification(false);
+    }
+  };
+
+  const handleTestSmtp = async () => {
+    if (!token) return;
+    const target = prompt(
+      isAr 
+        ? 'أدخل البريد الإلكتروني الذي ترغب في استلام الإيميل التجريبي عليه للتأكد من وصوله:' 
+        : 'Enter recipient email for SMTP test message:', 
+      providerStatus?.senderEmail || 'churchsplatform@gmail.com'
+    );
+    if (!target) return;
+    setTestingSmtp(true);
+    setActionMsg(null);
+    try {
+      const res = await fetch(`${API_URL}/email-center/test-connection`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ targetEmail: target })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setActionMsg(data.messageAr || 'تم إرسال الإيميل التجريبي بنجاح!');
+      } else {
+        alert(data.errorAr || data.error || 'Failed to send test email.');
+      }
+    } catch (e: any) {
+      alert('Error testing SMTP: ' + e.message);
+    } finally {
+      setTestingSmtp(false);
+    }
   };
 
   useEffect(() => {
@@ -239,7 +305,58 @@ export default function AdminEmailCenter({ token }: AdminEmailCenterProps) {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Test SMTP Connection Button */}
+          <button
+            onClick={handleTestSmtp}
+            disabled={testingSmtp}
+            title={isAr ? 'إرسال إيميل تجريبي لفحص خادم البريد' : 'Send Test Email'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '9px 14px',
+              borderRadius: '8px',
+              background: 'rgba(59, 130, 246, 0.15)',
+              border: '1px solid rgba(59, 130, 246, 0.4)',
+              color: '#60a5fa',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}
+          >
+            <Send size={15} />
+            <span>{testingSmtp ? (isAr ? 'جاري الفحص...' : 'Testing...') : (isAr ? 'اختبار الإرسال' : 'Test SMTP')}</span>
+          </button>
+
+          {/* Email Verification Toggle */}
+          <button
+            onClick={handleToggleVerification}
+            disabled={togglingVerification}
+            title={isAr ? 'تبديل إجبارية التحقق من البريد للحسابات الجديدة' : 'Toggle email verification requirement'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '9px 14px',
+              borderRadius: '8px',
+              background: requireVerification ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+              border: `1px solid ${requireVerification ? '#22c55e' : '#ef4444'}`,
+              color: requireVerification ? '#4ade80' : '#f87171',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: '0.85rem'
+            }}
+          >
+            <ShieldCheck size={16} />
+            <span>
+              {isAr ? 'التحقق من البريد: ' : 'Verify Email: '}
+              <strong style={{ textDecoration: 'underline' }}>
+                {requireVerification ? (isAr ? 'مُفعّل (ON)' : 'ON') : (isAr ? 'مُعطّل (OFF)' : 'OFF')}
+              </strong>
+            </span>
+          </button>
+
           <button
             onClick={() => setShowComposeModal(true)}
             style={{

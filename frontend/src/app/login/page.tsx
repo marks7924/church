@@ -74,7 +74,13 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Server error occurred.');
+        if (data.error === 'EMAIL_NOT_VERIFIED' || data.requireVerification) {
+          setMode('otp');
+          setErrorMsg(null);
+          setSuccessMsg(data.errorAr || (language === 'ar' ? 'يرجى تفعيل بريدك أولاً. تم إرسال كود تحقق جديد لبريدك (يرجى مراجعة Inbox أو مجلد Spam).' : 'Please verify your email first. A verification code has been sent (check Inbox or Spam folder).'));
+          return;
+        }
+        throw new Error(data.errorAr || data.error || 'Server error occurred.');
       }
 
       // Success flows
@@ -89,12 +95,17 @@ export default function LoginPage() {
         setSuccessMsg(language === 'ar' ? 'تم تسجيل الدخول بنجاح!' : 'Logged in successfully!');
         setTimeout(() => router.push('/'), 1000);
       } else if (mode === 'register') {
-        setSuccessMsg(language === 'ar' ? 'تم إنشاء الحساب بنجاح! جاري تحويلك لصفحة تسجيل الدخول...' : 'Account created successfully! Redirecting to login...');
-        setTimeout(() => {
-          setMode('login');
-          setSuccessMsg(null);
-          setPassword('');
-        }, 1500);
+        if (data.requireVerification) {
+          setMode('otp');
+          setSuccessMsg(data.messageAr || (language === 'ar' ? 'تم إنشاء الحساب بنجاح! تم إرسال كود التحقق لبريدك الإلكتروني (يرجى مراجعة صندوق الوارد أو مجلد Spam).' : 'Account created! Verification code sent to your email (check Inbox or Spam folder).'));
+        } else {
+          setSuccessMsg(language === 'ar' ? 'تم إنشاء الحساب بنجاح! جاري تحويلك لصفحة تسجيل الدخول...' : 'Account created successfully! Redirecting to login...');
+          setTimeout(() => {
+            setMode('login');
+            setSuccessMsg(null);
+            setPassword('');
+          }, 1500);
+        }
       } else if (mode === 'otp') {
         localStorage.setItem('church-token', data.accessToken);
         localStorage.setItem('church-refresh-token', data.refreshToken);
@@ -104,7 +115,7 @@ export default function LoginPage() {
         setSuccessMsg(language === 'ar' ? 'تم تفعيل الحساب بنجاح!' : 'Account verified successfully!');
         setTimeout(() => router.push('/'), 1000);
       } else if (mode === 'forgot') {
-        setSuccessMsg(language === 'ar' ? 'تم إرسال كود إعادة التعيين لبريدك.' : 'Reset code sent to your email.');
+        setSuccessMsg(data.messageAr || (language === 'ar' ? 'تم إرسال كود استعادة كلمة المرور لبريدك (يرجى مراجعة صندوق الوارد أو مجلد Spam).' : 'Reset code sent to your email (check Inbox or Spam folder).'));
         setMode('reset');
       } else if (mode === 'reset') {
         setSuccessMsg(language === 'ar' ? 'تم إعادة تعيين كلمة المرور بنجاح! يمكنك الآن تسجيل الدخول.' : 'Password reset successfully! You can now login.');
@@ -121,6 +132,31 @@ export default function LoginPage() {
         msg = language === 'ar' ? 'البريد الإلكتروني أو كلمة المرور غير صالحة.' : 'Invalid email or password.';
       }
       setErrorMsg(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!email) {
+      setErrorMsg(language === 'ar' ? 'يرجى إدخال البريد الإلكتروني أولاً.' : 'Please enter your email first.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/resend-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccessMsg(data.messageAr || (language === 'ar' ? 'تم إرسال كود تحقق جديد لبريدك (تحقق من Inbox أو مجلد Spam).' : 'New code sent to your email (check Inbox or Spam).'));
+      } else {
+        setErrorMsg(data.errorAr || data.error || 'Failed to resend code.');
+      }
+    } catch {
+      setErrorMsg(language === 'ar' ? 'تعذر إرسال الكود حالياً.' : 'Failed to resend code.');
     } finally {
       setLoading(false);
     }
@@ -280,6 +316,49 @@ export default function LoginPage() {
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value)}
                 />
+              </div>
+            )}
+
+            {/* Spam notice banner for OTP and Reset modes */}
+            {(mode === 'otp' || mode === 'reset') && (
+              <div style={{
+                backgroundColor: 'rgba(234, 179, 8, 0.1)',
+                border: '1px solid rgba(234, 179, 8, 0.3)',
+                borderInlineStart: '4px solid #eab308',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                fontSize: '0.82rem',
+                color: '#facc15',
+                lineHeight: '1.5',
+                marginBottom: '1rem'
+              }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>
+                  ⚠️ {language === 'ar' ? 'تنبيه بشأن البريد الإلكتروني:' : 'Important Email Notice:'}
+                </div>
+                {language === 'ar'
+                  ? 'إذا لم تجد رمز التحقق في صندوق الوارد (Inbox)، يرجى فحص مجلد الرسائل غير المرغوب فيها (Spam / Junk) ونقله للبريد الوارد.'
+                  : 'If the verification code is not in your Inbox, please check your Spam / Junk folder and mark it as Not Spam.'}
+              </div>
+            )}
+
+            {/* Resend OTP button */}
+            {mode === 'otp' && (
+              <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={loading}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--accent-gold)',
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  {language === 'ar' ? 'لم يصلك الرمز؟ اضغط هنا لإعادة الإرسال' : "Didn't receive code? Resend OTP"}
+                </button>
               </div>
             )}
 
