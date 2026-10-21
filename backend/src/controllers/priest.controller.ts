@@ -4,6 +4,7 @@ import prisma from '../db';
 import { requireAuth, requireRoles } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types';
 import { Role } from '@prisma/client';
+import { invalidatePriestsCache } from './booking.controller';
 
 const router = Router();
 
@@ -558,6 +559,7 @@ router.put('/:id/details', requireAuth, async (req: AuthRequest, res: Response) 
     });
 
     const enriched = extractPriestDetails(updatedProfile.availabilityJson, updatedProfile.nameAr, JSON.stringify(updatedDetails));
+    invalidatePriestsCache();
 
     return res.status(200).json({
       message: 'تم تحديث بيانات الأب الكاهن بنجاح.',

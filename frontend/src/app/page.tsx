@@ -57,8 +57,12 @@ export default function Home() {
   
   // Data States
   const [priests, setPriests] = useState<Priest[]>([]);
+  const [loadingPriests, setLoadingPriests] = useState<boolean>(true);
+  const [refreshingPriests, setRefreshingPriests] = useState<boolean>(false);
   const [sermons, setSermons] = useState<Sermon[]>([]);
+  const [loadingSermons, setLoadingSermons] = useState<boolean>(true);
   const [events, setEvents] = useState<ChurchEvent[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState<boolean>(true);
   const [liveStream, setLiveStream] = useState<{ isActive: boolean; youtubeLiveId: string; title?: string }>({ isActive: false, youtubeLiveId: '' });
   
   // Dynamic Image States
@@ -109,29 +113,10 @@ export default function Home() {
   const [isSubmittingTrip, setIsSubmittingTrip] = useState(false);
   const [userToken, setUserToken] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setUserToken(localStorage.getItem('church-token'));
-      const uStr = localStorage.getItem('church-user');
-      if (uStr) {
-        try {
-          setCurrentUser(JSON.parse(uStr));
-        } catch (e) {}
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    // 1. Fetch live status
-    fetch(`${API_URL}/live`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && typeof data === 'object' && !data.error) setLiveStream(data);
-      })
-      .catch(err => console.log('Error fetching live:', err));
-
-    // 2. Fetch Priests
-    fetch(`${API_URL}/bookings/priests`)
+  const fetchPriestsList = (isManualRefresh = false) => {
+    if (isManualRefresh) setRefreshingPriests(true);
+    const url = isManualRefresh ? `${API_URL}/bookings/priests?refresh=true` : `${API_URL}/bookings/priests`;
+    fetch(url)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -147,25 +132,105 @@ export default function Home() {
             return getRank(a) - getRank(b);
           });
           setPriests(sorted);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('cached_priests', JSON.stringify(sorted));
+            } catch (e) {}
+          }
         }
       })
-      .catch(err => console.log('Error fetching priests:', err));
+      .catch(err => console.error('Error fetching priests:', err))
+      .finally(() => {
+        setLoadingPriests(false);
+        setRefreshingPriests(false);
+      });
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setUserToken(localStorage.getItem('church-token'));
+      const uStr = localStorage.getItem('church-user');
+      if (uStr) {
+        try {
+          setCurrentUser(JSON.parse(uStr));
+        } catch (e) {}
+      }
+
+      // Instant 0ms cache retrieval
+      const cachedPriests = localStorage.getItem('cached_priests');
+      if (cachedPriests) {
+        try {
+          const parsed = JSON.parse(cachedPriests);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setPriests(parsed);
+            setLoadingPriests(false);
+          }
+        } catch (e) {}
+      }
+      const cachedSermons = localStorage.getItem('cached_sermons');
+      if (cachedSermons) {
+        try {
+          const parsed = JSON.parse(cachedSermons);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSermons(parsed);
+            setLoadingSermons(false);
+          }
+        } catch (e) {}
+      }
+      const cachedEvents = localStorage.getItem('cached_events');
+      if (cachedEvents) {
+        try {
+          const parsed = JSON.parse(cachedEvents);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setEvents(parsed);
+            setLoadingEvents(false);
+          }
+        } catch (e) {}
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    // 1. Fetch live status
+    fetch(`${API_URL}/live`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && typeof data === 'object' && !data.error) setLiveStream(data);
+      })
+      .catch(err => console.log('Error fetching live:', err));
+
+    // 2. Fetch Priests with revalidation
+    fetchPriestsList(false);
 
     // 3. Fetch Sermons
     fetch(`${API_URL}/sermons`)
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) setSermons(data.slice(0, 4));
+        if (Array.isArray(data)) {
+          const sliced = data.slice(0, 4);
+          setSermons(sliced);
+          if (typeof window !== 'undefined') {
+            try { localStorage.setItem('cached_sermons', JSON.stringify(sliced)); } catch (e) {}
+          }
+        }
       })
-      .catch(err => console.log('Error fetching sermons:', err));
+      .catch(err => console.log('Error fetching sermons:', err))
+      .finally(() => setLoadingSermons(false));
 
     // 4. Fetch Events
     fetch(`${API_URL}/events`)
       .then(res => res.json())
       .then(data => {
-        if (Array.isArray(data)) setEvents(data.filter((e: any) => e.type === 'TRIP' || e.type === 'CONFERENCE').slice(0, 3));
+        if (Array.isArray(data)) {
+          const sliced = data.filter((e: any) => e.type === 'TRIP' || e.type === 'CONFERENCE').slice(0, 3);
+          setEvents(sliced);
+          if (typeof window !== 'undefined') {
+            try { localStorage.setItem('cached_events', JSON.stringify(sliced)); } catch (e) {}
+          }
+        }
       })
-      .catch(err => console.log('Error fetching events:', err));
+      .catch(err => console.log('Error fetching events:', err))
+      .finally(() => setLoadingEvents(false));
 
     // 5. Fetch Global Settings
     fetch(`${API_URL}/settings`)
@@ -546,182 +611,453 @@ export default function Home() {
 
         {/* Priest Grid (Each has Book Confession button) */}
         <section id="priest-section" className={styles.rowSection}>
-          <h2 className={styles.rowTitle}>{language === 'ar' ? 'الآباء الكهنة والأجلاء' : 'Reverend Fathers & Bishops'}</h2>
-          <div className={styles.netflixGrid}>
-            {priests.map(p => (
-              <div 
-                key={p.id} 
-                className={styles.priestCard}
-                onClick={() => setSelectedPriestForDetails(p)}
-                style={{ cursor: 'pointer', position: 'relative' }}
-              >
-                {/* Jubilee Badge if achieved */}
-                {p.details?.isGoldenJubilee && (
-                  <span style={{
-                    position: 'absolute',
-                    top: '10px',
-                    [language === 'ar' ? 'left' : 'right']: '10px',
-                    background: 'rgba(241, 196, 15, 0.2)',
-                    border: '1px solid #f1c40f',
-                    color: '#f1c40f',
-                    padding: '2px 8px',
-                    borderRadius: '12px',
-                    fontSize: '0.72rem',
-                    fontWeight: 800,
-                    zIndex: 2
-                  }}>
-                    🥇 {language === 'ar' ? 'اليوبيل الذهبي' : 'Golden Jubilee'}
-                  </span>
-                )}
-                {p.details?.isSilverJubilee && !p.details?.isGoldenJubilee && (
-                  <span style={{
-                    position: 'absolute',
-                    top: '10px',
-                    [language === 'ar' ? 'left' : 'right']: '10px',
-                    background: 'rgba(189, 195, 199, 0.2)',
-                    border: '1px solid #bdc3c7',
-                    color: '#bdc3c7',
-                    padding: '2px 8px',
-                    borderRadius: '12px',
-                    fontSize: '0.72rem',
-                    fontWeight: 800,
-                    zIndex: 2
-                  }}>
-                    🥈 {language === 'ar' ? 'اليوبيل الفضي' : 'Silver Jubilee'}
-                  </span>
-                )}
-
-                <div 
-                  className={styles.priestAvatar} 
-                  style={{ backgroundImage: `url(${p.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200'})` }}
-                ></div>
-                <h3 className={styles.priestTitle}>
-                  {language === 'ar' ? `${p.titleAr} ${p.nameAr}` : `${p.titleEn} ${p.nameEn}`}
-                </h3>
-                <span className={styles.priestRole}>
-                  {p.role === 'BISHOP' ? (language === 'ar' ? 'الاسقف العام لحدائق القبه' : 'General Bishop of Hadayek Al Koba') : (language === 'ar' ? 'كاهن الكنيسة' : 'Priest')}
-                </span>
-
-                {/* Quick Hint: View Full Details & Jubilee */}
-                <div style={{
-                  margin: '4px 0 8px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '0.76rem',
-                  color: 'var(--accent-gold)',
-                  fontWeight: 700
-                }}>
-                  <span>{language === 'ar' ? 'سيرة الأب وتاريخ الرسامة ℹ️' : 'Pastoral Bio & Jubilee ℹ️'}</span>
-                </div>
-
-                <p className={styles.priestDays}>
-                  <b>{language === 'ar' ? 'أيام التواجد:' : 'Available Days:'}</b><br />
-                  {p.confessionStatus === 'TRAVELING' 
-                    ? (p.confessionStatusNote || (language === 'ar' ? 'خارج مصر' : 'Traveling abroad'))
-                    : p.confessionStatus === 'INACTIVE'
-                    ? (p.confessionStatusNote || (language === 'ar' ? 'غير متاح للاعترافات حالياً' : 'Not available currently'))
-                    : p.noFixedSchedule
-                    ? (language === 'ar' ? 'مواعيد بالتنسيق المسبق' : 'By coordination')
-                    : (p.availability && Object.keys(p.availability).length > 0 ? Object.keys(p.availability).join(', ') : (language === 'ar' ? 'مواعيد بالتنسيق' : 'By appointment'))}
-                </p>
-                {p.confessionStatus === 'TRAVELING' ? (
-                  <button className={styles.bookBtn} style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#555' }} disabled onClick={(e) => e.stopPropagation()}>
-                    ✈️ {language === 'ar' ? 'خارج مصر' : 'Traveling Abroad'}
-                  </button>
-                ) : p.confessionStatus === 'INACTIVE' ? (
-                  <button className={styles.bookBtn} style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#555' }} disabled onClick={(e) => e.stopPropagation()}>
-                    ⏸️ {language === 'ar' ? 'غير متاح للاعترافات' : 'Unavailable'}
-                  </button>
-                ) : (
-                  <button className={styles.bookBtn} onClick={(e) => { e.stopPropagation(); openBookingModal(p); }}>
-                    {p.role === 'BISHOP' ? t('meet_bishop') : (p.noFixedSchedule ? (language === 'ar' ? 'طلب ميعاد اعتراف' : 'Request Confession') : t('book_confession'))}
-                  </button>
-                )}
-              </div>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '1.25rem' }}>
+            <h2 className={styles.rowTitle} style={{ margin: 0 }}>
+              {language === 'ar' ? 'الآباء الكهنة والأجلاء' : 'Reverend Fathers & Bishops'}
+            </h2>
+            <button
+              onClick={() => fetchPriestsList(true)}
+              disabled={refreshingPriests}
+              title={language === 'ar' ? 'إعادة تحميل وتحديث قائمة الآباء' : 'Reload Priests List'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '7px 14px',
+                borderRadius: '8px',
+                background: 'rgba(226, 183, 20, 0.08)',
+                border: '1px solid rgba(226, 183, 20, 0.3)',
+                color: 'var(--accent-gold)',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                cursor: refreshingPriests ? 'wait' : 'pointer',
+                transition: 'all 0.25s ease'
+              }}
+            >
+              <span style={{ display: 'inline-block', animation: refreshingPriests ? 'spin 1s linear infinite' : 'none' }}>🔄</span>
+              <span>{refreshingPriests ? (language === 'ar' ? 'جاري التحديث...' : 'Refreshing...') : (language === 'ar' ? 'تحديث السجل' : 'Refresh List')}</span>
+            </button>
           </div>
+
+          {loadingPriests && priests.length === 0 ? (
+            <div style={{ width: '100%' }}>
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(226, 183, 20, 0.1) 0%, rgba(20, 20, 20, 0.7) 100%)',
+                border: '1px solid rgba(226, 183, 20, 0.25)',
+                borderRadius: '12px',
+                padding: '16px 20px',
+                marginBottom: '1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ fontSize: '1.6rem', animation: 'spin 2.5s linear infinite' }}>🕊️</div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--accent-gold)' }}>
+                      {language === 'ar' ? 'جاري استحضار سجلات الآباء الكهنة والأجلاء ومواعيد الاعترافات...' : 'Fetching Reverend Fathers and Confession schedules...'}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      {language === 'ar' ? 'لحظات مباركة ويظهر السجل كاملاً مع إمكانية حجز المواعيد' : 'Moments away from displaying the full pastoral registry'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => fetchPriestsList(true)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-secondary)',
+                    fontSize: '0.78rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ⚡ {language === 'ar' ? 'إعادة المحاولة' : 'Quick Retry'}
+                </button>
+              </div>
+
+              {/* Shimmer skeleton cards to make the user see what's loading */}
+              <div className={styles.netflixGrid}>
+                {[1, 2, 3, 4].map(idx => (
+                  <div
+                    key={`priest-skeleton-${idx}`}
+                    className={styles.priestCard}
+                    style={{
+                      border: idx === 1 ? '2px solid rgba(226, 183, 20, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+                      background: idx === 1 ? 'linear-gradient(155deg, rgba(35, 28, 12, 0.8) 0%, rgba(18, 18, 18, 0.9) 100%)' : 'rgba(20, 20, 20, 0.6)',
+                      pointerEvents: 'none',
+                      position: 'relative'
+                    }}
+                  >
+                    {idx === 1 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '-12px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: 'linear-gradient(135deg, #ffd700 0%, #e67e22 100%)',
+                        color: '#000',
+                        boxShadow: '0 4px 12px rgba(241, 196, 15, 0.4)',
+                        padding: '2px 12px',
+                        borderRadius: '20px',
+                        fontSize: '0.72rem',
+                        fontWeight: 900
+                      }}>
+                        👑 {language === 'ar' ? 'راعي الإيبارشية الجليل' : 'Bishop'}
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        width: '100px',
+                        height: '100px',
+                        borderRadius: '50%',
+                        margin: '0 auto 1rem',
+                        background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.04) 75%)',
+                        backgroundSize: '200% 100%',
+                        animation: 'shimmer 1.8s infinite',
+                        border: idx === 1 ? '3px solid rgba(226, 183, 20, 0.6)' : '3px solid rgba(255, 255, 255, 0.08)'
+                      }}
+                    />
+                    <div
+                      style={{
+                        width: '70%',
+                        height: '18px',
+                        borderRadius: '4px',
+                        margin: '0 auto 8px',
+                        background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.04) 75%)',
+                        backgroundSize: '200% 100%',
+                        animation: 'shimmer 1.8s infinite'
+                      }}
+                    />
+                    <div
+                      style={{
+                        width: '45%',
+                        height: '14px',
+                        borderRadius: '4px',
+                        margin: '0 auto 14px',
+                        background: 'linear-gradient(90deg, rgba(226,183,20,0.08) 25%, rgba(226,183,20,0.25) 50%, rgba(226,183,20,0.08) 75%)',
+                        backgroundSize: '200% 100%',
+                        animation: 'shimmer 1.8s infinite'
+                      }}
+                    />
+                    <div
+                      style={{
+                        width: '80%',
+                        height: '12px',
+                        borderRadius: '4px',
+                        margin: '0 auto 1.5rem',
+                        background: 'linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.03) 75%)',
+                        backgroundSize: '200% 100%',
+                        animation: 'shimmer 1.8s infinite'
+                      }}
+                    />
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '38px',
+                        borderRadius: '4px',
+                        background: 'linear-gradient(90deg, rgba(226,183,20,0.15) 25%, rgba(226,183,20,0.35) 50%, rgba(226,183,20,0.15) 75%)',
+                        backgroundSize: '200% 100%',
+                        animation: 'shimmer 1.8s infinite',
+                        marginTop: 'auto'
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className={styles.netflixGrid}>
+              {priests.map(p => {
+                const isBishopCard = p.role === 'BISHOP' || p.nameAr?.includes('اثناسيوس') || p.nameEn?.toLowerCase().includes('athanasius');
+                return (
+                  <div 
+                    key={p.id} 
+                    className={styles.priestCard}
+                    onClick={() => setSelectedPriestForDetails(p)}
+                    style={{
+                      cursor: 'pointer',
+                      position: 'relative',
+                      border: isBishopCard ? '2px solid #f1c40f' : undefined,
+                      boxShadow: isBishopCard ? '0 0 25px rgba(241, 196, 15, 0.45), inset 0 0 15px rgba(241, 196, 15, 0.08)' : undefined,
+                      background: isBishopCard ? 'linear-gradient(155deg, rgba(32, 26, 10, 0.95) 0%, rgba(18, 18, 18, 0.98) 100%)' : undefined,
+                      animation: isBishopCard ? 'goldenPulse 4s infinite ease-in-out' : undefined
+                    }}
+                  >
+                    {/* Bishop Golden Crown Banner */}
+                    {isBishopCard && (
+                      <div style={{
+                        position: 'absolute',
+                        top: '-12px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: 'linear-gradient(135deg, #ffd700 0%, #e67e22 100%)',
+                        color: '#000000',
+                        boxShadow: '0 4px 14px rgba(241, 196, 15, 0.5)',
+                        padding: '3px 14px',
+                        borderRadius: '20px',
+                        fontSize: '0.74rem',
+                        fontWeight: 900,
+                        letterSpacing: '0.5px',
+                        zIndex: 3,
+                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <span>👑</span>
+                        <span>{language === 'ar' ? 'راعي الإيبارشية الجليل' : 'Diocesan Bishop'}</span>
+                      </div>
+                    )}
+
+                    {/* Jubilee Badge if achieved */}
+                    {p.details?.isGoldenJubilee && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '10px',
+                        [language === 'ar' ? 'left' : 'right']: '10px',
+                        background: 'rgba(241, 196, 15, 0.2)',
+                        border: '1px solid #f1c40f',
+                        color: '#f1c40f',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '0.72rem',
+                        fontWeight: 800,
+                        zIndex: 2
+                      }}>
+                        🥇 {language === 'ar' ? 'اليوبيل الذهبي' : 'Golden Jubilee'}
+                      </span>
+                    )}
+                    {p.details?.isSilverJubilee && !p.details?.isGoldenJubilee && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '10px',
+                        [language === 'ar' ? 'left' : 'right']: '10px',
+                        background: 'rgba(189, 195, 199, 0.2)',
+                        border: '1px solid #bdc3c7',
+                        color: '#bdc3c7',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontSize: '0.72rem',
+                        fontWeight: 800,
+                        zIndex: 2
+                      }}>
+                        🥈 {language === 'ar' ? 'اليوبيل الفضي' : 'Silver Jubilee'}
+                      </span>
+                    )}
+
+                    <div 
+                      className={styles.priestAvatar} 
+                      style={{
+                        backgroundImage: `url(${p.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=200'})`,
+                        border: isBishopCard ? '3px solid #f1c40f' : undefined,
+                        boxShadow: isBishopCard ? '0 0 18px rgba(241, 196, 15, 0.6)' : undefined
+                      }}
+                    ></div>
+                    <h3 className={styles.priestTitle}>
+                      {language === 'ar' ? `${p.titleAr} ${p.nameAr}` : `${p.titleEn} ${p.nameEn}`}
+                    </h3>
+                    <span className={styles.priestRole}>
+                      {p.role === 'BISHOP' ? (language === 'ar' ? 'الاسقف العام لحدائق القبه' : 'General Bishop of Hadayek Al Koba') : (language === 'ar' ? 'كاهن الكنيسة' : 'Priest')}
+                    </span>
+
+                    {/* Quick Hint: View Full Details & Jubilee */}
+                    <div style={{
+                      margin: '4px 0 8px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      fontSize: '0.76rem',
+                      color: 'var(--accent-gold)',
+                      fontWeight: 700
+                    }}>
+                      <span>{language === 'ar' ? 'سيرة الأب وتاريخ الرسامة ℹ️' : 'Pastoral Bio & Jubilee ℹ️'}</span>
+                    </div>
+
+                    <p className={styles.priestDays}>
+                      <b>{language === 'ar' ? 'أيام التواجد:' : 'Available Days:'}</b><br />
+                      {p.confessionStatus === 'TRAVELING' 
+                        ? (p.confessionStatusNote || (language === 'ar' ? 'خارج مصر' : 'Traveling abroad'))
+                        : p.confessionStatus === 'INACTIVE'
+                        ? (p.confessionStatusNote || (language === 'ar' ? 'غير متاح للاعترافات حالياً' : 'Not available currently'))
+                        : p.noFixedSchedule
+                        ? (language === 'ar' ? 'مواعيد بالتنسيق المسبق' : 'By coordination')
+                        : (p.availability && Object.keys(p.availability).length > 0 ? Object.keys(p.availability).join(', ') : (language === 'ar' ? 'مواعيد بالتنسيق' : 'By appointment'))}
+                    </p>
+                    {p.confessionStatus === 'TRAVELING' ? (
+                      <button className={styles.bookBtn} style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#555' }} disabled onClick={(e) => e.stopPropagation()}>
+                        ✈️ {language === 'ar' ? 'خارج مصر' : 'Traveling Abroad'}
+                      </button>
+                    ) : p.confessionStatus === 'INACTIVE' ? (
+                      <button className={styles.bookBtn} style={{ opacity: 0.6, cursor: 'not-allowed', backgroundColor: '#555' }} disabled onClick={(e) => e.stopPropagation()}>
+                        ⏸️ {language === 'ar' ? 'غير متاح للاعترافات' : 'Unavailable'}
+                      </button>
+                    ) : (
+                      <button className={styles.bookBtn} onClick={(e) => { e.stopPropagation(); openBookingModal(p); }}>
+                        {p.role === 'BISHOP' ? t('meet_bishop') : (p.noFixedSchedule ? (language === 'ar' ? 'طلب ميعاد اعتراف' : 'Request Confession') : t('book_confession'))}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* Latest Sermons (Netflix Grid) */}
         <section className={styles.rowSection}>
           <h2 className={styles.rowTitle}>{t('nav_sermons')}</h2>
-          <div className={styles.netflixGrid}>
-            {sermons.map(s => (
-              <div key={s.id} className={styles.sermonCard} onClick={() => window.open(s.youtubeUrl, '_blank')}>
-                <div 
-                  className={styles.sermonThumbnail} 
-                  style={{ backgroundImage: `url(${s.thumbnailUrl || 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg'})` }}
-                ></div>
-                <div className={styles.sermonInfo}>
-                  <h3 className={styles.sermonTitle}>{language === 'ar' ? s.titleAr : s.titleEn}</h3>
-                  <div className={styles.sermonMeta}>
-                    <span>{language === 'ar' ? s.priestNameAr : s.priestNameEn}</span>
-                    <span>{s.topicAr}</span>
+          {loadingSermons && sermons.length === 0 ? (
+            <div className={styles.netflixGrid}>
+              {[1, 2, 3, 4].map(idx => (
+                <div key={`sermon-skeleton-${idx}`} className={styles.sermonCard} style={{ pointerEvents: 'none' }}>
+                  <div style={{
+                    width: '100%',
+                    height: '160px',
+                    background: 'linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.03) 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 1.8s infinite'
+                  }} />
+                  <div className={styles.sermonInfo}>
+                    <div style={{
+                      width: '85%',
+                      height: '16px',
+                      borderRadius: '4px',
+                      marginBottom: '8px',
+                      background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.04) 75%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'shimmer 1.8s infinite'
+                    }} />
+                    <div style={{
+                      width: '50%',
+                      height: '12px',
+                      borderRadius: '4px',
+                      background: 'linear-gradient(90deg, rgba(226,183,20,0.06) 25%, rgba(226,183,20,0.18) 50%, rgba(226,183,20,0.06) 75%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'shimmer 1.8s infinite'
+                    }} />
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className={styles.netflixGrid}>
+              {sermons.map(s => (
+                <div key={s.id} className={styles.sermonCard} onClick={() => window.open(s.youtubeUrl, '_blank')}>
+                  <div 
+                    className={styles.sermonThumbnail} 
+                    style={{ backgroundImage: `url(${s.thumbnailUrl || 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg'})` }}
+                  ></div>
+                  <div className={styles.sermonInfo}>
+                    <h3 className={styles.sermonTitle}>{language === 'ar' ? s.titleAr : s.titleEn}</h3>
+                    <div className={styles.sermonMeta}>
+                      <span>{language === 'ar' ? s.priestNameAr : s.priestNameEn}</span>
+                      <span>{s.topicAr}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Upcoming events / Activities */}
         <section className={styles.rowSection}>
           <h2 className={styles.rowTitle}>{language === 'ar' ? 'الرحلات والمؤتمرات الكنسية' : 'Trips & Church Conferences'}</h2>
-          <div className={styles.netflixGrid}>
-            {events.map(e => (
-              <div key={e.id} className={styles.priestCard} style={{ textAlign: 'start', alignItems: 'stretch' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ 
-                    fontSize: '0.75rem', 
-                    padding: '4px 8px', 
-                    backgroundColor: 'rgba(226, 183, 20, 0.1)', 
-                    color: 'var(--accent-gold)', 
+          {loadingEvents && events.length === 0 ? (
+            <div className={styles.netflixGrid}>
+              {[1, 2, 3].map(idx => (
+                <div key={`event-skeleton-${idx}`} className={styles.priestCard} style={{ pointerEvents: 'none', textAlign: 'start' }}>
+                  <div style={{
+                    width: '60px',
+                    height: '20px',
                     borderRadius: '4px',
-                    fontWeight: 'bold' 
-                  }}>
-                    {e.type}
-                  </span>
-                  {e.price > 0 && (
-                    <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--accent-gold)' }}>
-                      {e.price} {language === 'ar' ? 'ج.م' : 'EGP'}
+                    marginBottom: '10px',
+                    background: 'linear-gradient(90deg, rgba(226,183,20,0.08) 25%, rgba(226,183,20,0.22) 50%, rgba(226,183,20,0.08) 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 1.8s infinite'
+                  }} />
+                  <div style={{
+                    width: '75%',
+                    height: '20px',
+                    borderRadius: '4px',
+                    marginBottom: '12px',
+                    background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.04) 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 1.8s infinite'
+                  }} />
+                  <div style={{
+                    width: '90%',
+                    height: '14px',
+                    borderRadius: '4px',
+                    marginBottom: '8px',
+                    background: 'linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 1.8s infinite'
+                  }} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className={styles.netflixGrid}>
+              {events.map(e => (
+                <div key={e.id} className={styles.priestCard} style={{ textAlign: 'start', alignItems: 'stretch' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ 
+                      fontSize: '0.75rem', 
+                      padding: '4px 8px', 
+                      backgroundColor: 'rgba(226, 183, 20, 0.1)', 
+                      color: 'var(--accent-gold)', 
+                      borderRadius: '4px',
+                      fontWeight: 'bold' 
+                    }}>
+                      {e.type}
                     </span>
+                    {e.price > 0 && (
+                      <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--accent-gold)' }}>
+                        {e.price} {language === 'ar' ? 'ج.م' : 'EGP'}
+                      </span>
+                    )}
+                  </div>
+                  <h3 style={{ fontSize: '1.2rem', marginBottom: '10px' }}>
+                    {language === 'ar' ? e.titleAr : e.titleEn}
+                  </h3>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '15px', lineHeight: '1.4' }}>
+                    {language === 'ar' ? e.descriptionAr : e.descriptionEn}
+                  </p>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'auto', marginBottom: '12px' }}>
+                    📅 {new Date(e.date).toLocaleDateString()} <br />
+                    📍 {language === 'ar' ? e.locationAr : e.locationEn}
+                  </div>
+                  {(e.type === 'TRIP' || e.type === 'CONFERENCE') && (
+                    <button 
+                      className={styles.bookBtn} 
+                      style={{ width: '100%', marginTop: 'auto' }}
+                      onClick={() => {
+                        setSelectedTrip(e);
+                        setUserToken(typeof window !== 'undefined' ? localStorage.getItem('church-token') : null);
+                        setTripBookingMsg(null);
+                        const userStr = typeof window !== 'undefined' ? localStorage.getItem('church-user') : null;
+                        if (userStr) {
+                          try {
+                            const u = JSON.parse(userStr);
+                            setTripFullName(u.fullName || '');
+                            setTripPhone(u.phone || '');
+                          } catch (err) {}
+                        }
+                      }}
+                    >
+                      🎫 {language === 'ar' ? 'حجز الرحلة / الاشتراك' : 'Register / Book Trip'}
+                    </button>
                   )}
                 </div>
-                <h3 style={{ fontSize: '1.2rem', marginBottom: '10px' }}>
-                  {language === 'ar' ? e.titleAr : e.titleEn}
-                </h3>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '15px', lineHeight: '1.4' }}>
-                  {language === 'ar' ? e.descriptionAr : e.descriptionEn}
-                </p>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 'auto', marginBottom: '12px' }}>
-                  📅 {new Date(e.date).toLocaleDateString()} <br />
-                  📍 {language === 'ar' ? e.locationAr : e.locationEn}
-                </div>
-                {(e.type === 'TRIP' || e.type === 'CONFERENCE') && (
-                  <button 
-                    className={styles.bookBtn} 
-                    style={{ width: '100%', marginTop: 'auto' }}
-                    onClick={() => {
-                      setSelectedTrip(e);
-                      setUserToken(typeof window !== 'undefined' ? localStorage.getItem('church-token') : null);
-                      setTripBookingMsg(null);
-                      const userStr = typeof window !== 'undefined' ? localStorage.getItem('church-user') : null;
-                      if (userStr) {
-                        try {
-                          const u = JSON.parse(userStr);
-                          setTripFullName(u.fullName || '');
-                          setTripPhone(u.phone || '');
-                        } catch (err) {}
-                      }
-                    }}
-                  >
-                    🎫 {language === 'ar' ? 'حجز الرحلة / الاشتراك' : 'Register / Book Trip'}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Historic Photos Gallery (Only if photos were uploaded in Dashboard) */}

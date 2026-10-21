@@ -10,9 +10,20 @@ import { extractPriestDetails } from './priest.controller';
 
 const router = Router();
 
-// 1. Get Priests list (emails omitted for security)
+let priestsCache: { data: any; expiry: number } | null = null;
+
+export function invalidatePriestsCache() {
+  priestsCache = null;
+}
+
+// 1. Get Priests list (cached in memory for high-speed response)
 router.get('/priests', async (req: AuthRequest, res: Response) => {
   try {
+    const forceRefresh = req.query.refresh === 'true';
+    if (!forceRefresh && priestsCache && Date.now() < priestsCache.expiry) {
+      return res.status(200).json(priestsCache.data);
+    }
+
     const priests = await prisma.priestProfile.findMany({
       include: {
         user: {
@@ -54,7 +65,7 @@ router.get('/priests', async (req: AuthRequest, res: Response) => {
     ];
 
     const getPriestRank = (p: any) => {
-      if (p.role === 'BISHOP') return -100;
+      if (p.role === 'BISHOP' || p.nameAr.includes('اثناسيوس')) return -100;
       for (let i = 0; i < priestOrder.length; i++) {
         if (p.nameAr.includes(priestOrder[i]) || p.nameEn.toLowerCase().includes(priestOrder[i].toLowerCase())) {
           return i;
@@ -65,9 +76,17 @@ router.get('/priests', async (req: AuthRequest, res: Response) => {
 
     formatted.sort((a, b) => getPriestRank(a) - getPriestRank(b));
 
+    priestsCache = {
+      data: formatted,
+      expiry: Date.now() + 60 * 1000 // 60s cache
+    };
+
     return res.status(200).json(formatted);
   } catch (error) {
     console.error('Error fetching priests:', error);
+    if (priestsCache) {
+      return res.status(200).json(priestsCache.data);
+    }
     return res.status(500).json({ error: 'Server error fetching priests.' });
   }
 });
