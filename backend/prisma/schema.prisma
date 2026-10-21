@@ -1001,6 +1001,7 @@ model HistoryMediaItem {
   archivalCredit       String?
   altText              String?
   isPublic             Boolean  @default(true)
+  galleryJson          String?  @default("[]") // For group images / albums under one title
   status               String   @default("PUBLISHED")
   orderIndex           Int      @default(0)
   createdAt            DateTime @default(now())
@@ -1011,6 +1012,27 @@ model HistoryMediaItem {
   @@index([mediaType])
 }
 
+model HistoryPopeRecord {
+  id           String   @id @default(uuid())
+  nameAr       String
+  nameEn       String?
+  titleAr      String   @default("قداسة البابا المعظم")
+  titleEn      String?  @default("H.H. Pope")
+  papalNumber  Int?     // 116, 117, 118
+  papacyPeriod String   // e.g. "1959 - 1971"
+  isDeceased   Boolean  @default(true)
+  avatarUrl    String?
+  bioAr        String?
+  bioEn        String?
+  orderIndex   Int      @default(0)
+  status       String   @default("PUBLISHED")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([orderIndex])
+  @@index([status])
+}
+
 model HistoryBishopRecord {
   id              String   @id @default(uuid())
   nameAr          String
@@ -1018,6 +1040,7 @@ model HistoryBishopRecord {
   titleAr         String   @default("الأسقف العام")
   titleEn         String?  @default("General Bishop")
   episcopalPeriod String   // e.g. "2013 - حتى الآن"
+  isDeceased      Boolean  @default(false)
   avatarUrl       String?
   bioAr           String?
   bioEn           String?
@@ -1030,11 +1053,24 @@ model HistoryBishopRecord {
   @@index([status])
 }
 
+model HistoryServantCategory {
+  id         String   @id @default(uuid())
+  key        String   @unique // e.g. "DEACON", "PRIEST_MONK", "CONSECRATED"
+  nameAr     String
+  nameEn     String?
+  orderIndex Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([orderIndex])
+}
+
 model HistoryServantFruit {
   id                      String   @id @default(uuid())
   fullNameAr              String
   fullNameEn              String?
   currentRole             String   // e.g. "شماس دياكون", "كاهن مبارك", "راهب", "خادم مكرس"
+  categoryKey             String?  @default("DEACON")
   ordinationYear          String?
   currentChurchOrLocation String?  // e.g. "دير الشهيد مارمينا", "كنيسة العذراء"
   avatarUrl               String?
@@ -1046,6 +1082,7 @@ model HistoryServantFruit {
 
   @@index([orderIndex])
   @@index([status])
+  @@index([categoryKey])
 }
 
 

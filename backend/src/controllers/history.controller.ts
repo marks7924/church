@@ -99,14 +99,26 @@ router.get('/', async (req: Request, res: Response) => {
       orderBy: { orderIndex: 'asc' }
     });
 
-    // 7. Supervising Bishops
+    // 7. Popes of Alexandria (الآباء البطاركة)
+    const popeWhere = isAdmin ? {} : { status: 'PUBLISHED' };
+    const popes = await prisma.historyPopeRecord.findMany({
+      where: popeWhere,
+      orderBy: { orderIndex: 'asc' }
+    });
+
+    // 8. Supervising Bishops
     const bishopWhere = isAdmin ? {} : { status: 'PUBLISHED' };
     const bishops = await prisma.historyBishopRecord.findMany({
       where: bishopWhere,
       orderBy: { orderIndex: 'asc' }
     });
 
-    // 8. Church Deacons & Consecrated Servants (ثمار الخدمة المباركة)
+    // 9. Servant Filter Categories
+    const servantCategories = await prisma.historyServantCategory.findMany({
+      orderBy: { orderIndex: 'asc' }
+    });
+
+    // 10. Church Deacons & Consecrated Servants (ثمار الخدمة المباركة)
     const fruitWhere = isAdmin ? {} : { status: 'PUBLISHED' };
     const servantsFruits = await prisma.historyServantFruit.findMany({
       where: fruitWhere,
@@ -121,7 +133,9 @@ router.get('/', async (req: Request, res: Response) => {
       events,
       visits,
       media,
+      popes,
       bishops,
+      servantCategories,
       servantsFruits
     });
   } catch (error: any) {
@@ -738,6 +752,7 @@ router.post('/media', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRe
       archivalCredit,
       altText,
       isPublic,
+      galleryJson,
       status,
       orderIndex
     } = req.body;
@@ -761,6 +776,7 @@ router.post('/media', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRe
         archivalCredit,
         altText,
         isPublic: isPublic !== undefined ? Boolean(isPublic) : true,
+        galleryJson: typeof galleryJson === 'string' ? galleryJson : JSON.stringify(galleryJson || []),
         status: status || 'PUBLISHED',
         orderIndex: orderIndex !== undefined ? parseInt(orderIndex, 10) : 0
       }
@@ -790,6 +806,7 @@ router.put('/media/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: Aut
       archivalCredit,
       altText,
       isPublic,
+      galleryJson,
       status,
       orderIndex
     } = req.body;
@@ -810,6 +827,7 @@ router.put('/media/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: Aut
         archivalCredit,
         altText,
         isPublic: isPublic !== undefined ? Boolean(isPublic) : undefined,
+        galleryJson: typeof galleryJson === 'string' ? galleryJson : galleryJson ? JSON.stringify(galleryJson) : undefined,
         status,
         orderIndex: orderIndex !== undefined ? parseInt(orderIndex, 10) : undefined
       }
@@ -834,7 +852,127 @@ router.delete('/media/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: 
 });
 
 // ==========================================
-// 8. SUPERVISING BISHOPS MANAGEMENT (Admin)
+// 8. POPES OF ALEXANDRIA MANAGEMENT (Admin)
+// ==========================================
+router.post('/popes', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      nameAr,
+      nameEn,
+      titleAr,
+      titleEn,
+      papalNumber,
+      papacyPeriod,
+      isDeceased,
+      avatarUrl,
+      bioAr,
+      bioEn,
+      status,
+      orderIndex
+    } = req.body;
+
+    if (!nameAr || !papacyPeriod) {
+      return res.status(400).json({ error: 'اسم قداسة البابا وفترة حبريته مطلوبان.' });
+    }
+
+    const created = await prisma.historyPopeRecord.create({
+      data: {
+        nameAr,
+        nameEn,
+        titleAr: titleAr || 'قداسة البابا المعظم',
+        titleEn: titleEn || 'H.H. Pope',
+        papalNumber: papalNumber !== undefined && papalNumber !== null ? parseInt(papalNumber, 10) : null,
+        papacyPeriod,
+        isDeceased: isDeceased !== undefined ? Boolean(isDeceased) : true,
+        avatarUrl,
+        bioAr,
+        bioEn,
+        status: status || 'PUBLISHED',
+        orderIndex: orderIndex !== undefined ? parseInt(orderIndex, 10) : 0
+      }
+    });
+
+    return res.status(201).json({ message: 'تمت إضافة قداسة البابا بنجاح', pope: created });
+  } catch (error: any) {
+    console.error('Error creating pope record:', error);
+    return res.status(500).json({ error: 'Failed to create pope record.' });
+  }
+});
+
+router.put('/popes/reorder', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { items } = req.body;
+    if (Array.isArray(items)) {
+      for (const item of items) {
+        await prisma.historyPopeRecord.update({
+          where: { id: item.id },
+          data: { orderIndex: item.orderIndex }
+        });
+      }
+    }
+    return res.status(200).json({ message: 'تم إعادة ترتيب الآباء البطاركة بنجاح' });
+  } catch (error: any) {
+    console.error('Error reordering popes:', error);
+    return res.status(500).json({ error: 'Failed to reorder popes.' });
+  }
+});
+
+router.put('/popes/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      nameAr,
+      nameEn,
+      titleAr,
+      titleEn,
+      papalNumber,
+      papacyPeriod,
+      isDeceased,
+      avatarUrl,
+      bioAr,
+      bioEn,
+      status,
+      orderIndex
+    } = req.body;
+
+    const updated = await prisma.historyPopeRecord.update({
+      where: { id },
+      data: {
+        nameAr,
+        nameEn,
+        titleAr,
+        titleEn,
+        papalNumber: papalNumber !== undefined ? (papalNumber !== null ? parseInt(papalNumber, 10) : null) : undefined,
+        papacyPeriod,
+        isDeceased: isDeceased !== undefined ? Boolean(isDeceased) : undefined,
+        avatarUrl,
+        bioAr,
+        bioEn,
+        status,
+        orderIndex: orderIndex !== undefined ? parseInt(orderIndex, 10) : undefined
+      }
+    });
+
+    return res.status(200).json({ message: 'تم تحديث بيانات قداسة البابا بنجاح', pope: updated });
+  } catch (error: any) {
+    console.error('Error updating pope record:', error);
+    return res.status(500).json({ error: 'Failed to update pope record.' });
+  }
+});
+
+router.delete('/popes/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.historyPopeRecord.delete({ where: { id } });
+    return res.status(200).json({ message: 'تم حذف سجل قداسة البابا بنجاح' });
+  } catch (error: any) {
+    console.error('Error deleting pope record:', error);
+    return res.status(500).json({ error: 'Failed to delete pope record.' });
+  }
+});
+
+// ==========================================
+// 9. SUPERVISING BISHOPS MANAGEMENT (Admin)
 // ==========================================
 router.post('/bishops', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
   try {
@@ -844,6 +982,7 @@ router.post('/bishops', requireAuth, requireRoles(ADMIN_ROLES), async (req: Auth
       titleAr,
       titleEn,
       episcopalPeriod,
+      isDeceased,
       avatarUrl,
       bioAr,
       bioEn,
@@ -862,6 +1001,7 @@ router.post('/bishops', requireAuth, requireRoles(ADMIN_ROLES), async (req: Auth
         titleAr: titleAr || 'الأسقف العام',
         titleEn: titleEn || 'General Bishop',
         episcopalPeriod,
+        isDeceased: Boolean(isDeceased),
         avatarUrl,
         bioAr,
         bioEn,
@@ -877,6 +1017,24 @@ router.post('/bishops', requireAuth, requireRoles(ADMIN_ROLES), async (req: Auth
   }
 });
 
+router.put('/bishops/reorder', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { items } = req.body;
+    if (Array.isArray(items)) {
+      for (const item of items) {
+        await prisma.historyBishopRecord.update({
+          where: { id: item.id },
+          data: { orderIndex: item.orderIndex }
+        });
+      }
+    }
+    return res.status(200).json({ message: 'تم إعادة ترتيب الآباء الأساقفة بنجاح' });
+  } catch (error: any) {
+    console.error('Error reordering bishops:', error);
+    return res.status(500).json({ error: 'Failed to reorder bishops.' });
+  }
+});
+
 router.put('/bishops/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
@@ -886,6 +1044,7 @@ router.put('/bishops/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: A
       titleAr,
       titleEn,
       episcopalPeriod,
+      isDeceased,
       avatarUrl,
       bioAr,
       bioEn,
@@ -901,6 +1060,7 @@ router.put('/bishops/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: A
         titleAr,
         titleEn,
         episcopalPeriod,
+        isDeceased: isDeceased !== undefined ? Boolean(isDeceased) : undefined,
         avatarUrl,
         bioAr,
         bioEn,
@@ -928,7 +1088,74 @@ router.delete('/bishops/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req
 });
 
 // ==========================================
-// 9. CHURCH SERVANTS & DEACONS FRUIT (Admin)
+// 10. SERVANT CATEGORIES MANAGEMENT (Admin)
+// ==========================================
+router.get('/servant-categories', async (req: Request, res: Response) => {
+  try {
+    const categories = await prisma.historyServantCategory.findMany({
+      orderBy: { orderIndex: 'asc' }
+    });
+    return res.status(200).json(categories);
+  } catch (error: any) {
+    return res.status(500).json({ error: 'Failed to load categories.' });
+  }
+});
+
+router.post('/servant-categories', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { key, nameAr, nameEn, orderIndex } = req.body;
+    if (!nameAr) {
+      return res.status(400).json({ error: 'اسم التصنيف مطلوب.' });
+    }
+    const safeKey = key ? key.trim().toUpperCase().replace(/\s+/g, '_') : `CAT_${Date.now()}`;
+    const created = await prisma.historyServantCategory.create({
+      data: {
+        key: safeKey,
+        nameAr,
+        nameEn: nameEn || nameAr,
+        orderIndex: orderIndex !== undefined ? parseInt(orderIndex, 10) : 0
+      }
+    });
+    return res.status(201).json({ message: 'تم إنشاء التصنيف بنجاح', category: created });
+  } catch (error: any) {
+    console.error('Error creating servant category:', error);
+    return res.status(500).json({ error: 'Failed to create servant category.' });
+  }
+});
+
+router.put('/servant-categories/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { key, nameAr, nameEn, orderIndex } = req.body;
+    const updated = await prisma.historyServantCategory.update({
+      where: { id },
+      data: {
+        key: key !== undefined ? key.trim().toUpperCase().replace(/\s+/g, '_') : undefined,
+        nameAr: nameAr !== undefined ? nameAr.trim() : undefined,
+        nameEn: nameEn !== undefined ? nameEn.trim() : undefined,
+        orderIndex: orderIndex !== undefined ? parseInt(orderIndex, 10) : undefined
+      }
+    });
+    return res.status(200).json({ message: 'تم تحديث التصنيف بنجاح', category: updated });
+  } catch (error: any) {
+    console.error('Error updating servant category:', error);
+    return res.status(500).json({ error: 'Failed to update servant category.' });
+  }
+});
+
+router.delete('/servant-categories/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.historyServantCategory.delete({ where: { id } });
+    return res.status(200).json({ message: 'تم حذف التصنيف بنجاح' });
+  } catch (error: any) {
+    console.error('Error deleting servant category:', error);
+    return res.status(500).json({ error: 'Failed to delete servant category.' });
+  }
+});
+
+// ==========================================
+// 11. CHURCH SERVANTS & DEACONS FRUIT (Admin)
 // ==========================================
 router.post('/servants-fruits', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
   try {
@@ -936,6 +1163,7 @@ router.post('/servants-fruits', requireAuth, requireRoles(ADMIN_ROLES), async (r
       fullNameAr,
       fullNameEn,
       currentRole,
+      categoryKey,
       ordinationYear,
       currentChurchOrLocation,
       avatarUrl,
@@ -953,6 +1181,7 @@ router.post('/servants-fruits', requireAuth, requireRoles(ADMIN_ROLES), async (r
         fullNameAr,
         fullNameEn,
         currentRole,
+        categoryKey: categoryKey || 'DEACON',
         ordinationYear: ordinationYear ? String(ordinationYear) : null,
         currentChurchOrLocation,
         avatarUrl,
@@ -976,6 +1205,7 @@ router.put('/servants-fruits/:id', requireAuth, requireRoles(ADMIN_ROLES), async
       fullNameAr,
       fullNameEn,
       currentRole,
+      categoryKey,
       ordinationYear,
       currentChurchOrLocation,
       avatarUrl,
@@ -990,6 +1220,7 @@ router.put('/servants-fruits/:id', requireAuth, requireRoles(ADMIN_ROLES), async
         fullNameAr,
         fullNameEn,
         currentRole,
+        categoryKey: categoryKey !== undefined ? categoryKey : undefined,
         ordinationYear: ordinationYear !== undefined ? (ordinationYear ? String(ordinationYear) : null) : undefined,
         currentChurchOrLocation,
         avatarUrl,

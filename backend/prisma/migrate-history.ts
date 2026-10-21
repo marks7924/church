@@ -166,6 +166,7 @@ const statements = [
     "titleAr" TEXT NOT NULL DEFAULT 'الأسقف العام',
     "titleEn" TEXT DEFAULT 'General Bishop',
     "episcopalPeriod" TEXT NOT NULL,
+    "isDeceased" BOOLEAN NOT NULL DEFAULT false,
     "avatarUrl" TEXT,
     "bioAr" TEXT,
     "bioEn" TEXT,
@@ -176,13 +177,48 @@ const statements = [
   );`,
   `CREATE INDEX IF NOT EXISTS "HistoryBishopRecord_orderIndex_idx" ON "HistoryBishopRecord"("orderIndex");`,
   `CREATE INDEX IF NOT EXISTS "HistoryBishopRecord_status_idx" ON "HistoryBishopRecord"("status");`,
+  `ALTER TABLE "HistoryBishopRecord" ADD COLUMN IF NOT EXISTS "isDeceased" BOOLEAN NOT NULL DEFAULT false;`,
 
-  // 9. HistoryServantFruit (Deacons & Servants who originated from this church)
+  // 9. HistoryPopeRecord (Popes of Alexandria)
+  `CREATE TABLE IF NOT EXISTS "HistoryPopeRecord" (
+    "id" TEXT PRIMARY KEY,
+    "nameAr" TEXT NOT NULL,
+    "nameEn" TEXT,
+    "titleAr" TEXT NOT NULL DEFAULT 'قداسة البابا المعظم',
+    "titleEn" TEXT DEFAULT 'H.H. Pope',
+    "papalNumber" INTEGER,
+    "papacyPeriod" TEXT NOT NULL,
+    "isDeceased" BOOLEAN NOT NULL DEFAULT true,
+    "avatarUrl" TEXT,
+    "bioAr" TEXT,
+    "bioEn" TEXT,
+    "orderIndex" INTEGER NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'PUBLISHED',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );`,
+  `CREATE INDEX IF NOT EXISTS "HistoryPopeRecord_orderIndex_idx" ON "HistoryPopeRecord"("orderIndex");`,
+  `CREATE INDEX IF NOT EXISTS "HistoryPopeRecord_status_idx" ON "HistoryPopeRecord"("status");`,
+
+  // 10. HistoryServantCategory (Dynamic filter categories)
+  `CREATE TABLE IF NOT EXISTS "HistoryServantCategory" (
+    "id" TEXT PRIMARY KEY,
+    "key" TEXT UNIQUE NOT NULL,
+    "nameAr" TEXT NOT NULL,
+    "nameEn" TEXT,
+    "orderIndex" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );`,
+  `CREATE INDEX IF NOT EXISTS "HistoryServantCategory_orderIndex_idx" ON "HistoryServantCategory"("orderIndex");`,
+
+  // 11. HistoryServantFruit (Deacons & Servants who originated from this church)
   `CREATE TABLE IF NOT EXISTS "HistoryServantFruit" (
     "id" TEXT PRIMARY KEY,
     "fullNameAr" TEXT NOT NULL,
     "fullNameEn" TEXT,
     "currentRole" TEXT NOT NULL,
+    "categoryKey" TEXT DEFAULT 'DEACON',
     "ordinationYear" TEXT,
     "currentChurchOrLocation" TEXT,
     "avatarUrl" TEXT,
@@ -193,7 +229,11 @@ const statements = [
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
   );`,
   `CREATE INDEX IF NOT EXISTS "HistoryServantFruit_orderIndex_idx" ON "HistoryServantFruit"("orderIndex");`,
-  `CREATE INDEX IF NOT EXISTS "HistoryServantFruit_status_idx" ON "HistoryServantFruit"("status");`
+  `CREATE INDEX IF NOT EXISTS "HistoryServantFruit_status_idx" ON "HistoryServantFruit"("status");`,
+  `ALTER TABLE "HistoryServantFruit" ADD COLUMN IF NOT EXISTS "categoryKey" TEXT DEFAULT 'DEACON';`,
+
+  // 12. Media Item Album/Gallery
+  `ALTER TABLE "HistoryMediaItem" ADD COLUMN IF NOT EXISTS "galleryJson" TEXT DEFAULT '[]';`
 ];
 
 async function run() {

@@ -9,7 +9,7 @@ import {
   History, Calendar, Users, Eye, EyeOff, Edit3, Plus, Trash2, 
   CheckCircle, AlertTriangle, ChevronRight, ChevronLeft, Search, 
   Sparkles, BookOpen, Image as ImageIcon, FileText, ArrowUpRight,
-  Shield, Download, ExternalLink, X, RefreshCw
+  Shield, Download, ExternalLink, X, RefreshCw, Camera, ArrowUp, ArrowDown
 } from 'lucide-react';
 
 interface HistorySettings {
@@ -70,13 +70,15 @@ interface HistoryClergyRecord {
   documentsJson?: string;
 }
 
-interface HistoryBishopRecord {
+interface HistoryPopeRecord {
   id: string;
   nameAr: string;
   nameEn?: string | null;
   titleAr: string;
   titleEn?: string | null;
-  episcopalPeriod: string;
+  papalNumber?: number | null;
+  papacyPeriod: string;
+  isDeceased: boolean;
   avatarUrl?: string | null;
   bioAr?: string | null;
   bioEn?: string | null;
@@ -84,11 +86,35 @@ interface HistoryBishopRecord {
   status: string;
 }
 
+interface HistoryBishopRecord {
+  id: string;
+  nameAr: string;
+  nameEn?: string | null;
+  titleAr: string;
+  titleEn?: string | null;
+  episcopalPeriod: string;
+  isDeceased?: boolean;
+  avatarUrl?: string | null;
+  bioAr?: string | null;
+  bioEn?: string | null;
+  orderIndex: number;
+  status: string;
+}
+
+interface HistoryServantCategory {
+  id: string;
+  key: string;
+  nameAr: string;
+  nameEn?: string | null;
+  orderIndex: number;
+}
+
 interface HistoryServantFruit {
   id: string;
   fullNameAr: string;
   fullNameEn?: string | null;
   currentRole: string;
+  categoryKey?: string | null;
   ordinationYear?: string | null;
   currentChurchOrLocation?: string | null;
   avatarUrl?: string | null;
@@ -155,7 +181,269 @@ interface HistoryMediaItem {
   archivalCredit?: string | null;
   altText?: string | null;
   isPublic: boolean;
+  galleryJson?: string | null;
   status: string;
+}
+
+// Reusable Image Upload Field (Matching the Normal Priests system)
+function ImageUploadField({
+  label,
+  value,
+  onChange,
+  isCircular = true,
+  fallbackIcon = '✝️'
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  isCircular?: boolean;
+  fallbackIcon?: string;
+}) {
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      alert('حجم الصورة كبير جداً، يرجى اختيار صورة أقل من 8 ميجابايت');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      onChange(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div style={{ marginBottom: '1.25rem' }}>
+      <label style={{ display: 'block', fontWeight: 700, fontSize: '0.86rem', color: 'var(--accent-gold)', marginBottom: '8px' }}>
+        {label}
+      </label>
+      <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+        <div style={{
+          width: '74px',
+          height: '74px',
+          borderRadius: isCircular ? '50%' : '10px',
+          border: '2px solid var(--accent-gold)',
+          backgroundColor: '#16171b',
+          backgroundImage: value ? `url(${value})` : undefined,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          overflow: 'hidden',
+          fontSize: '1.8rem',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.4)'
+        }}>
+          {!value && fallbackIcon}
+        </div>
+        <div style={{ flex: 1, minWidth: '200px' }}>
+          <input
+            type="text"
+            placeholder="رابط الصورة المباشر أو ارفع من جهازك"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '9px 12px',
+              borderRadius: '8px',
+              background: 'rgba(0,0,0,0.3)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              color: '#fff',
+              fontSize: '0.84rem',
+              boxSizing: 'border-box',
+              marginBottom: '6px'
+            }}
+          />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              color: '#fff',
+              fontSize: '0.78rem',
+              cursor: 'pointer'
+            }}>
+              <Camera size={14} />
+              <span>اختيار صورة من جهازك</span>
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleFile}
+              />
+            </label>
+            {value && (
+              <button
+                type="button"
+                onClick={() => onChange('')}
+                style={{
+                  background: 'rgba(231, 76, 60, 0.15)',
+                  border: '1px solid rgba(231, 76, 60, 0.4)',
+                  color: '#e74c3c',
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  fontSize: '0.76rem',
+                  cursor: 'pointer'
+                }}
+              >
+                مسح الصورة
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Multi-Image Gallery / Album Component
+function MultiImageGalleryField({
+  label,
+  images,
+  onChange
+}: {
+  label: string;
+  images: string[];
+  onChange: (imgs: string[]) => void;
+}) {
+  const [newUrl, setNewUrl] = useState('');
+
+  const handleMultipleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    Array.from(files).forEach((file) => {
+      if (file.size > 10 * 1024 * 1024) return;
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        onChange([...images, base64]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const addUrl = () => {
+    if (newUrl.trim()) {
+      onChange([...images, newUrl.trim()]);
+      setNewUrl('');
+    }
+  };
+
+  const removeImg = (index: number) => {
+    onChange(images.filter((_, idx) => idx !== index));
+  };
+
+  return (
+    <div style={{ marginBottom: '1.25rem' }}>
+      <label style={{ display: 'block', fontWeight: 700, fontSize: '0.86rem', color: 'var(--accent-gold)', marginBottom: '8px' }}>
+        {label} ({images.length} صور)
+      </label>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+        <input
+          type="text"
+          placeholder="رابط صورة مباشر..."
+          value={newUrl}
+          onChange={(e) => setNewUrl(e.target.value)}
+          style={{
+            flex: 1,
+            minWidth: '180px',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            background: 'rgba(0,0,0,0.3)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            color: '#fff',
+            fontSize: '0.84rem'
+          }}
+        />
+        <button
+          type="button"
+          onClick={addUrl}
+          style={{
+            background: 'var(--accent-gold)',
+            color: '#000',
+            border: 'none',
+            padding: '8px 14px',
+            borderRadius: '8px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            fontSize: '0.82rem'
+          }}
+        >
+          + إضافة رابط
+        </button>
+        <label style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '8px 14px',
+          borderRadius: '8px',
+          background: 'rgba(255,255,255,0.1)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          color: '#fff',
+          fontSize: '0.82rem',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap'
+        }}>
+          <Camera size={14} />
+          <span>اختيار صور من الجهاز</span>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: 'none' }}
+            onChange={handleMultipleFiles}
+          />
+        </label>
+      </div>
+
+      {images.length > 0 && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+          gap: '8px',
+          background: 'rgba(0,0,0,0.25)',
+          padding: '10px',
+          borderRadius: '8px',
+          maxHeight: '180px',
+          overflowY: 'auto'
+        }}>
+          {images.map((img, idx) => (
+            <div key={idx} style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: '6px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.15)' }}>
+              <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <button
+                type="button"
+                onClick={() => removeImg(idx)}
+                style={{
+                  position: 'absolute',
+                  top: '2px',
+                  right: '2px',
+                  background: 'rgba(0,0,0,0.75)',
+                  color: '#e74c3c',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '20px',
+                  height: '20px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '11px'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function HistoryPage() {
@@ -166,7 +454,9 @@ export default function HistoryPage() {
   const [chapters, setChapters] = useState<HistoryChapter[]>([]);
   const [activeChapterSlug, setActiveChapterSlug] = useState<string>('foundation');
   const [clergyList, setClergyList] = useState<HistoryClergyRecord[]>([]);
+  const [popes, setPopes] = useState<HistoryPopeRecord[]>([]);
   const [bishops, setBishops] = useState<HistoryBishopRecord[]>([]);
+  const [servantCategories, setServantCategories] = useState<HistoryServantCategory[]>([]);
   const [servantsFruits, setServantsFruits] = useState<HistoryServantFruit[]>([]);
   const [events, setEvents] = useState<HistoryEvent[]>([]);
   const [visits, setVisits] = useState<HistoryVisit[]>([]);
@@ -186,6 +476,7 @@ export default function HistoryPage() {
   const [servantRoleFilter, setServantRoleFilter] = useState<string>('ALL');
   const [selectedPriestModal, setSelectedPriestModal] = useState<HistoryClergyRecord | null>(null);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string; caption?: string } | null>(null);
+  const [albumModal, setAlbumModal] = useState<{ title: string; images: string[] } | null>(null);
 
   // Interactive Chapter Reader Controls
   const [chapterTab, setChapterTab] = useState<'narrative' | 'gallery' | 'figures'>('narrative');
@@ -199,8 +490,12 @@ export default function HistoryPage() {
   const [isCreatingChapter, setIsCreatingChapter] = useState(false);
   const [editingClergy, setEditingClergy] = useState<HistoryClergyRecord | null>(null);
   const [isCreatingClergy, setIsCreatingClergy] = useState(false);
+  const [editingPope, setEditingPope] = useState<HistoryPopeRecord | null>(null);
+  const [isCreatingPope, setIsCreatingPope] = useState(false);
   const [editingBishop, setEditingBishop] = useState<HistoryBishopRecord | null>(null);
   const [isCreatingBishop, setIsCreatingBishop] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<HistoryServantCategory | null>(null);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [editingServantFruit, setEditingServantFruit] = useState<HistoryServantFruit | null>(null);
   const [isCreatingServantFruit, setIsCreatingServantFruit] = useState(false);
   const [editingEvent, setEditingEvent] = useState<HistoryEvent | null>(null);
@@ -232,7 +527,9 @@ export default function HistoryPage() {
             setSettings(parsed.settings || null);
             setChapters(parsed.chapters || []);
             setClergyList(parsed.clergy || []);
+            setPopes(parsed.popes || []);
             setBishops(parsed.bishops || []);
+            setServantCategories(parsed.servantCategories || []);
             setServantsFruits(parsed.servantsFruits || []);
             setEvents(parsed.events || []);
             setVisits(parsed.visits || []);
@@ -260,7 +557,15 @@ export default function HistoryPage() {
           setActiveChapterSlug(data.chapters[0].slug);
         }
         setClergyList(data.clergy || []);
+        setPopes(data.popes || []);
         setBishops(data.bishops || []);
+        
+        const defaultCats: HistoryServantCategory[] = [
+          { id: 'cat-1', key: 'DEACON', nameAr: 'الشمامسة المباركون', orderIndex: 1 },
+          { id: 'cat-2', key: 'PRIEST_MONK', nameAr: 'آباء كهنة ورهبان', orderIndex: 2 },
+          { id: 'cat-3', key: 'CONSECRATED', nameAr: 'خدام مكرسون وأمناء خدمة', orderIndex: 3 }
+        ];
+        setServantCategories((data.servantCategories && data.servantCategories.length > 0) ? data.servantCategories : defaultCats);
         setServantsFruits(data.servantsFruits || []);
         setEvents(data.events || []);
         setVisits(data.visits || []);
@@ -282,12 +587,65 @@ export default function HistoryPage() {
   // Filtered Servants & Deacons Fruit
   const filteredServants = servantsFruits.filter(s => {
     if (servantRoleFilter === 'ALL') return true;
+    if (s.categoryKey) {
+      return s.categoryKey === servantRoleFilter;
+    }
     const role = (s.currentRole || '').toLowerCase();
     if (servantRoleFilter === 'DEACON') return role.includes('شماس') || role.includes('دياكون') || role.includes('deacon');
     if (servantRoleFilter === 'PRIEST_MONK') return role.includes('كاهن') || role.includes('قس') || role.includes('قمص') || role.includes('راهب') || role.includes('priest') || role.includes('monk');
     if (servantRoleFilter === 'CONSECRATED') return role.includes('مكرس') || role.includes('أمين') || role.includes('خادم') || role.includes('servant');
-    return true;
+    return false;
   });
+
+  // Reorder Popes
+  const handleMovePope = async (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= popes.length) return;
+    const newPopes = [...popes];
+    const temp = newPopes[index];
+    newPopes[index] = newPopes[targetIndex];
+    newPopes[targetIndex] = temp;
+    
+    const items = newPopes.map((p, idx) => ({ id: p.id, orderIndex: idx + 1 }));
+    setPopes(newPopes.map((p, idx) => ({ ...p, orderIndex: idx + 1 })));
+
+    try {
+      const token = localStorage.getItem('church-token');
+      await fetch(`${API_URL}/history/popes/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ items })
+      });
+      showToast(language === 'ar' ? 'تم تحديث ترتيب الآباء البطاركة بنجاح' : 'Popes order updated');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Reorder Bishops
+  const handleMoveBishop = async (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= bishops.length) return;
+    const newBishops = [...bishops];
+    const temp = newBishops[index];
+    newBishops[index] = newBishops[targetIndex];
+    newBishops[targetIndex] = temp;
+
+    const items = newBishops.map((b, idx) => ({ id: b.id, orderIndex: idx + 1 }));
+    setBishops(newBishops.map((b, idx) => ({ ...b, orderIndex: idx + 1 })));
+
+    try {
+      const token = localStorage.getItem('church-token');
+      await fetch(`${API_URL}/history/bishops/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ items })
+      });
+      showToast(language === 'ar' ? 'تم تحديث ترتيب الآباء الأساقفة بنجاح' : 'Bishops order updated');
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const handleChapterChange = (slug: string) => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -393,19 +751,6 @@ export default function HistoryPage() {
             <span>
               {language === 'ar' ? 'وضع إدارة وتوثيق التاريخ الكنسي' : 'Church Heritage Management Mode'}
             </span>
-            {pendingWarnings.length > 0 && (
-              <span style={{
-                background: 'rgba(230, 126, 34, 0.2)',
-                color: '#f39c12',
-                border: '1px solid #e67e22',
-                padding: '2px 8px',
-                borderRadius: '12px',
-                fontSize: '0.75rem',
-                marginRight: '6px'
-              }}>
-                ⚠️ {pendingWarnings.length} {language === 'ar' ? 'سجل يتطلب مراجعة' : 'needs review'}
-              </span>
-            )}
           </div>
           <div className={styles.adminActions}>
             <button 
@@ -427,6 +772,20 @@ export default function HistoryPage() {
                   title="تعديل مقدمة الصفحة وسنة التأسيس"
                 >
                   ⚙️ {language === 'ar' ? 'إعدادات المقدمة والتأسيس' : 'Settings'}
+                </button>
+                <button 
+                  className={styles.adminToggleBtn}
+                  onClick={() => setIsCreatingPope(true)}
+                >
+                  <Plus size={14} />
+                  <span>{language === 'ar' ? 'إضافة قداسة بابا' : 'Add Pope'}</span>
+                </button>
+                <button 
+                  className={styles.adminToggleBtn}
+                  onClick={() => setIsCreatingBishop(true)}
+                >
+                  <Plus size={14} />
+                  <span>{language === 'ar' ? 'إضافة حبر جليل' : 'Add Bishop'}</span>
                 </button>
                 <button 
                   className={styles.adminToggleBtn}
@@ -455,9 +814,9 @@ export default function HistoryPage() {
       >
         <div className={styles.heroOverlay}></div>
         <div className={styles.heroContent}>
-          {/* Confirmed Founding Year: 1955 */}
+          {/* Confirmed Founding Year: 1955 (Authentic Ecclesiastical Emblem) */}
           <div className={styles.foundingBadge}>
-            <Sparkles size={16} />
+            <span className={styles.foundingBadgeGlyph}>✝</span>
             <span>
               {language === 'ar' 
                 ? (settings?.subheadlineAr || `منذ عام ${settings?.foundingYear || 1955}`) 
@@ -467,6 +826,7 @@ export default function HistoryPage() {
               <button 
                 onClick={() => setEditSettingsOpen(true)}
                 style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0 }}
+                title="تعديل مقدمة الصفحة"
               >
                 ✏️
               </button>
@@ -490,13 +850,17 @@ export default function HistoryPage() {
               <BookOpen size={18} />
               <span>{t('history_begin')}</span>
             </a>
-            <a href="#timeline-section" className={styles.btnSecondary}>
-              <Calendar size={18} />
-              <span>{t('history_timeline')}</span>
+            <a href="#popes-section" className={styles.btnSecondary}>
+              <Shield size={18} />
+              <span>{language === 'ar' ? 'الآباء البطاركة والأساقفة' : 'Popes & Bishops'}</span>
             </a>
             <a href="#clergy-section" className={styles.btnSecondary}>
               <Users size={18} />
               <span>{t('history_clergy')}</span>
+            </a>
+            <a href="#timeline-section" className={styles.btnSecondary}>
+              <Calendar size={18} />
+              <span>{t('history_timeline')}</span>
             </a>
           </div>
 
@@ -514,10 +878,6 @@ export default function HistoryPage() {
               <div className={styles.statNumber}>{chapters.length}</div>
               <div className={styles.statLabel}>{language === 'ar' ? 'فصول الحكاية الكنسية' : 'Story Chapters'}</div>
             </div>
-            <div className={styles.statCard}>
-              <div className={styles.statNumber}>100%</div>
-              <div className={styles.statLabel}>{language === 'ar' ? 'أرشيف موثق ومستمر' : 'Documented Heritage'}</div>
-            </div>
           </div>
         </div>
       </section>
@@ -527,6 +887,10 @@ export default function HistoryPage() {
         <a href="#chapters-section" className={styles.stickyNavLink}>
           <BookOpen size={15} />
           <span>{language === 'ar' ? 'فصول الرواية' : 'Chapters'}</span>
+        </a>
+        <a href="#popes-section" className={styles.stickyNavLink}>
+          <Shield size={15} />
+          <span>{language === 'ar' ? 'الآباء البطاركة' : 'Popes'}</span>
         </a>
         <a href="#bishops-section" className={styles.stickyNavLink}>
           <Shield size={15} />
@@ -849,14 +1213,148 @@ export default function HistoryPage() {
                     {language === 'ar' ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
                   </button>
                 ) : (
-                  <a href="#bishops-section" className={styles.btnPrimary}>
-                    <span>{language === 'ar' ? 'متابعة إلى الآباء الأساقفة' : 'Proceed to Bishops'}</span>
+                  <a href="#popes-section" className={styles.btnPrimary}>
+                    <span>{language === 'ar' ? 'متابعة إلى الآباء البطاركة والأساقفة' : 'Proceed to Popes & Bishops'}</span>
                   </a>
                 )}
               </div>
             </div>
           </article>
         )}
+      </section>
+
+      {/* SECTION — POPES OF ALEXANDRIA (الآباء البطاركة المعاصرون) */}
+      <section id="popes-section" className={styles.contentSection}>
+        <div className={styles.sectionHeader}>
+          <div>
+            <h2 className={styles.sectionTitle}>
+              <Shield size={24} color="var(--accent-gold)" />
+              <span>{language === 'ar' ? 'الآباء البطاركة — باباوات الكنيسة القبطية الأرثوذكسية المعاصرون' : 'Popes of Alexandria & Patriarchs'}</span>
+            </h2>
+            <p className={styles.sectionSubtitle}>
+              {language === 'ar'
+                ? 'توثيق لمسيرة الرعاية الرسولية المباركة لقداسة باباوات الإسكندرية الذين قادوا الكنيسة في عصر تأسيس ونمو كنيستنا المباركة.'
+                : 'Honoring the Holy Patriarchs of the See of St. Mark during our church history.'}
+            </p>
+          </div>
+          {inlineEditMode && (
+            <button 
+              className={styles.btnPrimary}
+              onClick={() => setIsCreatingPope(true)}
+            >
+              <Plus size={16} />
+              <span>{language === 'ar' ? 'إضافة قداسة بابا' : 'Add Pope'}</span>
+            </button>
+          )}
+        </div>
+
+        <div className={styles.popesGrid}>
+          {popes.map((p, idx) => {
+            const isDeceased = Boolean(p.isDeceased);
+            return (
+              <div 
+                key={p.id} 
+                className={`${styles.popeCard} ${isDeceased ? styles.deceasedCard : styles.popeGoldenFrame}`}
+              >
+                {/* Admin Controls (Reordering & Edit / Delete) */}
+                {inlineEditMode && (
+                  <>
+                    <div className={styles.orderControls}>
+                      <button
+                        className={styles.orderBtn}
+                        onClick={() => handleMovePope(idx, 'up')}
+                        disabled={idx === 0}
+                        title="تحريك لأعلى"
+                      >
+                        <ArrowUp size={13} />
+                      </button>
+                      <button
+                        className={styles.orderBtn}
+                        onClick={() => handleMovePope(idx, 'down')}
+                        disabled={idx === popes.length - 1}
+                        title="تحريك لأسفل"
+                      >
+                        <ArrowDown size={13} />
+                      </button>
+                    </div>
+                    <div style={{ position: 'absolute', top: '12px', [language === 'ar' ? 'left' : 'right']: '12px', display: 'flex', gap: '6px', zIndex: 10 }}>
+                      <button
+                        onClick={() => setEditingPope(p)}
+                        style={{ background: 'rgba(226, 183, 20, 0.2)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                        title="تعديل"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+                      <button
+                        onClick={() => handleDeletePope(p.id)}
+                        style={{ background: 'rgba(231, 76, 60, 0.2)', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                        title="حذف"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {/* Avatar with Monochrome Filter if Deceased */}
+                <div 
+                  className={`${styles.popeAvatar} ${isDeceased ? styles.deceasedAvatar : ''}`}
+                  style={{
+                    backgroundImage: p.avatarUrl ? `url(${p.avatarUrl})` : undefined,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {!p.avatarUrl && <span style={{ fontSize: '3rem', color: isDeceased ? '#888' : 'var(--accent-gold)' }}>👑</span>}
+                </div>
+
+                {/* Deceased / Living Badge */}
+                {isDeceased ? (
+                  <div className={styles.deceasedMourningBadge}>
+                    <span>🖤 🎗️</span>
+                    <span>{language === 'ar' ? 'مثلث الرحمات — في فردوس النعيم 🕊️' : 'Departed to Paradise 🕊️'}</span>
+                  </div>
+                ) : (
+                  <div className={styles.activeLivingBadge}>
+                    <span>🕊️</span>
+                    <span>{language === 'ar' ? 'أطال الله لنا حياته ورعايته' : 'May the Lord preserve his life'}</span>
+                  </div>
+                )}
+
+                {/* Papal Number Badge */}
+                {p.papalNumber && (
+                  <span className={styles.popeNumberBadge}>
+                    {language === 'ar' ? `البابا رقم ${p.papalNumber}` : `Pope #${p.papalNumber}`}
+                  </span>
+                )}
+
+                {/* Title */}
+                <span className={styles.bishopTitleBadge} style={{ borderColor: isDeceased ? '#666' : undefined, color: isDeceased ? '#ccc' : undefined }}>
+                  {language === 'ar' ? p.titleAr : (p.titleEn || p.titleAr)}
+                </span>
+
+                {/* Pope Name */}
+                <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', margin: '4px 0 8px' }}>
+                  {language === 'ar' ? p.nameAr : (p.nameEn || p.nameAr)}
+                </h3>
+
+                {/* Papacy Period */}
+                <div className={styles.bishopPeriodBadge}>
+                  <span>📅 {language === 'ar' ? 'سنوات الحبرية:' : 'Papacy:'}</span>
+                  <b>{p.papacyPeriod}</b>
+                </div>
+
+                {/* Bio / Impact */}
+                {p.bioAr && (
+                  <p className={styles.bishopBioText}>
+                    {language === 'ar' ? p.bioAr : (p.bioEn || p.bioAr)}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       {/* SECTION — SUPERVISING BISHOPS (الآباء الأساقفة المسؤولون عن الكنيسة) */}
@@ -885,63 +1383,99 @@ export default function HistoryPage() {
         </div>
 
         <div className={styles.bishopsGrid}>
-          {bishops.map((b) => (
-            <div key={b.id} className={`${styles.bishopCard} ${styles.bishopGoldenFrame}`}>
-              {/* Admin Edit / Delete */}
-              {inlineEditMode && (
-                <div style={{ position: 'absolute', top: '12px', [language === 'ar' ? 'left' : 'right']: '12px', display: 'flex', gap: '6px', zIndex: 10 }}>
-                  <button
-                    onClick={() => setEditingBishop(b)}
-                    style={{ background: 'rgba(226, 183, 20, 0.2)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
-                  >
-                    <Edit3 size={13} />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteBishop(b.id)}
-                    style={{ background: 'rgba(231, 76, 60, 0.2)', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              )}
-
-              {/* Avatar with Golden Episcopal Frame */}
+          {bishops.map((b, idx) => {
+            const isDeceased = Boolean(b.isDeceased);
+            return (
               <div 
-                className={styles.bishopAvatar}
-                style={{
-                  backgroundImage: b.avatarUrl ? `url(${b.avatarUrl})` : undefined,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
+                key={b.id} 
+                className={`${styles.bishopCard} ${isDeceased ? styles.deceasedCard : styles.bishopGoldenFrame}`}
               >
-                {!b.avatarUrl && <span style={{ fontSize: '2.5rem', color: 'var(--accent-gold)' }}>👑</span>}
+                {/* Admin Controls (Reordering & Edit / Delete) */}
+                {inlineEditMode && (
+                  <>
+                    <div className={styles.orderControls}>
+                      <button
+                        className={styles.orderBtn}
+                        onClick={() => handleMoveBishop(idx, 'up')}
+                        disabled={idx === 0}
+                        title="تحريك لأعلى"
+                      >
+                        <ArrowUp size={13} />
+                      </button>
+                      <button
+                        className={styles.orderBtn}
+                        onClick={() => handleMoveBishop(idx, 'down')}
+                        disabled={idx === bishops.length - 1}
+                        title="تحريك لأسفل"
+                      >
+                        <ArrowDown size={13} />
+                      </button>
+                    </div>
+                    <div style={{ position: 'absolute', top: '12px', [language === 'ar' ? 'left' : 'right']: '12px', display: 'flex', gap: '6px', zIndex: 10 }}>
+                      <button
+                        onClick={() => setEditingBishop(b)}
+                        style={{ background: 'rgba(226, 183, 20, 0.2)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                        title="تعديل"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBishop(b.id)}
+                        style={{ background: 'rgba(231, 76, 60, 0.2)', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                        title="حذف"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {/* Avatar with Golden Episcopal Frame & Monochrome if Deceased */}
+                <div 
+                  className={`${styles.bishopAvatar} ${isDeceased ? styles.deceasedAvatar : ''}`}
+                  style={{
+                    backgroundImage: b.avatarUrl ? `url(${b.avatarUrl})` : undefined,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {!b.avatarUrl && <span style={{ fontSize: '2.5rem', color: isDeceased ? '#888' : 'var(--accent-gold)' }}>👑</span>}
+                </div>
+
+                {/* Deceased Mourning Badge if Bishop is dead */}
+                {isDeceased && (
+                  <div className={styles.deceasedMourningBadge}>
+                    <span>🖤 🎗️</span>
+                    <span>{language === 'ar' ? 'متنيح في الرب 🕊️' : 'Departed in Christ 🕊️'}</span>
+                  </div>
+                )}
+
+                {/* Title Badge */}
+                <span className={styles.bishopTitleBadge} style={{ borderColor: isDeceased ? '#666' : undefined, color: isDeceased ? '#ccc' : undefined }}>
+                  {language === 'ar' ? b.titleAr : (b.titleEn || b.titleAr)}
+                </span>
+
+                {/* Bishop Name */}
+                <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', marginBottom: '6px' }}>
+                  {language === 'ar' ? b.nameAr : (b.nameEn || b.nameAr)}
+                </h3>
+
+                {/* Episcopal Pastoral Period Badge */}
+                <div className={styles.bishopPeriodBadge}>
+                  <span>🕊️ {language === 'ar' ? 'فترة الرعاية الكنسية:' : 'Period:'}</span>
+                  <b>{b.episcopalPeriod}</b>
+                </div>
+
+                {/* Biography */}
+                {b.bioAr && (
+                  <p className={styles.bishopBioText}>
+                    {language === 'ar' ? b.bioAr : (b.bioEn || b.bioAr)}
+                  </p>
+                )}
               </div>
-
-              {/* Title Badge */}
-              <span className={styles.bishopTitleBadge}>
-                {language === 'ar' ? b.titleAr : (b.titleEn || b.titleAr)}
-              </span>
-
-              {/* Bishop Name */}
-              <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', marginBottom: '6px' }}>
-                {language === 'ar' ? b.nameAr : (b.nameEn || b.nameAr)}
-              </h3>
-
-              {/* Episcopal Pastoral Period Badge */}
-              <div className={styles.bishopPeriodBadge}>
-                <span>🕊️ {language === 'ar' ? 'فترة الرعاية الكنسية:' : 'Period:'}</span>
-                <b>{b.episcopalPeriod}</b>
-              </div>
-
-              {/* Biography */}
-              {b.bioAr && (
-                <p className={styles.bishopBioText}>
-                  {language === 'ar' ? b.bioAr : (b.bioEn || b.bioAr)}
-                </p>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -1161,7 +1695,7 @@ export default function HistoryPage() {
           )}
         </div>
 
-        {/* Servants Role Filter Track */}
+        {/* Servants Dynamic Role Filter Track */}
         <div className={styles.servantsFilterRow}>
           <button 
             className={`${styles.servantFilterChip} ${servantRoleFilter === 'ALL' ? styles.activeServantFilter : ''}`}
@@ -1169,24 +1703,45 @@ export default function HistoryPage() {
           >
             {language === 'ar' ? 'الكل' : 'All'}
           </button>
-          <button 
-            className={`${styles.servantFilterChip} ${servantRoleFilter === 'DEACON' ? styles.activeServantFilter : ''}`}
-            onClick={() => setServantRoleFilter('DEACON')}
-          >
-            {language === 'ar' ? 'الشمامسة المباركون' : 'Deacons'}
-          </button>
-          <button 
-            className={`${styles.servantFilterChip} ${servantRoleFilter === 'PRIEST_MONK' ? styles.activeServantFilter : ''}`}
-            onClick={() => setServantRoleFilter('PRIEST_MONK')}
-          >
-            {language === 'ar' ? 'آباء كهنة ورهبان' : 'Priests & Monks'}
-          </button>
-          <button 
-            className={`${styles.servantFilterChip} ${servantRoleFilter === 'CONSECRATED' ? styles.activeServantFilter : ''}`}
-            onClick={() => setServantRoleFilter('CONSECRATED')}
-          >
-            {language === 'ar' ? 'خدام مكرسون وأمناء خدمة' : 'Consecrated Servants'}
-          </button>
+
+          {servantCategories.map((cat) => (
+            <div key={cat.id} style={{ display: 'inline-flex', alignItems: 'center', position: 'relative' }}>
+              <button 
+                className={`${styles.servantFilterChip} ${servantRoleFilter === cat.key ? styles.activeServantFilter : ''}`}
+                onClick={() => setServantRoleFilter(cat.key)}
+              >
+                {language === 'ar' ? cat.nameAr : (cat.nameEn || cat.nameAr)}
+              </button>
+              {inlineEditMode && (
+                <div style={{ display: 'flex', gap: '2px', marginRight: '4px', marginLeft: '4px' }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditingCategory(cat); }}
+                    style={{ background: 'rgba(226, 183, 20, 0.25)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '4px', padding: '2px 5px', cursor: 'pointer', fontSize: '10px' }}
+                    title="تعديل اسم التصنيف"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat.id); }}
+                    style={{ background: 'rgba(231, 76, 60, 0.25)', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '4px', padding: '2px 5px', cursor: 'pointer', fontSize: '10px' }}
+                    title="حذف التصنيف"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {inlineEditMode && (
+            <button
+              className={styles.servantFilterChip}
+              onClick={() => setIsCreatingCategory(true)}
+              style={{ borderStyle: 'dashed', borderColor: 'var(--accent-gold)', color: 'var(--accent-gold)' }}
+            >
+              + {language === 'ar' ? 'إضافة تصنيف جديد' : 'Add Category'}
+            </button>
+          )}
         </div>
 
         {/* Servants Grid */}
@@ -1381,35 +1936,78 @@ export default function HistoryPage() {
           </div>
         ) : (
           <div className={styles.clergyGrid}>
-            {visits.map(v => (
-              <div key={v.id} className={styles.clergyCard} style={{ textAlign: 'start', alignItems: 'stretch' }}>
-                <span className={styles.clergyRoleBadge} style={{ alignSelf: 'flex-start' }}>
-                  {language === 'ar' ? v.ecclesiasticalTitleAr : (v.ecclesiasticalTitleEn || v.ecclesiasticalTitleAr)}
-                </span>
-                <h3 className={styles.clergyEcclesiasticalName} style={{ fontSize: '1.25rem' }}>
-                  {language === 'ar' ? v.visitorNameAr : (v.visitorNameEn || v.visitorNameAr)}
-                </h3>
-                <h4 style={{ fontSize: '1rem', color: 'var(--accent-gold)', marginBottom: '8px' }}>
-                  {language === 'ar' ? v.visitTitleAr : (v.visitTitleEn || v.visitTitleAr)}
-                </h4>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                  📅 {v.visitDate} {v.locationAr && `📍 ${v.locationAr}`}
-                </div>
-                <p style={{ fontSize: '0.9rem', lineHeight: 1.7, color: 'var(--text-primary)' }}>
-                  {language === 'ar' ? v.narrativeAr : (v.narrativeEn || v.narrativeAr)}
-                </p>
-                {inlineEditMode && (
-                  <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
-                    <button onClick={() => setEditingVisit(v)} className={styles.btnSecondary} style={{ padding: '4px 10px', fontSize: '0.78rem' }}>
-                      <Edit3 size={13} /> {language === 'ar' ? 'تعديل' : 'Edit'}
-                    </button>
-                    <button onClick={() => handleDeleteVisit(v.id)} className={styles.btnSecondary} style={{ padding: '4px 10px', fontSize: '0.78rem', color: '#e74c3c', borderColor: '#e74c3c' }}>
-                      <Trash2 size={13} /> {language === 'ar' ? 'حذف' : 'Delete'}
-                    </button>
+            {visits.map(v => {
+              let visitGallery: string[] = [];
+              try {
+                if (v.galleryJson) visitGallery = JSON.parse(v.galleryJson);
+              } catch (e) {}
+
+              return (
+                <div key={v.id} className={styles.clergyCard} style={{ textAlign: 'start', alignItems: 'stretch' }}>
+                  {v.mainImageUrl && (
+                    <div 
+                      onClick={() => setLightboxImage({ url: v.mainImageUrl!, title: v.visitTitleAr, caption: v.narrativeAr })}
+                      style={{
+                        height: '180px',
+                        backgroundImage: `url(${v.mainImageUrl})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        borderRadius: '10px',
+                        marginBottom: '12px',
+                        cursor: 'pointer'
+                      }}
+                    />
+                  )}
+
+                  <span className={styles.clergyRoleBadge} style={{ alignSelf: 'flex-start' }}>
+                    {language === 'ar' ? v.ecclesiasticalTitleAr : (v.ecclesiasticalTitleEn || v.ecclesiasticalTitleAr)}
+                  </span>
+                  <h3 className={styles.clergyEcclesiasticalName} style={{ fontSize: '1.25rem' }}>
+                    {language === 'ar' ? v.visitorNameAr : (v.visitorNameEn || v.visitorNameAr)}
+                  </h3>
+                  <h4 style={{ fontSize: '1rem', color: 'var(--accent-gold)', marginBottom: '8px' }}>
+                    {language === 'ar' ? v.visitTitleAr : (v.visitTitleEn || v.visitTitleAr)}
+                  </h4>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                    📅 {v.visitDate} {v.locationAr && `📍 ${v.locationAr}`}
                   </div>
-                )}
-              </div>
-            ))}
+                  <p style={{ fontSize: '0.9rem', lineHeight: 1.7, color: 'var(--text-primary)' }}>
+                    {language === 'ar' ? v.narrativeAr : (v.narrativeEn || v.narrativeAr)}
+                  </p>
+
+                  {/* Multi-Photo Gallery for Visit */}
+                  {visitGallery.length > 0 && (
+                    <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-gold)', marginBottom: '6px' }}>
+                        📸 {language === 'ar' ? `صور توثيقية للزيارة (${visitGallery.length} صور):` : `Visit Photos (${visitGallery.length}):`}
+                      </div>
+                      <div className={styles.photoGalleryGrid}>
+                        {visitGallery.map((img, i) => (
+                          <img
+                            key={i}
+                            src={img}
+                            alt=""
+                            className={styles.photoThumb}
+                            onClick={() => setLightboxImage({ url: img, title: `${v.visitTitleAr} - صورة ${i + 1}` })}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {inlineEditMode && (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                      <button onClick={() => setEditingVisit(v)} className={styles.btnSecondary} style={{ padding: '4px 10px', fontSize: '0.78rem' }}>
+                        <Edit3 size={13} /> {language === 'ar' ? 'تعديل' : 'Edit'}
+                      </button>
+                      <button onClick={() => handleDeleteVisit(v.id)} className={styles.btnSecondary} style={{ padding: '4px 10px', fontSize: '0.78rem', color: '#e74c3c', borderColor: '#e74c3c' }}>
+                        <Trash2 size={13} /> {language === 'ar' ? 'حذف' : 'Delete'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
@@ -1424,8 +2022,8 @@ export default function HistoryPage() {
             </h2>
             <p className={styles.sectionSubtitle}>
               {language === 'ar'
-                ? 'معرض الصور الأرشيفية النادرة، وثائق التأسيس، والاحتفالات الكنسية عبر العقود.'
-                : 'Archival gallery of historic photographs, foundational documents, and ceremonies.'}
+                ? 'معرض الصور الأرشيفية النادرة، الألبومات التاريخية، وثائق التأسيس، والاحتفالات الكنسية عبر العقود.'
+                : 'Archival gallery of historic photographs, albums, foundational documents, and ceremonies.'}
             </p>
           </div>
           {inlineEditMode && (
@@ -1434,7 +2032,7 @@ export default function HistoryPage() {
               onClick={() => setIsCreatingMedia(true)}
             >
               <Plus size={16} />
-              <span>{language === 'ar' ? 'رفع وثيقة / صورة للأرشيف' : 'Add Media Item'}</span>
+              <span>{language === 'ar' ? 'رفع وثيقة أو ألبوم صور للأرشيف' : 'Add Photo / Album'}</span>
             </button>
           )}
         </div>
@@ -1442,55 +2040,102 @@ export default function HistoryPage() {
         {mediaItems.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px dashed var(--border-color)' }}>
             <p style={{ fontSize: '1rem' }}>
-              🖼️ {language === 'ar' ? 'الأرشيف البصري جاهز لاستقبال الصور والوثائق التاريخية القديمة.' : 'Visual archive ready for historical photographs.'}
+              🖼️ {language === 'ar' ? 'الأرشيف البصري جاهز لاستقبال الصور والوثائق والألبومات التاريخية القديمة.' : 'Visual archive ready for historical photographs.'}
             </p>
             {inlineEditMode && (
               <button className={styles.btnPrimary} onClick={() => setIsCreatingMedia(true)} style={{ marginTop: '12px' }}>
-                + {language === 'ar' ? 'رفع أول صورة أرشيفية' : 'Upload First Image'}
+                + {language === 'ar' ? 'رفع أول صورة أو ألبوم' : 'Upload First Image / Album'}
               </button>
             )}
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px' }}>
-            {mediaItems.map(item => (
-              <div 
-                key={item.id}
-                style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '10px',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  transition: 'all 0.25s ease'
-                }}
-                onClick={() => setLightboxImage({ url: item.url, title: item.titleAr, caption: item.captionAr || undefined })}
-              >
-                <div style={{ height: '180px', backgroundImage: `url(${item.url})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundColor: '#111' }} />
-                <div style={{ padding: '12px' }}>
-                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', marginBottom: '4px' }}>
-                    {language === 'ar' ? item.titleAr : (item.titleEn || item.titleAr)}
-                  </h4>
-                  {item.archivalCredit && (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)' }}>
-                      📷 {item.archivalCredit}
-                    </span>
-                  )}
-                  {inlineEditMode && (
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }} onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => setEditingMedia(item)} className={styles.btnSecondary} style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
-                        <Edit3 size={12} /> {language === 'ar' ? 'تعديل' : 'Edit'}
-                      </button>
-                      <button onClick={() => handleDeleteMedia(item.id)} className={styles.btnSecondary} style={{ padding: '2px 8px', fontSize: '0.75rem', color: '#e74c3c' }}>
-                        <Trash2 size={12} /> {language === 'ar' ? 'حذف' : 'Delete'}
-                      </button>
-                    </div>
-                  )}
+            {mediaItems.map(item => {
+              let albumPhotos: string[] = [];
+              try {
+                if (item.galleryJson) albumPhotos = JSON.parse(item.galleryJson);
+              } catch (e) {}
+              const isAlbum = albumPhotos.length > 1;
+
+              return (
+                <div 
+                  key={item.id}
+                  style={{
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    transition: 'all 0.25s ease',
+                    position: 'relative'
+                  }}
+                  onClick={() => {
+                    if (isAlbum) {
+                      setAlbumModal({ title: item.titleAr, images: albumPhotos });
+                    } else {
+                      setLightboxImage({ url: item.url, title: item.titleAr, caption: item.captionAr || undefined });
+                    }
+                  }}
+                >
+                  <div style={{ height: '180px', backgroundImage: `url(${item.url})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundColor: '#111', position: 'relative' }}>
+                    {isAlbum && (
+                      <div className={styles.albumBadge}>
+                        <span>📷</span>
+                        <span>{language === 'ar' ? `ألبوم (${albumPhotos.length} صور)` : `Album (${albumPhotos.length})`}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ padding: '12px' }}>
+                    <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', marginBottom: '4px' }}>
+                      {language === 'ar' ? item.titleAr : (item.titleEn || item.titleAr)}
+                    </h4>
+                    {item.archivalCredit && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)' }}>
+                        📷 {item.archivalCredit}
+                      </span>
+                    )}
+                    {inlineEditMode && (
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }} onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => setEditingMedia(item)} className={styles.btnSecondary} style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
+                          <Edit3 size={12} /> {language === 'ar' ? 'تعديل' : 'Edit'}
+                        </button>
+                        <button onClick={() => handleDeleteMedia(item.id)} className={styles.btnSecondary} style={{ padding: '2px 8px', fontSize: '0.75rem', color: '#e74c3c' }}>
+                          <Trash2 size={12} /> {language === 'ar' ? 'حذف' : 'Delete'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
+
+      {/* ALBUM VIEWER MODAL (Group Images under one title) */}
+      {albumModal && (
+        <div className={styles.modalOverlay} onClick={() => setAlbumModal(null)}>
+          <div className={styles.modalContent} style={{ maxWidth: '850px' }} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>
+                📷 {albumModal.title} ({albumModal.images.length} صور)
+              </h3>
+              <button className={styles.closeBtn} onClick={() => setAlbumModal(null)}>✕</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '14px', maxHeight: '65vh', overflowY: 'auto', padding: '10px 0' }}>
+              {albumModal.images.map((img, i) => (
+                <div 
+                  key={i} 
+                  style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', background: '#000' }}
+                  onClick={() => setLightboxImage({ url: img, title: `${albumModal.title} - صورة ${i + 1}` })}
+                >
+                  <img src={img} alt="" style={{ width: '100%', height: '150px', objectFit: 'cover', display: 'block' }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* LIGHTBOX MODAL */}
       {lightboxImage && (
@@ -1678,6 +2323,34 @@ export default function HistoryPage() {
         />
       )}
 
+      {/* CREATE / EDIT POPE MODAL */}
+      {(editingPope || isCreatingPope) && (
+        <PopeFormModal 
+          pope={editingPope}
+          onClose={() => { setEditingPope(null); setIsCreatingPope(false); }}
+          onSaved={() => {
+            setEditingPope(null);
+            setIsCreatingPope(false);
+            loadHistoryData();
+            showToast(language === 'ar' ? 'تم حفظ بيانات قداسة البابا بنجاح' : 'Pope record saved');
+          }}
+        />
+      )}
+
+      {/* CREATE / EDIT SERVANT CATEGORY MODAL */}
+      {(editingCategory || isCreatingCategory) && (
+        <ServantCategoryModal 
+          category={editingCategory}
+          onClose={() => { setEditingCategory(null); setIsCreatingCategory(false); }}
+          onSaved={() => {
+            setEditingCategory(null);
+            setIsCreatingCategory(false);
+            loadHistoryData();
+            showToast(language === 'ar' ? 'تم حفظ تصنيف الخدمة بنجاح' : 'Servant category saved');
+          }}
+        />
+      )}
+
       {/* 4. CREATE / EDIT BISHOP MODAL */}
       {(editingBishop || isCreatingBishop) && (
         <BishopFormModal 
@@ -1696,6 +2369,7 @@ export default function HistoryPage() {
       {(editingServantFruit || isCreatingServantFruit) && (
         <ServantFruitFormModal 
           servantFruit={editingServantFruit}
+          categories={servantCategories}
           onClose={() => { setEditingServantFruit(null); setIsCreatingServantFruit(false); }}
           onSaved={() => {
             setEditingServantFruit(null);
@@ -1864,6 +2538,40 @@ export default function HistoryPage() {
       });
       if (res.ok) {
         showToast(language === 'ar' ? 'تم حذف الوثيقة بنجاح' : 'Media deleted');
+        loadHistoryData();
+      }
+    } catch (e) {
+      alert('Error deleting');
+    }
+  }
+
+  async function handleDeletePope(id: string) {
+    if (!confirm(language === 'ar' ? 'هل أنت متأكد من حذف سجل قداسة البابا؟' : 'Delete pope record?')) return;
+    try {
+      const token = localStorage.getItem('church-token');
+      const res = await fetch(`${API_URL}/history/popes/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        showToast(language === 'ar' ? 'تم حذف سجل قداسة البابا بنجاح' : 'Pope deleted');
+        loadHistoryData();
+      }
+    } catch (e) {
+      alert('Error deleting');
+    }
+  }
+
+  async function handleDeleteCategory(id: string) {
+    if (!confirm(language === 'ar' ? 'هل أنت متأكد من حذف هذا التصنيف؟' : 'Delete category?')) return;
+    try {
+      const token = localStorage.getItem('church-token');
+      const res = await fetch(`${API_URL}/history/servant-categories/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        showToast(language === 'ar' ? 'تم حذف التصنيف بنجاح' : 'Category deleted');
         loadHistoryData();
       }
     } catch (e) {
@@ -2232,17 +2940,12 @@ function ClergyFormModal({ clergy, onClose, onSaved }: { clergy: HistoryClergyRe
           </div>
 
           {/* AVATAR IMAGE */}
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>صورة الأب الكاهن (رفع صورة من الجهاز أو رابط):</label>
-            <input type="file" accept="image/*" onChange={handleImageFile} style={{ marginBottom: '8px', display: 'block', fontSize: '0.85rem' }} />
-            <input 
-              type="text" 
-              className={styles.formInput} 
-              placeholder="أو ضع رابط مباشر للصورة https://..."
-              value={avatarUrl} 
-              onChange={(e) => setAvatarUrl(e.target.value)} 
-            />
-          </div>
+          <ImageUploadField 
+            label="صورة الأب الكاهن (رفع صورة من جهازك أو وضع رابط):"
+            value={avatarUrl}
+            onChange={setAvatarUrl}
+            fallbackIcon="☦️"
+          />
 
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>نبذة السيرة والخدمة (عربي):</label>
@@ -2464,6 +3167,14 @@ function VisitFormModal({ visit, onClose, onSaved }: { visit: HistoryVisit | nul
   const [visitDate, setVisitDate] = useState(visit?.visitDate || '');
   const [occasionAr, setOccasionAr] = useState(visit?.occasionAr || '');
   const [narrativeAr, setNarrativeAr] = useState(visit?.narrativeAr || '');
+  const [mainImageUrl, setMainImageUrl] = useState(visit?.mainImageUrl || '');
+  const [gallery, setGallery] = useState<string[]>(() => {
+    try {
+      return visit?.galleryJson ? JSON.parse(visit.galleryJson) : [];
+    } catch (e) {
+      return [];
+    }
+  });
   const [saving, setSaving] = useState(false);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -2483,7 +3194,9 @@ function VisitFormModal({ visit, onClose, onSaved }: { visit: HistoryVisit | nul
           visitTitleAr,
           visitDate,
           occasionAr,
-          narrativeAr
+          narrativeAr,
+          mainImageUrl: mainImageUrl.trim() || null,
+          galleryJson: gallery.length > 0 ? JSON.stringify(gallery) : null
         })
       });
 
@@ -2522,6 +3235,23 @@ function VisitFormModal({ visit, onClose, onSaved }: { visit: HistoryVisit | nul
             <label className={styles.formLabel}>عنوان وموضوع الزيارة:</label>
             <input type="text" className={styles.formInput} placeholder="تدشين المعمودية، زيارة رعوية..." value={visitTitleAr} onChange={(e) => setVisitTitleAr(e.target.value)} required />
           </div>
+
+          {/* Main Cover Image (ImageUploadField matching priests) */}
+          <ImageUploadField
+            label="الصورة الرئيسية للزيارة (صورة الغلاف):"
+            value={mainImageUrl}
+            onChange={setMainImageUrl}
+            isCircular={false}
+            fallbackIcon="🏛️"
+          />
+
+          {/* Multi-Image Gallery for Visit */}
+          <MultiImageGalleryField
+            label="معرض صور الزيارة التاريخية (يمكن اختيار عدة صور معاً من جهازك):"
+            images={gallery}
+            onChange={setGallery}
+          />
+
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>تفاصيل ووقائع الزيارة:</label>
             <textarea rows={4} className={styles.formTextarea} value={narrativeAr} onChange={(e) => setNarrativeAr(e.target.value)} required />
@@ -2545,36 +3275,50 @@ function MediaFormModal({ media, onClose, onSaved }: { media: HistoryMediaItem |
   const [captionAr, setCaptionAr] = useState(media?.captionAr || '');
   const [archivalCredit, setArchivalCredit] = useState(media?.archivalCredit || '');
   const [category, setCategory] = useState(media?.category || 'CHURCH_BUILDING');
+  const [isAlbum, setIsAlbum] = useState<boolean>(() => {
+    try {
+      if (media?.galleryJson) {
+        const parsed = JSON.parse(media.galleryJson);
+        return Array.isArray(parsed) && parsed.length > 0;
+      }
+    } catch (e) {}
+    return false;
+  });
+  const [albumImages, setAlbumImages] = useState<string[]>(() => {
+    try {
+      if (media?.galleryJson) {
+        return JSON.parse(media.galleryJson);
+      }
+    } catch (e) {}
+    return [];
+  });
   const [saving, setSaving] = useState(false);
-
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!url.trim() && (!albumImages || albumImages.length === 0)) {
+      alert('يرجى اختيار صورة رئيسية أو إضافة صور للألبوم');
+      return;
+    }
     setSaving(true);
     try {
       const token = localStorage.getItem('church-token');
       const apiEndpoint = isEdit ? `${API_URL}/history/media/${media!.id}` : `${API_URL}/history/media`;
       const method = isEdit ? 'PUT' : 'POST';
 
+      const finalCoverUrl = url.trim() || (albumImages.length > 0 ? albumImages[0] : '');
+      const finalGalleryJson = isAlbum && albumImages.length > 0 ? JSON.stringify(albumImages) : null;
+
       const res = await fetch(apiEndpoint, {
         method,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          url,
+          url: finalCoverUrl,
           titleAr,
           captionAr,
           archivalCredit,
-          category
+          category,
+          galleryJson: finalGalleryJson
         })
       });
 
@@ -2591,19 +3335,50 @@ function MediaFormModal({ media, onClose, onSaved }: { media: HistoryMediaItem |
     <div className={styles.modalOverlay} onClick={onClose}>
       <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalHeader}>
-          <h3 className={styles.modalTitle}>{isEdit ? '✏️ تعديل الوثيقة الأرشيفية' : '➕ إضافة صورة أو وثيقة للأرشيف'}</h3>
+          <h3 className={styles.modalTitle}>{isEdit ? '✏️ تعديل الوثيقة / الألبوم الأرشيفي' : '➕ إضافة صورة أو ألبوم صور للأرشيف'}</h3>
           <button className={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSave}>
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>عنوان الوثيقة / الصورة (عربي):</label>
-            <input type="text" className={styles.formInput} value={titleAr} onChange={(e) => setTitleAr(e.target.value)} required />
+            <label className={styles.formLabel}>عنوان الوثيقة / الألبوم (عربي):</label>
+            <input type="text" className={styles.formInput} placeholder="مثال: ألبوم تدشين مذابح الكنيسة..." value={titleAr} onChange={(e) => setTitleAr(e.target.value)} required />
           </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>الملف أو الصورة (رفع من جهازك أو ضع رابط):</label>
-            <input type="file" accept="image/*" onChange={handleFile} style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem' }} />
-            <input type="text" className={styles.formInput} placeholder="أو رابط https://..." value={url} onChange={(e) => setUrl(e.target.value)} required />
+
+          {/* Single Photo vs Photo Album Toggle */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '12px', marginBottom: '1.25rem' }}>
+            <label className={styles.formCheckboxLabel}>
+              <input 
+                type="checkbox" 
+                checked={isAlbum} 
+                onChange={(e) => setIsAlbum(e.target.checked)} 
+              />
+              <span style={{ fontWeight: 700, color: 'var(--accent-gold)' }}>
+                📷 جعل هذا السجل ألبوم صور مجمعة تحت عنوان واحد
+              </span>
+            </label>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px', paddingRight: '24px' }}>
+              يتيح لك تجميع عدة صور في ألبوم واحد يتصفحه الزوار بسهولة مع بطاقة غلاف وعداد للصور.
+            </div>
           </div>
+
+          {/* Main Cover Image */}
+          <ImageUploadField
+            label={isAlbum ? 'صورة غلاف الألبوم (أو اتركها فارغة لاستخدام أول صورة):' : 'الصورة / الوثيقة الأرشيفية:'}
+            value={url}
+            onChange={setUrl}
+            isCircular={false}
+            fallbackIcon="🖼️"
+          />
+
+          {/* Multi-Photo Gallery if Album */}
+          {isAlbum && (
+            <MultiImageGalleryField
+              label="صور الألبوم الأرشيفي (يمكن اختيار عدة صور معاً من جهازك):"
+              images={albumImages}
+              onChange={setAlbumImages}
+            />
+          )}
+
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>القسم الأرشيفي:</label>
             <select className={styles.formSelect} value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -2634,6 +3409,123 @@ function MediaFormModal({ media, onClose, onSaved }: { media: HistoryMediaItem |
   );
 }
 
+function PopeFormModal({ pope, onClose, onSaved }: { pope: HistoryPopeRecord | null; onClose: () => void; onSaved: () => void }) {
+  const isEdit = Boolean(pope);
+  const [nameAr, setNameAr] = useState(pope?.nameAr || '');
+  const [nameEn, setNameEn] = useState(pope?.nameEn || '');
+  const [titleAr, setTitleAr] = useState(pope?.titleAr || 'بابا الإسكندرية وبطريرك الكرازة المرقسية');
+  const [titleEn, setTitleEn] = useState(pope?.titleEn || 'Pope of Alexandria and Patriarch of All Africa');
+  const [papacyPeriod, setPapacyPeriod] = useState(pope?.papacyPeriod || '');
+  const [papalNumber, setPapalNumber] = useState<number | ''>(pope?.papalNumber || '');
+  const [isDeceased, setIsDeceased] = useState<boolean>(pope ? Boolean(pope.isDeceased) : true);
+  const [avatarUrl, setAvatarUrl] = useState(pope?.avatarUrl || '');
+  const [bioAr, setBioAr] = useState(pope?.bioAr || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('church-token');
+      const url = isEdit ? `${API_URL}/history/popes/${pope!.id}` : `${API_URL}/history/popes`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          nameAr,
+          nameEn: nameEn.trim() || null,
+          titleAr,
+          titleEn: titleEn.trim() || null,
+          papacyPeriod,
+          papalNumber: papalNumber ? Number(papalNumber) : null,
+          isDeceased,
+          avatarUrl: avatarUrl.trim() || null,
+          bioAr: bioAr.trim() || null
+        })
+      });
+
+      if (res.ok) onSaved();
+      else alert('Failed to save pope record');
+    } catch (err) {
+      alert('Error updating pope record');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <h3 className={styles.modalTitle}>
+            {isEdit ? '👑 تعديل بيانات قداسة البابا' : '👑 إضافة بطريرك (بابا الإسكندرية)'}
+          </h3>
+          <button className={styles.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSave}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>اللقب الكنسي (عربي):</label>
+              <input type="text" className={styles.formInput} value={titleAr} onChange={(e) => setTitleAr(e.target.value)} required />
+            </div>
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>اسم قداسة البابا (عربي):</label>
+              <input type="text" className={styles.formInput} placeholder="مثال: البابا شنوده الثالث" value={nameAr} onChange={(e) => setNameAr(e.target.value)} required />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>سنوات الحبرية (Papacy Period):</label>
+              <input type="text" className={styles.formInput} placeholder="مثال: 1971 - 2012 أو 2012 - حتى الآن" value={papacyPeriod} onChange={(e) => setPapacyPeriod(e.target.value)} required />
+            </div>
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>رقم البابا في تاريخ الكرازة (اختياري):</label>
+              <input type="number" className={styles.formInput} placeholder="مثال: 116، 117، 118" value={papalNumber} onChange={(e) => setPapalNumber(e.target.value ? Number(e.target.value) : '')} />
+            </div>
+          </div>
+
+          {/* Living vs Deceased Selection */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '12px', marginBottom: '1.25rem' }}>
+            <label className={styles.formCheckboxLabel}>
+              <input 
+                type="checkbox" 
+                checked={isDeceased} 
+                onChange={(e) => setIsDeceased(e.target.checked)} 
+              />
+              <span style={{ fontWeight: 700, color: isDeceased ? '#ccc' : 'var(--accent-gold)' }}>
+                {isDeceased ? '🖤 مثلث الرحمات — متنيح في الرب 🕊️ (يعرض بالأبيض والأسود مع شارة حداد)' : '🕊️ أطال الله لنا حياته ورعايته بالصحة والبركة (حي)'}
+              </span>
+            </label>
+          </div>
+
+          {/* Image Upload Field (Normal Priests pattern) */}
+          <ImageUploadField
+            label="صورة قداسة البابا (رفع صورة من جهازك أو وضع رابط):"
+            value={avatarUrl}
+            onChange={setAvatarUrl}
+            fallbackIcon="👑"
+          />
+
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>نبذة الرعاية والأثر الروحي والبابوي:</label>
+            <textarea rows={3} className={styles.formTextarea} value={bioAr} onChange={(e) => setBioAr(e.target.value)} />
+          </div>
+
+          <div className={styles.modalActions}>
+            <button type="button" className={styles.btnSecondary} onClick={onClose}>إلغاء</button>
+            <button type="submit" className={styles.btnPrimary} disabled={saving}>
+              {saving ? 'جاري الحفظ...' : 'حفظ سجل قداسة البابا'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function BishopFormModal({ bishop, onClose, onSaved }: { bishop: HistoryBishopRecord | null; onClose: () => void; onSaved: () => void }) {
   const isEdit = Boolean(bishop);
   const [nameAr, setNameAr] = useState(bishop?.nameAr || '');
@@ -2641,18 +3533,10 @@ function BishopFormModal({ bishop, onClose, onSaved }: { bishop: HistoryBishopRe
   const [titleAr, setTitleAr] = useState(bishop?.titleAr || 'الأسقف العام');
   const [titleEn, setTitleEn] = useState(bishop?.titleEn || 'General Bishop');
   const [episcopalPeriod, setEpiscopalPeriod] = useState(bishop?.episcopalPeriod || '');
+  const [isDeceased, setIsDeceased] = useState<boolean>(bishop ? Boolean(bishop.isDeceased) : false);
   const [avatarUrl, setAvatarUrl] = useState(bishop?.avatarUrl || '');
   const [bioAr, setBioAr] = useState(bishop?.bioAr || '');
   const [saving, setSaving] = useState(false);
-
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setAvatarUrl(reader.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2667,12 +3551,13 @@ function BishopFormModal({ bishop, onClose, onSaved }: { bishop: HistoryBishopRe
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           nameAr,
-          nameEn,
+          nameEn: nameEn.trim() || null,
           titleAr,
-          titleEn,
+          titleEn: titleEn.trim() || null,
           episcopalPeriod,
+          isDeceased,
           avatarUrl: avatarUrl.trim() || null,
-          bioAr
+          bioAr: bioAr.trim() || null
         })
       });
 
@@ -2711,11 +3596,27 @@ function BishopFormModal({ bishop, onClose, onSaved }: { bishop: HistoryBishopRe
             <input type="text" className={styles.formInput} placeholder="مثال: 2021 - حتى الآن أو 2001 - 2021" value={episcopalPeriod} onChange={(e) => setEpiscopalPeriod(e.target.value)} required />
           </div>
 
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>الصورة الشخصية (رفع أو رابط):</label>
-            <input type="file" accept="image/*" onChange={handleFile} style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem' }} />
-            <input type="text" className={styles.formInput} placeholder="أو رابط https://..." value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} />
+          {/* Living vs Deceased Selection */}
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '12px', marginBottom: '1.25rem' }}>
+            <label className={styles.formCheckboxLabel}>
+              <input 
+                type="checkbox" 
+                checked={isDeceased} 
+                onChange={(e) => setIsDeceased(e.target.checked)} 
+              />
+              <span style={{ fontWeight: 700, color: isDeceased ? '#ccc' : 'var(--accent-gold)' }}>
+                {isDeceased ? '🖤 حبر جليل متنيح في الرب 🕊️ (يعرض بالأبيض والأسود مع شارة حداد)' : '🕊️ رعاية حالية مباركة ومستمرة بالصحة والسلام'}
+              </span>
+            </label>
           </div>
+
+          {/* Image Upload Field (Normal Priests pattern) */}
+          <ImageUploadField
+            label="صورة الحبر الجليل (رفع صورة من جهازك أو وضع رابط):"
+            value={avatarUrl}
+            onChange={setAvatarUrl}
+            fallbackIcon="👑"
+          />
 
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>نبذة الرعاية والأثر الروحي والكنسي:</label>
@@ -2734,24 +3635,101 @@ function BishopFormModal({ bishop, onClose, onSaved }: { bishop: HistoryBishopRe
   );
 }
 
-function ServantFruitFormModal({ servantFruit, onClose, onSaved }: { servantFruit: HistoryServantFruit | null; onClose: () => void; onSaved: () => void }) {
+function ServantCategoryModal({ category, onClose, onSaved }: { category: HistoryServantCategory | null; onClose: () => void; onSaved: () => void }) {
+  const isEdit = Boolean(category);
+  const [nameAr, setNameAr] = useState(category?.nameAr || '');
+  const [key, setKey] = useState(category?.key || '');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('church-token');
+      const url = isEdit ? `${API_URL}/history/servant-categories/${category!.id}` : `${API_URL}/history/servant-categories`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const finalKey = key.trim() || `CAT_${Date.now()}`;
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          nameAr,
+          key: finalKey
+        })
+      });
+
+      if (res.ok) onSaved();
+      else alert('Failed to save servant category');
+    } catch (err) {
+      alert('Error updating servant category');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <h3 className={styles.modalTitle}>
+            {isEdit ? '✏️ تعديل تصنيف الخدمة' : '➕ إضافة تصنيف جديد للخدام والشمامسة'}
+          </h3>
+          <button className={styles.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSave}>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>اسم التصنيف (يظهر في شريط الفلترة):</label>
+            <input 
+              type="text" 
+              className={styles.formInput} 
+              placeholder="مثال: الشمامسة المباركون، أمناء الخدمة، خادمات مباركات..." 
+              value={nameAr} 
+              onChange={(e) => {
+                setNameAr(e.target.value);
+                if (!isEdit && !key) {
+                  setKey(e.target.value.trim().toUpperCase().replace(/\s+/g, '_'));
+                }
+              }} 
+              required 
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>رمز التصنيف الداخلي (Category Key):</label>
+            <input 
+              type="text" 
+              className={styles.formInput} 
+              placeholder="مثال: DEACONS أو LEADERS" 
+              value={key} 
+              onChange={(e) => setKey(e.target.value.toUpperCase().replace(/\s+/g, '_'))} 
+              required 
+            />
+          </div>
+
+          <div className={styles.modalActions}>
+            <button type="button" className={styles.btnSecondary} onClick={onClose}>إلغاء</button>
+            <button type="submit" className={styles.btnPrimary} disabled={saving}>
+              {saving ? 'جاري الحفظ...' : 'حفظ التصنيف'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ServantFruitFormModal({ servantFruit, categories, onClose, onSaved }: { servantFruit: HistoryServantFruit | null; categories: HistoryServantCategory[]; onClose: () => void; onSaved: () => void }) {
   const isEdit = Boolean(servantFruit);
   const [fullNameAr, setFullNameAr] = useState(servantFruit?.fullNameAr || '');
   const [currentRole, setCurrentRole] = useState(servantFruit?.currentRole || 'شماس دياكون');
+  const [categoryKey, setCategoryKey] = useState(servantFruit?.categoryKey || (categories[0]?.key || 'DEACON'));
   const [ordinationYear, setOrdinationYear] = useState(servantFruit?.ordinationYear || '');
   const [currentChurchOrLocation, setCurrentChurchOrLocation] = useState(servantFruit?.currentChurchOrLocation || '');
   const [avatarUrl, setAvatarUrl] = useState(servantFruit?.avatarUrl || '');
   const [notes, setNotes] = useState(servantFruit?.notes || '');
   const [saving, setSaving] = useState(false);
-
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setAvatarUrl(reader.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2767,6 +3745,7 @@ function ServantFruitFormModal({ servantFruit, onClose, onSaved }: { servantFrui
         body: JSON.stringify({
           fullNameAr,
           currentRole,
+          categoryKey,
           ordinationYear: ordinationYear.trim() || null,
           currentChurchOrLocation: currentChurchOrLocation.trim() || null,
           avatarUrl: avatarUrl.trim() || null,
@@ -2800,26 +3779,37 @@ function ServantFruitFormModal({ servantFruit, onClose, onSaved }: { servantFrui
             </div>
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>الرتبة أو الصفة الحالية:</label>
-              <input type="text" className={styles.formInput} placeholder="مثال: شماس كامل (دياكون) / راهب قس / كاهن مبارك" value={currentRole} onChange={(e) => setCurrentRole(e.target.value)} required />
+              <input type="text" className={styles.formInput} placeholder="مثال: شماس كامل (دياكون) / راهب قس / خادم مبارك" value={currentRole} onChange={(e) => setCurrentRole(e.target.value)} required />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>تصنيف الخدمة في شريط الفلاتر:</label>
+              <select className={styles.formSelect} value={categoryKey} onChange={(e) => setCategoryKey(e.target.value)}>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.key}>{cat.nameAr}</option>
+                ))}
+              </select>
+            </div>
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>سنة الرسامة / الخدمة (اختياري):</label>
               <input type="text" className={styles.formInput} placeholder="مثال: 1985 أو 2010" value={ordinationYear} onChange={(e) => setOrdinationYear(e.target.value)} />
             </div>
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>مكان الخدمة أو الدير الحالي (اختياري):</label>
-              <input type="text" className={styles.formInput} placeholder="مثال: دير الأنبا بولا بالبحر الأحمر / كنيسة العذراء" value={currentChurchOrLocation} onChange={(e) => setCurrentChurchOrLocation(e.target.value)} />
-            </div>
           </div>
 
           <div className={styles.formGroup}>
-            <label className={styles.formLabel}>الصورة (رفع من الجهاز أو رابط):</label>
-            <input type="file" accept="image/*" onChange={handleFile} style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem' }} />
-            <input type="text" className={styles.formInput} placeholder="أو رابط https://..." value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} />
+            <label className={styles.formLabel}>مكان الخدمة أو الدير الحالي (اختياري):</label>
+            <input type="text" className={styles.formInput} placeholder="مثال: دير الأنبا بولا بالبحر الأحمر / كنيسة العذراء" value={currentChurchOrLocation} onChange={(e) => setCurrentChurchOrLocation(e.target.value)} />
           </div>
+
+          {/* Image Upload Field (Normal Priests pattern) */}
+          <ImageUploadField
+            label="صورة الخادم المبارك (رفع صورة من جهازك أو وضع رابط):"
+            value={avatarUrl}
+            onChange={setAvatarUrl}
+            fallbackIcon="✝️"
+          />
 
           <div className={styles.formGroup}>
             <label className={styles.formLabel}>ملاحظات ومسيرة الخدمة والبركة:</label>

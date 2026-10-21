@@ -100,17 +100,24 @@
 .foundingBadge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(226, 183, 20, 0.12);
-  border: 1px solid rgba(226, 183, 20, 0.4);
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(32, 22, 10, 0.92) 0%, rgba(18, 14, 10, 0.98) 100%);
+  border: 1px solid rgba(212, 175, 55, 0.6);
   color: var(--accent-gold);
-  padding: 6px 18px;
-  border-radius: 30px;
-  font-size: 0.9rem;
+  padding: 7px 22px;
+  border-radius: 6px;
+  font-size: 0.95rem;
   font-weight: 800;
-  letter-spacing: 0.5px;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 4px 15px rgba(226, 183, 20, 0.15);
+  letter-spacing: 0.6px;
+  margin-bottom: 1.75rem;
+  box-shadow: inset 0 0 16px rgba(212, 175, 55, 0.1), 0 6px 20px rgba(0, 0, 0, 0.45);
+  position: relative;
+}
+
+.foundingBadgeGlyph {
+  color: var(--accent-gold);
+  font-size: 0.9rem;
+  opacity: 0.85;
 }
 
 .heroHeadline {
@@ -1220,11 +1227,238 @@
   position: relative;
 }
 
+/* Popes of Alexandria (الآباء البطاركة المعاصرون) */
+.popesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 22px;
+  margin-bottom: 2rem;
+}
+
+.popeCard {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.popeGoldenFrame {
+  border: 2px solid rgba(226, 183, 20, 0.7) !important;
+  box-shadow: 0 6px 24px rgba(226, 183, 20, 0.18);
+  background: linear-gradient(180deg, rgba(226, 183, 20, 0.06) 0%, var(--bg-card) 100%);
+}
+
+.popeGoldenFrame::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, var(--accent-gold), transparent);
+}
+
+.popeCard:hover {
+  transform: translateY(-5px);
+  border-color: var(--accent-gold);
+  box-shadow: 0 12px 32px rgba(226, 183, 20, 0.28);
+}
+
+.popeAvatar {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  border: 3px solid var(--accent-gold);
+  margin-bottom: 1.25rem;
+  background-color: #1e1b12;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.deceasedAvatar {
+  filter: grayscale(100%) contrast(1.08) !important;
+  border-color: #888888 !important;
+}
+
+.deceasedCard {
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  background: linear-gradient(180deg, rgba(40, 40, 40, 0.2) 0%, var(--bg-card) 100%) !important;
+}
+
+.deceasedCard::before {
+  background: linear-gradient(90deg, transparent, #888, transparent) !important;
+}
+
+.deceasedMourningBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #e2e8f0;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.activeLivingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(46, 204, 113, 0.15);
+  border: 1px solid rgba(46, 204, 113, 0.4);
+  color: #2ecc71;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.popeNumberBadge {
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 14px;
+  background: rgba(226, 183, 20, 0.15);
+  color: var(--accent-gold);
+  border: 1px solid rgba(226, 183, 20, 0.35);
+  margin-bottom: 8px;
+}
+
+.orderControls {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 10;
+}
+
+.orderBtn {
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: all 0.2s;
+}
+
+.orderBtn:hover:not(:disabled) {
+  background: var(--accent-gold);
+  color: #000;
+  border-color: var(--accent-gold);
+}
+
+.orderBtn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.albumBadge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(226, 183, 20, 0.55);
+  color: var(--accent-gold);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 3;
+}
+
+.photoGalleryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.photoThumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.photoThumb:hover {
+  transform: scale(1.03);
+  border-color: var(--accent-gold);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
-  .heroHeadline {
-    font-size: 2.1rem;
+  .heroSection {
+    padding: 3.5rem 1rem 2.5rem;
+    min-height: auto;
   }
+  .heroHeadline {
+    font-size: 1.85rem;
+    line-height: 1.35;
+    margin-bottom: 1rem;
+  }
+  .heroIntro {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    margin-bottom: 1.75rem;
+  }
+  .heroButtons {
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+    margin-bottom: 2rem;
+  }
+  .heroButtons a {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 16px;
+    font-size: 0.95rem;
+    box-sizing: border-box;
+  }
+  .statGrid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+  .statCard {
+    padding: 10px 6px;
+  }
+  .statNumber {
+    font-size: 1.35rem;
+  }
+  .statLabel {
+    font-size: 0.7rem;
+    line-height: 1.3;
+  }
+
   .timelineTrack::before {
     right: 20px;
     left: auto;
@@ -1257,5 +1491,12 @@
   }
   .modalContent {
     padding: 1.25rem;
+  }
+}
+
+@media (max-width: 440px) {
+  .statGrid {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 }

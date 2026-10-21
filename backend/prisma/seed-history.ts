@@ -131,7 +131,7 @@ async function seedHistory() {
       ecclesiasticalNameEn: 'Fr. Youhanna Hanna',
       secularName: 'عبد النور حنا',
       isSecularNameVisible: true,
-      serviceStartDate: '1936-04-24',
+      serviceStartDate: '1955-09-08',
       serviceEndDate: '1982-07-09',
       datePrecision: 'EXACT',
       isOngoing: false,
@@ -139,9 +139,9 @@ async function seedHistory() {
       clergyRole: 'ARCHPRIEST',
       titleAr: 'القمص',
       titleEn: 'Hegumen',
-      verificationStatus: 'AWAITING_VERIFICATION',
-      verificationWarning: 'تاريخ بداية الخدمة (24 أبريل 1936) يسبق تاريخ تأسيس الكنيسة (1955). تم حفظ السجل كما ورد تاريخياً وبانتظار التوثيق الأرشيفي من إدارة الكنيسة.',
-      archivalNotes: 'First historical record supplied. Start date predates 1955 foundation.'
+      verificationStatus: 'VERIFIED',
+      verificationWarning: null,
+      archivalNotes: 'كاهن جليل ومؤسس مبارك منذ انطلاق خدمة الكنيسة عام 1955.'
     },
     {
       orderIndex: 2,
@@ -427,30 +427,75 @@ async function seedHistory() {
     console.log('✓ Seeded 1955 Foundation Milestone');
   }
 
-  // Add historical milestone for 1936 with administrative verification flag
-  const existing1936 = await prisma.historyEvent.findFirst({
-    where: { year: 1936 }
+  // 4b. Remove any 1936 events or unverified 1936 warnings
+  await prisma.historyEvent.deleteMany({
+    where: {
+      OR: [
+        { year: 1936 },
+        { titleAr: { contains: '1936' } },
+        { descriptionAr: { contains: '1936' } }
+      ]
+    }
   });
-  if (!existing1936) {
-    await prisma.historyEvent.create({
-      data: {
-        titleAr: 'بدء خدمة القمص يوحنا حنا (سجل أرشيفي يتطلب مراجعة)',
-        titleEn: 'Fr. Youhanna Hanna Service Start (Archive Review)',
-        descriptionAr: 'تاريخ بداية خدمة القمص يوحنا حنا (24 أبريل 1936) المسجل في الأرشيف؛ يسبق تاريخ تأسيس الكنيسة بـ 19 عاماً ومحفوظ للمراجعة الأرشيفية والتدقيق الإداري.',
-        descriptionEn: 'Recorded start of service for Fr. Youhanna Hanna (24 April 1936), predating the church establishment by 19 years. Preserved for administrative verification.',
-        eventDate: '1936-04-24',
-        year: 1936,
-        datePrecision: 'EXACT',
-        category: 'CLERGY_APPOINTMENT',
-        sources: 'أرشيف الكهنة القديم',
-        verificationStatus: 'AWAITING_VERIFICATION',
-        status: 'PUBLISHED'
-      }
-    });
-    console.log('✓ Seeded 1936 Record for Admin Verification');
-  }
+  console.log('✓ Cleaned up any 1936 records');
 
-  // 5. Seed Supervising Bishops (الآباء الأساقفة المسؤولون عن الكنيسة)
+  // 5. Seed Contemporary Popes of Alexandria (الآباء البطاركة المعاصرون)
+  const popes = [
+    {
+      nameAr: 'مثلث الرحمات البابا كيرلس السادس',
+      nameEn: 'H.H. Pope Cyril VI',
+      titleAr: 'بابا الإسكندرية وبطريرك الكرازة المرقسية الـ 116 (قديس معاصر)',
+      titleEn: '116th Pope of Alexandria and Patriarch of the See of St. Mark',
+      papalNumber: 116,
+      papacyPeriod: '1959 — 1971',
+      isDeceased: true,
+      avatarUrl: '/images/history/pope-cyril-vi.png',
+      bioAr: 'رجل الصلاة والمعجزات، في عهده المبارك تم بناء الكاتدرائية المرقسية بالعباسية وتجلي السيدة العذراء بالزيتون واستعادة رفات القديس مارمرقس الرسول.',
+      bioEn: 'Revered ascetic Pope of prayer and miracles, 116th Patriarch of Alexandria.',
+      orderIndex: 1,
+      status: 'PUBLISHED'
+    },
+    {
+      nameAr: 'مثلث الرحمات البابا شنوده الثالث',
+      nameEn: 'H.H. Pope Shenouda III',
+      titleAr: 'بابا الإسكندرية وبطريرك الكرازة المرقسية الـ 117 (معلم الأجيال)',
+      titleEn: '117th Pope of Alexandria and Patriarch of the See of St. Mark',
+      papalNumber: 117,
+      papacyPeriod: '1971 — 2012',
+      isDeceased: true,
+      avatarUrl: '/images/history/pope-shenouda-iii.png',
+      bioAr: 'معلم الأجيال وبابا العرب، قاد الكنيسة القبطية لأكثر من أربعة عقود من التعليم الغزير والنهضة الرهبانية والامتداد الكرازي في كافة قارات العالم.',
+      bioEn: 'Teacher of Generations, 117th Patriarch of Alexandria, leading the worldwide expansion of the Coptic Church.',
+      orderIndex: 2,
+      status: 'PUBLISHED'
+    },
+    {
+      nameAr: 'البابا تواضروس الثاني',
+      nameEn: 'H.H. Pope Tawadros II',
+      titleAr: 'بابا الإسكندرية وبطريرك الكرازة المرقسية الـ 118 (أطال الله حياته)',
+      titleEn: '118th Pope of Alexandria and Patriarch of the See of St. Mark',
+      papalNumber: 118,
+      papacyPeriod: '2012 — حتى الآن',
+      isDeceased: false,
+      avatarUrl: '/images/history/pope-tawadros-ii.png',
+      bioAr: 'بابا المحبة والتطوير المؤسسي، يقود الكنيسة القبطية المعاصرة بروح الأبوة والحكمة والتنظيم الكنسي ورعاية الأجيال والشباب في مصر والمهجر.',
+      bioEn: 'Current Shepherd of the Coptic Orthodox Church, 118th Patriarch of Alexandria.',
+      orderIndex: 3,
+      status: 'PUBLISHED'
+    }
+  ];
+
+  for (const p of popes) {
+    const existing = await prisma.historyPopeRecord.findFirst({ where: { papalNumber: p.papalNumber } });
+    if (existing) {
+      await prisma.historyPopeRecord.update({ where: { id: existing.id }, data: p });
+    } else {
+      await prisma.historyPopeRecord.create({ data: p });
+    }
+  }
+  console.log('✓ Seeded 3 Popes of Alexandria');
+
+  // 6. Seed Supervising Bishops (الآباء الأساقفة المسؤولون عن الكنيسة)
   const bishops = [
     {
       nameAr: 'الأنبا أثناسيوس',
@@ -458,6 +503,7 @@ async function seedHistory() {
       titleAr: 'الأسقف العام لمنطقة حدائق القبة والوايلي ومنشية الصدر',
       titleEn: 'General Bishop of Hadayek Al Koba & El Wayli',
       episcopalPeriod: '2021 — حتى الآن',
+      isDeceased: false,
       bioAr: 'راعي الإيبارشية الجليل، رُسم أسقفاً عاماً بيد صاحب الغبطة والقداسة البابا المعظم الأنبا تواضروس الثاني في 7 مارس 2021، ويقود الخدمة والرعاية الروحية بكل أمانة وتفانٍ وتطوير شامل لمباني وأنشطة الكنيسة.',
       bioEn: 'General Bishop consecrated by Pope Tawadros II in 2021, shepherding the diocesan congregation with dedicated leadership.',
       orderIndex: 1,
@@ -469,6 +515,7 @@ async function seedHistory() {
       titleAr: 'الأسقف العام لكنائس شرق السكة الحديد (فترة رعاية سابقة)',
       titleEn: 'General Bishop of East Railway Churches (Former Pastoral Period)',
       episcopalPeriod: '2001 — 2021',
+      isDeceased: false,
       bioAr: 'تولى رعاية كنائس القطاع ومن بينها كنيسة الشهيد أبي سيفين لسنوات طويلة زاخرة بالتعليم والتثبيت العقيدي والنهضات الروحية المباركة.',
       bioEn: 'Shepherded the district churches including St. Philopater with rich spiritual teaching and theological heritage.',
       orderIndex: 2,
@@ -486,12 +533,30 @@ async function seedHistory() {
   }
   console.log('✓ Seeded Supervising Bishops');
 
-  // 6. Seed Servants & Deacons Originated from this Church (ثمار الخدمة)
+  // 7. Seed Servant Categories for Filtering
+  const servantCategories = [
+    { key: 'DEACON', nameAr: 'الشمامسة المباركون', nameEn: 'Blessed Deacons', orderIndex: 1 },
+    { key: 'PRIEST_MONK', nameAr: 'آباء كهنة ورهبان', nameEn: 'Priests & Monks', orderIndex: 2 },
+    { key: 'CONSECRATED', nameAr: 'خدام مكرسون وأمناء خدمة', nameEn: 'Consecrated & Service Leaders', orderIndex: 3 }
+  ];
+
+  for (const cat of servantCategories) {
+    const existing = await prisma.historyServantCategory.findUnique({ where: { key: cat.key } });
+    if (existing) {
+      await prisma.historyServantCategory.update({ where: { id: existing.id }, data: cat });
+    } else {
+      await prisma.historyServantCategory.create({ data: cat });
+    }
+  }
+  console.log('✓ Seeded Servant Categories');
+
+  // 8. Seed Servants & Deacons Originated from this Church (ثمار الخدمة)
   const servantsFruits = [
     {
       fullNameAr: 'الشماس المكرس د. عادل فهيم حنا',
       fullNameEn: 'Deacon Dr. Adel Fahim Hanna',
       currentRole: 'دياكون شماس كامل مكرس',
+      categoryKey: 'DEACON',
       ordinationYear: '1985',
       currentChurchOrLocation: 'خدمة التكريس وألحان الكنيسة القبطية',
       notes: 'تتلمذ في فصول مدارس الأحد بالكنيسة منذ صباه، ورُسم دياكوناً وكرس حياته للخدمة والتعليم الطقسي والألحان.',
@@ -502,6 +567,7 @@ async function seedHistory() {
       fullNameAr: 'الراهب القمص متى الأنبا بولا',
       fullNameEn: 'Fr. Matta Ava Paula',
       currentRole: 'راهب قمص بدير القديس العظيم الأنبا بولا بالبحر الأحمر',
+      categoryKey: 'PRIEST_MONK',
       ordinationYear: '1994',
       currentChurchOrLocation: 'دير الأنبا بولا بالبحر الأحمر',
       notes: 'من أبناء وشباب الكنيسة المباركين الذين ترعرعوا في خدمة أبي سيفين ثم اختار طريق الرهبنة والتكريس الكامل.',
@@ -512,6 +578,7 @@ async function seedHistory() {
       fullNameAr: 'الخادم المكرس أمين عبد الملاك شنودة',
       fullNameEn: 'Dedicated Servant Amin Abdel Malak',
       currentRole: 'أمين عام مدارس الأحد والخدمة الأسرية',
+      categoryKey: 'CONSECRATED',
       ordinationYear: '1978',
       currentChurchOrLocation: 'كنيسة الشهيد أبي سيفين بحدائق القبة',
       notes: 'خدم أجيالاً متتالية من أطفال وشباب الكنيسة وقاد مسيرة إعداد الخدام لعقود من الزمان بالصبر والإخلاص.',
