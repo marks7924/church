@@ -538,27 +538,105 @@ async function seedHistory() {
       nameEn: 'Bishop Anba Athanasius',
       titleAr: 'الأسقف العام لمنطقة حدائق القبة والوايلي ومنشية الصدر',
       titleEn: 'General Bishop of Hadayek Al Koba & El Wayli',
-      episcopalPeriod: '2021 — حتى الآن',
+      episcopalPeriod: '2025 — حتى الآن',
       isDeceased: false,
       bishopStatus: 'CURRENT', // أسقفنا الحالي!
       currentDioceseOrService: 'أسقف ورعاية قطاع حدائق القبة والوايلي ومنشية الصدر',
-      bioAr: 'راعي الإيبارشية وأسقفنا الجليل الحالي، رُسم أسقفاً عاماً بيد صاحب الغبطة والقداسة البابا المعظم الأنبا تواضروس الثاني في 7 مارس 2021، ويقود الخدمة والرعاية الروحية بكل أمانة وتفانٍ وتطوير شامل لمباني وأنشطة الكنيسة.',
+      bioAr: 'راعي الإيبارشية وأسقفنا الجليل الحالي، رُسم أسقفاً عاماً بيد صاحب الغبطة والقداسة البابا المعظم الأنبا تواضروس الثاني في 1 يونيو 2025، ويقود الخدمة والرعاية الروحية بكل أمانة وتفانٍ وتطوير شامل لمباني وأنشطة الكنيسة.',
       bioEn: 'General Bishop consecrated by Pope Tawadros II in 2021, currently shepherding our church congregation.',
       orderIndex: 1,
       status: 'PUBLISHED'
     },
     {
-      nameAr: 'الأنبا مارتيروس',
-      nameEn: 'Bishop Anba Martyros',
-      titleAr: 'الأسقف العام لكنائس شرق السكة الحديد (فترة رعاية سابقة)',
-      titleEn: 'General Bishop of East Railway Churches (Former Pastoral Period)',
-      episcopalPeriod: '2001 — 2021',
+      nameAr: 'الأنبا ميخائيل',
+      nameEn: 'Bishop Anba Mikhail',
+      titleAr: 'سقف عام لكنائس منطقة حدائق القبة والوايلي ومنشية الصدر والعباسية',
+      titleEn: 'General Bishop of Hadayek Al Koba, El Wayli, Manshiyet El Sadr & Abbassia',
+      episcopalPeriod: '2018 — 2024',
       isDeceased: false,
-      bishopStatus: 'OTHER_DIOCESE', // حي ويخدم في إيبارشية / قطاع آخر
+      bishopStatus: 'OTHER_DIOCESE',
       currentDioceseOrService: 'الأسقف العام لكنائس شرق السكة الحديد',
-      bioAr: 'تولى رعاية كنائس القطاع ومن بينها كنيسة الشهيد أبي سيفين لسنوات طويلة زاخرة بالتعليم والتثبيت العقيدي والنهضات الروحية المباركة، وهو حي بالجسد يواصل خدمته المباركة في كرم الرب.',
-      bioEn: 'Former overseeing bishop who shepherded the church across two blessed decades, currently serving in Christ.',
+      bioAr: 'تولى رعاية كنائس القطاع باقتدار ومحبة ورعاية شاملة قبل انتقاله لرعاية كنائس قطاع شرق السكة الحديد.',
+      bioEn: 'Former overseeing bishop, currently serving East Railway churches.',
       orderIndex: 2,
+      status: 'PUBLISHED'
+    },
+    {
+      nameAr: 'الأنبا ماركوس',
+      nameEn: 'Bishop Anba Marcus',
+      titleAr: 'أسقف عام على كنائس القبة والعباسية',
+      titleEn: 'General Bishop of Hadayek Al Koba & Abbassia',
+      episcopalPeriod: '2014-06-01 — 2018',
+      bishopStatus: 'OTHER_DIOCESE',
+      isDeceased: false,
+      currentDioceseOrService: 'أسقف دمياط وكفر الشيخ والبراري ورئيس دير القديسة دميانة',
+      bioAr: 'خدم كأسقف عام مشرف على كنائس منطقة القبة والعباسية من 1 يونيو 2014 حتى عام 2018، وحالياً هو أسقف دمياط وكفر الشيخ والبراري ورئيس دير القديسة دميانة.',
+      orderIndex: 3,
+      status: 'PUBLISHED'
+    },
+    {
+      nameAr: 'الأنبا مكاريوس',
+      nameEn: 'Bishop Anba Macarius',
+      titleAr: 'الأسقف العام لحدائق القبة والوايلي وحمامات القبة',
+      titleEn: 'General Bishop of Hadayek Al Koba & El Wayli',
+      episcopalPeriod: '2008-02-01 — 2014-06',
+      bishopStatus: 'OTHER_DIOCESE',
+      isDeceased: false,
+      currentDioceseOrService: 'أسقف المنيا وتوابعها',
+      bioAr: 'تولى الرعاية الكنسية أسقفاً عاماً لحدائق القبة والوايلي وحمامات القبة من 1 فبراير 2008 حتى يونيو 2014، وحالياً هو أسقف المنيا وتوابعها.',
+      orderIndex: 4,
+      status: 'PUBLISHED'
+    },
+    {
+      nameAr: 'المتنيح الأنبا بيشوي',
+      nameEn: 'Metropolitan Anba Bishoy',
+      titleAr: 'مطران دمياط وكفر الشيخ وسكرتير المجمع المقدس',
+      titleEn: 'Metropolitan of Damietta & Holy Synod Secretary',
+      episcopalPeriod: '2004-04-23 — 2008-02-01',
+      bishopStatus: 'DECEASED',
+      isDeceased: true,
+      currentDioceseOrService: null,
+      bioAr: 'العالم اللاهوتي الجليل، أشرف على رعاية الكنيسة والمنطقة من 23 أبريل 2004 حتى 1 فبراير 2008، وتنيح بسلام في الرب.',
+      orderIndex: 5,
+      status: 'PUBLISHED'
+    },
+    {
+      nameAr: 'الأنبا بنيامين',
+      nameEn: 'Metropolitan Anba Benjamin',
+      titleAr: 'مطران المنوفية وتوابعها',
+      titleEn: 'Metropolitan of Menoufia',
+      episcopalPeriod: '1991 — 2004',
+      bishopStatus: 'OTHER_DIOCESE',
+      isDeceased: false,
+      currentDioceseOrService: 'مطران المنوفية وتوابعها',
+      bioAr: 'أشرف على رعاية كنائس المنطقة بدءاً من عام 1991 حتى عام 2004، ويخدم حالياً مطراناً جليلاً لإيبارشية المنوفية وتوابعها.',
+      orderIndex: 6,
+      status: 'PUBLISHED'
+    },
+    {
+      nameAr: 'اللجنة الخماسية (المتنيح الأنبا يوانس أسقف الغربية)',
+      nameEn: 'The Quintet Committee (Anba Youannis)',
+      titleAr: 'اللجنة البابوية المشرفة لإدارة شؤون البطريركية',
+      titleEn: 'Papal Oversight Committee',
+      episcopalPeriod: '1981 — 1991',
+      bishopStatus: 'DECEASED',
+      isDeceased: true,
+      currentDioceseOrService: null,
+      bioAr: 'اللجنة الخماسية المشرفة التي شكلت لإدارة شؤون الكنائس والبطريركية برئاسة مثلث الرحمات نيافة الأنبا يوانس أسقف الغربية الراحل من عام 1981.',
+      orderIndex: 7,
+      status: 'PUBLISHED'
+    },
+    {
+      nameAr: 'الانبا يؤانس',
+      nameEn: 'Metropolitan Anba Youannis (Giza)',
+      titleAr: 'مطران الجيزه ',
+      titleEn: 'Metropolitan of Giza',
+      episcopalPeriod: '1949 - 1963',
+      bishopStatus: 'DECEASED',
+      isDeceased: true,
+      currentDioceseOrService: null,
+      bioAr: 'مثلث الرحمات مطران الجيزة، رعى شعب الكنيسة في فترات التأسيس الأولى.',
+      orderIndex: 8,
       status: 'PUBLISHED'
     }
   ];
@@ -571,7 +649,7 @@ async function seedHistory() {
       await prisma.historyBishopRecord.create({ data: b });
     }
   }
-  console.log('✓ Seeded Supervising Bishops with 3-way statuses');
+  console.log('✓ Seeded 8 Supervising Bishops in chronological order');
 
   // 7. Seed Servant Categories for Filtering
   const servantCategories = [

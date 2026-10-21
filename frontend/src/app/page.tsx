@@ -615,28 +615,53 @@ export default function Home() {
             <h2 className={styles.rowTitle} style={{ margin: 0 }}>
               {language === 'ar' ? 'الآباء الكهنة والأجلاء' : 'Reverend Fathers & Bishops'}
             </h2>
-            <button
-              onClick={() => fetchPriestsList(true)}
-              disabled={refreshingPriests}
-              title={language === 'ar' ? 'إعادة تحميل وتحديث قائمة الآباء' : 'Reload Priests List'}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '7px 14px',
-                borderRadius: '8px',
-                background: 'rgba(226, 183, 20, 0.08)',
-                border: '1px solid rgba(226, 183, 20, 0.3)',
-                color: 'var(--accent-gold)',
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                cursor: refreshingPriests ? 'wait' : 'pointer',
-                transition: 'all 0.25s ease'
-              }}
-            >
-              <span style={{ display: 'inline-block', animation: refreshingPriests ? 'spin 1s linear infinite' : 'none' }}>🔄</span>
-              <span>{refreshingPriests ? (language === 'ar' ? 'جاري التحديث...' : 'Refreshing...') : (language === 'ar' ? 'تحديث السجل' : 'Refresh List')}</span>
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <Link
+                href="/history#popes-section"
+                title={language === 'ar' ? 'الانتقال إلى سجل الآباء البطاركة والأساقفة في صفحة التاريخ الكنسي' : 'View Popes & Bishops Archive'}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '7px 14px',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, rgba(226, 183, 20, 0.18) 0%, rgba(226, 183, 20, 0.06) 100%)',
+                  border: '1px solid var(--accent-gold)',
+                  color: 'var(--accent-gold)',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.25s ease'
+                }}
+              >
+                <span>👑</span>
+                <span>{language === 'ar' ? 'باقي الآباء' : 'Other Fathers'}</span>
+                <span style={{ fontSize: '0.9rem' }}>←</span>
+              </Link>
+              <button
+                onClick={() => fetchPriestsList(true)}
+                disabled={refreshingPriests}
+                title={language === 'ar' ? 'إعادة تحميل وتحديث قائمة الآباء' : 'Reload Priests List'}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '7px 14px',
+                  borderRadius: '8px',
+                  background: 'rgba(226, 183, 20, 0.08)',
+                  border: '1px solid rgba(226, 183, 20, 0.3)',
+                  color: 'var(--accent-gold)',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  cursor: refreshingPriests ? 'wait' : 'pointer',
+                  transition: 'all 0.25s ease'
+                }}
+              >
+                <span style={{ display: 'inline-block', animation: refreshingPriests ? 'spin 1s linear infinite' : 'none' }}>🔄</span>
+                <span>{refreshingPriests ? (language === 'ar' ? 'جاري التحديث...' : 'Refreshing...') : (language === 'ar' ? 'تحديث السجل' : 'Refresh List')}</span>
+              </button>
+            </div>
           </div>
 
           {loadingPriests && priests.length === 0 ? (

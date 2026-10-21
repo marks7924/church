@@ -1690,3 +1690,66 @@
   }
 }
 
+.historyLoadingState {
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.historyLoadingIcon {
+  font-size: 3.5rem;
+  color: var(--accent-gold);
+  animation: pulseCross 1.8s ease-in-out infinite;
+  display: inline-block;
+  filter: drop-shadow(0 0 16px rgba(226, 183, 20, 0.4));
+}
+
+.historyLoadingTitle {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--accent-gold);
+  letter-spacing: 0.5px;
+}
+
+.historyLoadingBarWrap {
+  width: 220px;
+  height: 4px;
+  background: rgba(226, 183, 20, 0.15);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.historyLoadingBarFill {
+  width: 70px;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-gold), #fff, var(--accent-gold));
+  border-radius: 4px;
+  animation: indeterminateBar 1.4s infinite ease-in-out;
+}
+
+@keyframes pulseCross {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+@keyframes indeterminateBar {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+

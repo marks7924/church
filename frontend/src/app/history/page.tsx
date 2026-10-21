@@ -878,8 +878,21 @@ export default function HistoryPage() {
     return true;
   });
 
-  // Verification Warnings count (visible in admin mode)
-  const pendingWarnings = clergyList.filter(c => c.verificationWarning || c.verificationStatus === 'AWAITING_VERIFICATION');
+  if (loading && chapters.length === 0 && popes.length === 0 && bishops.length === 0) {
+    return (
+      <div className={styles.historyPage} dir={language === 'ar' ? 'rtl' : 'ltr'}>
+        <div className={styles.historyLoadingState}>
+          <div className={styles.historyLoadingIcon}>☦️</div>
+          <div className={styles.historyLoadingTitle}>
+            {language === 'ar' ? 'جاري استحضار سجلات التاريخ الكنسي والتراث المقدس...' : 'Loading Sacred Church History & Heritage...'}
+          </div>
+          <div className={styles.historyLoadingBarWrap}>
+            <div className={styles.historyLoadingBarFill} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.historyPage} dir={language === 'ar' ? 'rtl' : 'ltr'}>
@@ -1705,135 +1718,141 @@ export default function HistoryPage() {
 
         {!collapsedSections['bishops'] && (
           <div className={styles.sectionCollapsibleBody}>
-            <div className={styles.bishopsGrid}>
-              {bishops.map((b, idx) => {
-                const isDeceased = b.bishopStatus === 'DECEASED' || Boolean(b.isDeceased);
-                const isCurrent = b.bishopStatus === 'CURRENT';
-                const isOtherDiocese = b.bishopStatus === 'OTHER_DIOCESE' && !isDeceased;
+            {bishops.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                {language === 'ar' ? 'جاري استحضار سجلات الآباء الأساقفة...' : 'Loading Bishops records...'}
+              </div>
+            ) : (
+              <div className={styles.bishopsGrid}>
+                {bishops.map((b, idx) => {
+                  const isDeceased = b.bishopStatus === 'DECEASED' || Boolean(b.isDeceased);
+                  const isCurrent = b.bishopStatus === 'CURRENT';
+                  const isOtherDiocese = b.bishopStatus === 'OTHER_DIOCESE' && !isDeceased;
 
-                return (
-                  <div 
-                    key={b.id} 
-                    className={`${styles.bishopCard} ${
-                      isDeceased ? styles.deceasedCard : isCurrent ? styles.currentBishopCard : styles.servingElsewhereBishopCard
-                    } ${draggedBishopId === b.id ? styles.isDragging : ''} ${dragOverBishopId === b.id ? styles.draggedOver : ''}`}
-                    draggable={inlineEditMode}
-                    onDragStart={(e) => handleBishopDragStart(e, b.id)}
-                    onDragOver={(e) => handleBishopDragOver(e, b.id)}
-                    onDrop={(e) => handleBishopDrop(e, b.id)}
-                  >
-                    {/* Admin Controls (Drag Handle, Reordering & Edit / Delete) */}
-                    {inlineEditMode && (
-                      <>
-                        <div className={styles.dragHandle} title="اسحب لتغيير ترتيب الأساقفة">
-                          <GripVertical size={16} />
-                          <span>سحب للترتيب</span>
-                        </div>
-                        <div className={styles.orderControls}>
-                          <button
-                            className={styles.orderBtn}
-                            onClick={() => handleMoveBishop(idx, 'up')}
-                            disabled={idx === 0}
-                            title="تحريك لأعلى"
-                          >
-                            <ArrowUp size={13} />
-                          </button>
-                          <button
-                            className={styles.orderBtn}
-                            onClick={() => handleMoveBishop(idx, 'down')}
-                            disabled={idx === bishops.length - 1}
-                            title="تحريك لأسفل"
-                          >
-                            <ArrowDown size={13} />
-                          </button>
-                        </div>
-                        <div style={{ position: 'absolute', top: '12px', [language === 'ar' ? 'left' : 'right']: '12px', display: 'flex', gap: '6px', zIndex: 10 }}>
-                          <button
-                            onClick={() => setEditingBishop(b)}
-                            style={{ background: 'rgba(226, 183, 20, 0.2)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
-                            title="تعديل بيانات الحبر الجليل"
-                          >
-                            <Edit3 size={13} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteBishop(b.id)}
-                            style={{ background: 'rgba(231, 76, 60, 0.2)', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
-                            title="حذف"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Avatar with Golden Episcopal Frame & Monochrome if Deceased (Regular colors if Current or Other Diocese, NO NEON) */}
+                  return (
                     <div 
-                      className={`${styles.bishopAvatar} ${isDeceased ? styles.deceasedAvatar : ''}`}
-                      style={{
-                        backgroundImage: b.avatarUrl ? `url(${b.avatarUrl})` : undefined,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
+                      key={b.id} 
+                      className={`${styles.bishopCard} ${
+                        isDeceased ? styles.deceasedCard : isCurrent ? styles.currentBishopCard : styles.servingElsewhereBishopCard
+                      } ${draggedBishopId === b.id ? styles.isDragging : ''} ${dragOverBishopId === b.id ? styles.draggedOver : ''}`}
+                      draggable={inlineEditMode}
+                      onDragStart={(e) => handleBishopDragStart(e, b.id)}
+                      onDragOver={(e) => handleBishopDragOver(e, b.id)}
+                      onDrop={(e) => handleBishopDrop(e, b.id)}
                     >
-                      {!b.avatarUrl && <span style={{ fontSize: '2.5rem', color: isDeceased ? '#888' : 'var(--accent-gold)' }}>👑</span>}
+                      {/* Admin Controls (Drag Handle, Reordering & Edit / Delete) */}
+                      {inlineEditMode && (
+                        <>
+                          <div className={styles.dragHandle} title="اسحب لتغيير ترتيب الأساقفة">
+                            <GripVertical size={16} />
+                            <span>سحب للترتيب</span>
+                          </div>
+                          <div className={styles.orderControls}>
+                            <button
+                              className={styles.orderBtn}
+                              onClick={() => handleMoveBishop(idx, 'up')}
+                              disabled={idx === 0}
+                              title="تحريك لأعلى"
+                            >
+                              <ArrowUp size={13} />
+                            </button>
+                            <button
+                              className={styles.orderBtn}
+                              onClick={() => handleMoveBishop(idx, 'down')}
+                              disabled={idx === bishops.length - 1}
+                              title="تحريك لأسفل"
+                            >
+                              <ArrowDown size={13} />
+                            </button>
+                          </div>
+                          <div style={{ position: 'absolute', top: '12px', [language === 'ar' ? 'left' : 'right']: '12px', display: 'flex', gap: '6px', zIndex: 10 }}>
+                            <button
+                              onClick={() => setEditingBishop(b)}
+                              style={{ background: 'rgba(226, 183, 20, 0.2)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                              title="تعديل بيانات الحبر الجليل"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBishop(b.id)}
+                              style={{ background: 'rgba(231, 76, 60, 0.2)', border: '1px solid #e74c3c', color: '#e74c3c', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer' }}
+                              title="حذف"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Avatar with Golden Episcopal Frame & Monochrome if Deceased (Regular colors if Current or Other Diocese, NO NEON) */}
+                      <div 
+                        className={`${styles.bishopAvatar} ${isDeceased ? styles.deceasedAvatar : ''}`}
+                        style={{
+                          backgroundImage: b.avatarUrl ? `url(${b.avatarUrl})` : undefined,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        {!b.avatarUrl && <span style={{ fontSize: '2.5rem', color: isDeceased ? '#888' : 'var(--accent-gold)' }}>👑</span>}
+                      </div>
+
+                      {/* 3-Way Status Badges */}
+                      {isCurrent && (
+                        <div className={styles.currentBishopBadge}>
+                          <span>👑</span>
+                          <span>{language === 'ar' ? 'راعي وأسقف الكنيسة الحالي' : 'Current Bishop & Shepherd'}</span>
+                        </div>
+                      )}
+
+                      {isOtherDiocese && (
+                        <div className={styles.servingElsewhereBadge}>
+                          <span>⛪</span>
+                          <span>{language === 'ar' ? 'يخدم حاليا في إيبارشية / كنيسة أخرى' : 'Serving in Another Diocese'}</span>
+                        </div>
+                      )}
+
+                      {isDeceased && (
+                        <div className={styles.deceasedMourningBadge}>
+                          <span>🖤 🎗️</span>
+                          <span>{language === 'ar' ? 'متنيح في الرب 🕊️' : 'Departed in Christ 🕊️'}</span>
+                        </div>
+                      )}
+
+                      {/* Title Badge */}
+                      <span className={styles.bishopTitleBadge} style={{ borderColor: isDeceased ? '#666' : isCurrent ? 'var(--accent-gold)' : '#3b82f6', color: isDeceased ? '#ccc' : isCurrent ? 'var(--accent-gold)' : '#93c5fd' }}>
+                        {language === 'ar' ? b.titleAr : (b.titleEn || b.titleAr)}
+                      </span>
+
+                      {/* Bishop Name */}
+                      <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', marginBottom: '6px' }}>
+                        {language === 'ar' ? b.nameAr : (b.nameEn || b.nameAr)}
+                      </h3>
+
+                      {/* Episcopal Pastoral Period Badge */}
+                      <div className={styles.bishopPeriodBadge}>
+                        <span>🕊️ {language === 'ar' ? 'فترة الرعاية الكنسية:' : 'Period:'}</span>
+                        <b>{b.episcopalPeriod}</b>
+                      </div>
+
+                      {/* Current Diocese / Location if Serving Elsewhere */}
+                      {isOtherDiocese && b.currentDioceseOrService && (
+                        <div style={{ fontSize: '0.8rem', color: '#93c5fd', background: 'rgba(59, 130, 246, 0.1)', padding: '4px 10px', borderRadius: '6px', margin: '4px 0 8px', fontWeight: 600 }}>
+                          📍 {language === 'ar' ? 'الخدمة الحالية:' : 'Current Service:'} {b.currentDioceseOrService}
+                        </div>
+                      )}
+
+                      {/* Biography */}
+                      {b.bioAr && (
+                        <p className={styles.bishopBioText}>
+                          {language === 'ar' ? b.bioAr : (b.bioEn || b.bioAr)}
+                        </p>
+                      )}
                     </div>
-
-                    {/* 3-Way Status Badges */}
-                    {isCurrent && (
-                      <div className={styles.currentBishopBadge}>
-                        <span>👑</span>
-                        <span>{language === 'ar' ? 'راعي وأسقف الكنيسة الحالي' : 'Current Bishop & Shepherd'}</span>
-                      </div>
-                    )}
-
-                    {isOtherDiocese && (
-                      <div className={styles.servingElsewhereBadge}>
-                        <span>⛪</span>
-                        <span>{language === 'ar' ? 'يخدم حاليا في إيبارشية / كنيسة أخرى' : 'Serving in Another Diocese'}</span>
-                      </div>
-                    )}
-
-                    {isDeceased && (
-                      <div className={styles.deceasedMourningBadge}>
-                        <span>🖤 🎗️</span>
-                        <span>{language === 'ar' ? 'متنيح في الرب 🕊️' : 'Departed in Christ 🕊️'}</span>
-                      </div>
-                    )}
-
-                    {/* Title Badge */}
-                    <span className={styles.bishopTitleBadge} style={{ borderColor: isDeceased ? '#666' : isCurrent ? 'var(--accent-gold)' : '#3b82f6', color: isDeceased ? '#ccc' : isCurrent ? 'var(--accent-gold)' : '#93c5fd' }}>
-                      {language === 'ar' ? b.titleAr : (b.titleEn || b.titleAr)}
-                    </span>
-
-                    {/* Bishop Name */}
-                    <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', marginBottom: '6px' }}>
-                      {language === 'ar' ? b.nameAr : (b.nameEn || b.nameAr)}
-                    </h3>
-
-                    {/* Episcopal Pastoral Period Badge */}
-                    <div className={styles.bishopPeriodBadge}>
-                      <span>🕊️ {language === 'ar' ? 'فترة الرعاية الكنسية:' : 'Period:'}</span>
-                      <b>{b.episcopalPeriod}</b>
-                    </div>
-
-                    {/* Current Diocese / Location if Serving Elsewhere */}
-                    {isOtherDiocese && b.currentDioceseOrService && (
-                      <div style={{ fontSize: '0.8rem', color: '#93c5fd', background: 'rgba(59, 130, 246, 0.1)', padding: '4px 10px', borderRadius: '6px', margin: '4px 0 8px', fontWeight: 600 }}>
-                        📍 {language === 'ar' ? 'الخدمة الحالية:' : 'Current Service:'} {b.currentDioceseOrService}
-                      </div>
-                    )}
-
-                    {/* Biography */}
-                    {b.bioAr && (
-                      <p className={styles.bishopBioText}>
-                        {language === 'ar' ? b.bioAr : (b.bioEn || b.bioAr)}
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </section>
