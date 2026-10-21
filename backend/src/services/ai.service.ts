@@ -26,6 +26,13 @@ export interface AiChatAction {
   data?: Record<string, any>;
 }
 
+export interface AiAttachedImage {
+  url: string;
+  captionAr?: string;
+  captionEn?: string;
+  alt?: string;
+}
+
 export interface AiChatResponse {
   response: string;
   sources: AiSourceReference[];
@@ -36,6 +43,7 @@ export interface AiChatResponse {
   model: string;
   fallbackTriggered?: boolean;
   action?: AiChatAction;
+  attachedImage?: AiAttachedImage;
 }
 
 export interface ProviderResult {
@@ -443,15 +451,17 @@ export class ChurchKnowledgeRetriever {
     try {
       let history = getCached<any>('church_history_data');
       if (!history) {
-        const [settings, popes, bishops, clergy, events, visits] = await Promise.all([
+        const [settings, popes, bishops, clergy, events, visits, servantFruits, servantCategories] = await Promise.all([
           prisma.historySettings.findFirst(),
           prisma.historyPopeRecord.findMany({ where: { status: 'PUBLISHED' }, orderBy: { orderIndex: 'asc' } }),
           prisma.historyBishopRecord.findMany({ where: { status: 'PUBLISHED' }, orderBy: { orderIndex: 'asc' } }),
           prisma.historyClergyRecord.findMany({ where: { status: 'PUBLISHED' }, orderBy: { orderIndex: 'asc' } }),
           prisma.historyEvent.findMany({ where: { status: 'PUBLISHED' }, orderBy: [{ year: 'asc' }, { orderIndex: 'asc' }] }),
-          prisma.historyVisit.findMany({ where: { status: 'PUBLISHED' }, orderBy: [{ year: 'asc' }, { orderIndex: 'asc' }] })
+          prisma.historyVisit.findMany({ where: { status: 'PUBLISHED' }, orderBy: [{ year: 'asc' }, { orderIndex: 'asc' }] }),
+          prisma.historyServantFruit.findMany({ where: { status: 'PUBLISHED' }, orderBy: { orderIndex: 'asc' } }),
+          prisma.historyServantCategory.findMany({ orderBy: { orderIndex: 'asc' } })
         ]);
-        history = { settings, popes, bishops, clergy, events, visits };
+        history = { settings, popes, bishops, clergy, events, visits, servantFruits, servantCategories };
         setCached('church_history_data', history);
       }
       return history;
@@ -1399,7 +1409,21 @@ export class ChurchAiService {
         knowledgeText += `  - ${c.titleAr || 'القمص'} ${c.ecclesiasticalNameAr} | بدء الخدمة: ${c.serviceStartDate} ${c.isOngoing ? '(مستمر بالخدمة)' : (c.isServingAbroad ? `(مسافر بالخارج: ${c.servingAbroadLocation || ''})` : (c.isDeceased ? '(متنيح)' : ''))}\n`;
       });
     }
+
+    // Servants & Deacons Honor Roll (ثمار الخدمة — الشمامسة والخدام والآباء الذين خرجوا من الكنيسة) - <section id="servants-section">
+    knowledgeText += `• Church Deacons & Consecrated Servants Honor Roll (ثمار الخدمة المباركة — الشمامسة والخدام والآباء الذين خرجوا من الكنيسة - قسم #servants-section):\n`;
+    knowledgeText += `  - Section Intro: توثيق واعتزاز بكل شماس مبارك، وكاهن، وراهب، وخادم مكرس نما وترعرع في حضن هذه الكنيسة وأثمرت خدمته في كرم الرب.\n`;
+    if (historyData?.servantFruits && historyData.servantFruits.length > 0) {
+      historyData.servantFruits.forEach((s: any) => {
+        knowledgeText += `  - ${s.fullNameAr} (${s.fullNameEn || ''}) | الصفة/الرتبة: ${s.currentRole} | سنة التكريس/الرسامة: ${s.ordinationYear || 'غير محدد'} | مكان الخدمة الحالي: ${s.currentChurchOrLocation || 'الكنيسة'} | نبذة: ${s.notes || ''}\n`;
+      });
+    } else {
+      knowledgeText += `  - الشماس المكرس د. عادل فهيم حنا (دياكون شماس كامل مكرس، رسامة 1985، خدمة التكريس وألحان الكنيسة القبطية - تتلمذ في مدارس الأحد بالكنيسة منذ صباه وكرس حياته للخدمة والتعليم الطقسي والألحان).\n`;
+      knowledgeText += `  - الراهب القمص متى الأنبا بولا (راهب قمص بدير القديس العظيم الأنبا بولا بالبحر الأحمر، رهبنة 1994 - من أبناء وشباب الكنيسة الذين ترعرعوا في خدمة أبي سيفين ثم اختار طريق الرهبنة والتكريس الكامل).\n`;
+      knowledgeText += `  - الخادم المكرس أمين عبد الملاك شنودة (أمين عام مدارس الأحد والخدمة الأسرية، بدء الخدمة 1978، كنيسة الشهيد أبي سيفين بحدائق القبة - خدم أجيالاً متتالية من أطفال وشباب الكنيسة وقاد مسيرة إعداد الخدام لعقود).\n`;
+    }
     sources.push({ title: userLanguage === 'ar' ? 'تاريخ الكنيسة والأرشيف' : 'Our History', url: '/history', type: 'general' });
+    sources.push({ title: userLanguage === 'ar' ? 'ثمار الخدمة والشمامسة' : 'Blessed Servants & Deacons', url: '/history#servants-section', type: 'general' });
 
     // 4. Church Services & Inner Cards Detailed Breakdown
     knowledgeText += `\n### Church Services & Ministries with All Inner Card Stages (الخدمات الكنسية وتفاصيل بطاقاتها):\n`;
@@ -1542,6 +1566,144 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
   }
 
   /**
+   * Finds a relevant image to attach with the AI answer:
+   * 1. If asked about a CERTAIN PRIEST (only 1 priest mentioned), attaches that priest's photo.
+   * 2. If asked about a church topic where an image helps (Abu Sefein shrine, Popes, history, servants), attaches a relevant photo.
+   */
+  static findRelatedImage(
+    query: string,
+    lang: 'ar' | 'en',
+    priests: any[] = [],
+    historyData: any = null
+  ): AiAttachedImage | undefined {
+    if (!query) return undefined;
+    const q = normalizeQuery(query);
+
+    // 1. Detect single priest query
+    const priestCandidates = [
+      { key: 'مينا', names: ['مينا', 'mina'], id: 'mina' },
+      { key: 'فيلوباتير', names: ['فيلوباتير', 'philopateer'], id: 'philopateer' },
+      { key: 'يوحنا', names: ['يوحنا', 'yohanna', 'john'], id: 'yohanna' },
+      { key: 'كاراس', names: ['كاراس', 'karas'], id: 'karas' },
+      { key: 'مايكل', names: ['مايكل', 'michael'], id: 'michael' },
+      { key: 'موسى', names: ['موسى', 'موسي', 'moussa'], id: 'moussa' },
+      { key: 'اثناسيوس', names: ['اثناسيوس', 'athanasius', 'سيدنا'], id: 'athanasius' }
+    ];
+
+    const matchedPriestKeys = priestCandidates.filter(c =>
+      c.names.some(n => q.includes(normalizeQuery(n)))
+    );
+
+    // EXACTLY 1 priest requested
+    if (matchedPriestKeys.length === 1) {
+      const matched = matchedPriestKeys[0];
+      const p = priests.find(item =>
+        matched.names.some(n =>
+          normalizeQuery(item.nameAr || '').includes(normalizeQuery(n)) ||
+          (item.nameEn || '').toLowerCase().includes(n.toLowerCase())
+        )
+      );
+
+      // Local fallback images if avatarUrl is empty
+      let imgUrl = p?.avatarUrl || null;
+      if (!imgUrl) {
+        if (matched.id === 'athanasius') imgUrl = '/images/b athas.jfif';
+        else if (matched.id === 'michael') imgUrl = '/images/micha.jpg';
+        else if (matched.id === 'karas') imgUrl = '/images/ka2m 1.jfif';
+        else if (matched.id === 'mina') imgUrl = '/images/FB_IMG_1782165968857.jpg';
+        else if (matched.id === 'philopateer') imgUrl = '/images/FB_IMG_1782165993920.jpg';
+        else if (matched.id === 'yohanna') imgUrl = '/images/FB_IMG_1782166149124.jpg';
+      }
+
+      if (imgUrl) {
+        const titleAr = p?.titleAr || (matched.id === 'athanasius' ? 'نيافة الأنبا' : 'أبونا');
+        const nameAr = p?.nameAr || (matched.id === 'athanasius' ? 'الأنبا أثناسيوس' : `أبونا ${matched.key}`);
+        const titleEn = p?.titleEn || (matched.id === 'athanasius' ? 'H.G. Bishop' : 'Fr.');
+        const nameEn = p?.nameEn || `Fr. ${matched.names[1]}`;
+
+        return {
+          url: imgUrl,
+          captionAr: `صورة ${titleAr} ${nameAr}`,
+          captionEn: `Photo of ${titleEn} ${nameEn}`,
+          alt: nameAr
+        };
+      }
+    }
+
+    // 2. Popes of Alexandria
+    if (q.includes('كيرلس السادس') || q.includes('kyrillos') || q.includes('cyril')) {
+      return {
+        url: '/images/pope k.jfif',
+        captionAr: 'قداسة البابا كيرلس السادس (البابا 116)',
+        captionEn: 'H.H. Pope Kyrillos VI (116th Pope of Alexandria)',
+        alt: 'Pope Kyrillos VI'
+      };
+    }
+    if (q.includes('شنوده') || q.includes('شنودة') || q.includes('shenouda')) {
+      return {
+        url: '/images/pope s.jfif',
+        captionAr: 'مثلث الرحمات قداسة البابا شنودة الثالث (البابا 117)',
+        captionEn: 'H.H. Pope Shenouda III (117th Pope of Alexandria)',
+        alt: 'Pope Shenouda III'
+      };
+    }
+    if (q.includes('تواضروس') || q.includes('tawadros')) {
+      return {
+        url: '/images/pope t.jfif',
+        captionAr: 'قداسة البابا المعظم الأنبا تواضروس الثاني (البابا 118)',
+        captionEn: 'H.H. Pope Tawadros II (118th Pope of Alexandria)',
+        alt: 'Pope Tawadros II'
+      };
+    }
+
+    // 3. St. Abu Sefein Shrine & Church Building
+    if (q.includes('مزار') || q.includes('ضريح') || q.includes('رفات') || q.includes('ابو سيفين') || q.includes('shrine') || q.includes('مبني الكنيسه') || q.includes('الكنيسه الكبري')) {
+      return {
+        url: '/images/0 (1).jpg',
+        captionAr: 'مزار ومقتنيات الشهيد العظيم أبي سيفين بالكنيسة',
+        captionEn: 'Shrine of St. Philopateer Mercurius (Abu Sefein)',
+        alt: 'St. Abu Sefein Shrine'
+      };
+    }
+
+    // 4. Servants Section & Specific Servants (#servants-section)
+    if (q.includes('عادل فهيم') || q.includes('adel fahim')) {
+      return {
+        url: '/images/2.png',
+        captionAr: 'الشماس المكرس د. عادل فهيم حنا (ثمار الخدمة المباركة)',
+        captionEn: 'Deacon Dr. Adel Fahim Hanna (Blessed Fruit of Service)',
+        alt: 'Deacon Adel Fahim'
+      };
+    }
+    if (q.includes('متي الانبا بولا') || q.includes('متى الانبا بولا') || q.includes('matta')) {
+      return {
+        url: '/images/3.png',
+        captionAr: 'الراهب القمص متى الأنبا بولا (ثمار الخدمة المباركة)',
+        captionEn: 'Fr. Matta Ava Paula (Blessed Fruit of Service)',
+        alt: 'Fr. Matta Ava Paula'
+      };
+    }
+    if (q.includes('امين عبد الملاك') || q.includes('أمين عبد الملاك') || q.includes('amin abdel malak')) {
+      return {
+        url: '/images/1.png',
+        captionAr: 'الخادم المكرس أمين عبد الملاك شنودة (ثمار الخدمة المباركة)',
+        captionEn: 'Dedicated Servant Amin Abdel Malak (Blessed Fruit of Service)',
+        alt: 'Servant Amin Abdel Malak'
+      };
+    }
+    if (q.includes('ثمار الخدمه') || q.includes('ثمار الخدمة') || q.includes('شمامسه خرجوا') || q.includes('خدام خرجوا')) {
+      return {
+        url: '/images/22.png',
+        captionAr: 'قسم ثمار الخدمة المباركة — الشمامسة والخدام والآباء الذين خرجوا من الكنيسة',
+        captionEn: 'Blessed Fruit: Deacons & Consecrated Servants of the Church',
+        alt: 'Blessed Fruit of Church Service'
+      };
+    }
+
+    return undefined;
+  }
+
+  /**
    * High-fidelity Grounded Fallback Engine
    */
   static generateGroundedResponse(
@@ -1549,7 +1711,7 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
     language: 'ar' | 'en',
     context: { knowledgeText: string; sources: AiSourceReference[]; customFaqs?: CustomFaq[]; trackingRequest?: any; isEventsPublic?: boolean; priests?: any[] },
     user?: { id?: string; name?: string; email?: string }
-  ): { text: string; matchedSources: AiSourceReference[]; suggested: string[]; action?: AiChatResponse['action'] } {
+  ): { text: string; matchedSources: AiSourceReference[]; suggested: string[]; action?: AiChatResponse['action']; attachedImage?: AiAttachedImage } {
     const q = normalizeQuery(query);
     const isAr = language === 'ar';
     const userGreeting = user?.name ? ` يا ${user.name.trim().split(' ')[0]}` : '';
@@ -1758,8 +1920,53 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
         text,
         matchedSources: context.sources.filter(s => s.type === 'general'),
         suggested: isAr
-          ? ['من هو أسقف الكنيسة الحالي؟', 'مواعيد القداسات هذا الأسبوع', 'حجز موعد اعتراف']
-          : ['Who is the current Bishop?', 'Mass schedules', 'Book confession']
+          ? ['من هو أسقف الكنيسة الحالي؟', 'ثمار الخدمة والشمامسة', 'مواعيد القداسات']
+          : ['Who is the current Bishop?', 'Servants honor roll', 'Mass schedule']
+      };
+    }
+
+    // 4.5. Servants Section & Deacons Honor Roll (ثمار الخدمة — الشمامسة والخدام والآباء الذين خرجوا من الكنيسة) - <section id="servants-section">
+    if (
+      q.includes('ثمار الخدمه') || q.includes('ثمار الخدمة') || q.includes('خدام خرجوا') || q.includes('شمامسه خرجوا') ||
+      q.includes('شمامسة خرجوا') || q.includes('خدام الكنيسه') || q.includes('خدام الكنيسة') ||
+      q.includes('عادل فهيم') || q.includes('متي الانبا بولا') || q.includes('متى الانبا بولا') ||
+      q.includes('امين عبد الملاك') || q.includes('أمين عبد الملاك') || q.includes('servants section') ||
+      q.includes('deacons honor') || q.includes('blessed fruit')
+    ) {
+      let text = isAr
+        ? `✨ **ثمار الخدمة — الشمامسة والخدام والآباء الذين خرجوا من الكنيسة (#servants-section):**\n\n` +
+          `توثيق واعتزاز بكل شماس مبارك، وكاهن، وراهب، وخادم مكرس نما وترعرع في حضن كنيسة الشهيد العظيم أبي سيفين وأثمرت خدمته في كرم الرب:\n\n` +
+          `• **الشمامسة المكرسون:**\n` +
+          `  - **الشماس المكرس د. عادل فهيم حنا:** دياكون شماس كامل مكرس (رسامة 1985) — خدمة التكريس وألحان الكنيسة القبطية. تتلمذ في فصول مدارس الأحد بالكنيسة منذ صباه، ورُسم دياكوناً وكرس حياته للخدمة والتعليم الطقسي والألحان.\n\n` +
+          `• **الآباء الرهبان والكهنة:**\n` +
+          `  - **الراهب القمص متى الأنبا بولا:** راهب قمص بدير القديس العظيم الأنبا بولا بالبحر الأحمر (رهبنة 1994) — من أبناء وشباب الكنيسة المباركين الذين ترعرعوا في خدمة أبي سيفين ثم اختار طريق الرهبنة والتكريس الكامل.\n\n` +
+          `• **الخدام المكرسون:**\n` +
+          `  - **الخادم المكرس أمين عبد الملاك شنودة:** أمين عام مدارس الأحد والخدمة الأسرية (بدء الخدمة 1978) — كنيسة الشهيد أبي سيفين بحدائق القبة. خدم أجيالاً متتالية من أطفال وشباب الكنيسة وقاد مسيرة إعداد الخدام لعقود من الزمان بالصبر والإخلاص.\n\n` +
+          `يمكنك استعراض لوحة الشرف الكاملة لثمار الخدمة عبر [صفحة تاريخنا — ثمار الخدمة](/history#servants-section).`
+        : `✨ **Blessed Fruit: Deacons & Consecrated Servants (#servants-section):**\n\n` +
+          `Honoring deacons, priests, monks, and servants who were nurtured in this church and called into sacred service:\n\n` +
+          `• **Consecrated Deacons:**\n` +
+          `  - **Deacon Dr. Adel Fahim Hanna:** Full consecrated deacon (Ordained 1985) — Dedicated service to Coptic rites and hymns.\n\n` +
+          `• **Priests & Monks:**\n` +
+          `  - **Fr. Matta Ava Paula:** Monk Hegumen at St. Paul Monastery, Red Sea (Monasticism 1994) — Nurtured in this church's youth service.\n\n` +
+          `• **Consecrated Servants:**\n` +
+          `  - **Dedicated Servant Amin Abdel Malak:** General supervisor of Sunday School & family care (Service began 1978).\n\n` +
+          `You can view the full Honor Roll at [Our History — Servants Section](/history#servants-section).`;
+
+      return {
+        text,
+        matchedSources: [{ title: isAr ? 'ثمار الخدمة والشمامسة' : 'Blessed Servants & Deacons', url: '/history#servants-section', type: 'general' }],
+        suggested: isAr
+          ? ['تاريخ تأسيس الكنيسة', 'مواعيد مدرسة الشمامسة', 'مواعيد مدارس الأحد']
+          : ['Church founding history', 'Deacons school schedule', 'Sunday school schedule'],
+        action: {
+          actionId: 'view_history',
+          labelAr: 'عرض ثمار الخدمة بقسم التاريخ',
+          labelEn: 'View Servants Section',
+          nameAr: 'عرض ثمار الخدمة بقسم التاريخ',
+          nameEn: 'View Servants Section',
+          redirectUrl: '/history#servants-section'
+        }
       };
     }
 
@@ -2303,6 +2510,7 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
 
     if (isNearestConfessionQuery) {
       const priests = await ChurchKnowledgeRetriever.getClergyDirectory();
+      const historyData = await ChurchKnowledgeRetriever.getHistoryData();
       const nearestRes = calculateNearestConfessionDate(userMessage, priests, lang);
       const priestAction = ChurchAiService.detectActionIntent(userMessage, lang) || {
         actionId: 'book_appointment',
@@ -2312,6 +2520,7 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
         nameEn: nearestRes.priestName ? `Book appointment with ${nearestRes.priestName}` : 'Book Confession',
         redirectUrl: '/'
       };
+      const attachedImage = ChurchAiService.findRelatedImage(userMessage, lang, priests, historyData);
 
       return {
         response: nearestRes.text,
@@ -2323,9 +2532,14 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
         tokensUsed: 0,
         provider: 'local-knowledge-engine',
         model: 'confession-scheduler-v1',
-        action: priestAction
+        action: priestAction,
+        attachedImage
       };
     }
+
+    const priests = await ChurchKnowledgeRetriever.getClergyDirectory();
+    const historyData = await ChurchKnowledgeRetriever.getHistoryData();
+    const attachedImage = ChurchAiService.findRelatedImage(userMessage, lang, priests, historyData);
 
     // 1. Resolve multi-turn conversational memory & references
     const resolvedQuery = ChurchAiService.resolveFollowUpQuery(userMessage, history);
@@ -2440,7 +2654,8 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
         tokensUsed: 0,
         provider: 'local-knowledge-engine (budget-cap-active)',
         model: 'church-grounded-v1',
-        action: action || fallback.action
+        action: action || fallback.action,
+        attachedImage: attachedImage || fallback.attachedImage
       };
     }
 
@@ -2525,7 +2740,6 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
 
     // 7. Grounded Local Engine Fallback (If no provider keys or all external offline)
     if (!chosenText) {
-      const priests = await ChurchKnowledgeRetriever.getClergyDirectory();
       const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources, customFaqs, isEventsPublic, priests });
       const latencyMs = Date.now() - startTime;
       recordProviderCall('local', true, latencyMs);
@@ -2538,7 +2752,8 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
         provider: 'local-knowledge-engine',
         model: 'church-grounded-v1',
         fallbackTriggered,
-        action: action || fallback.action
+        action: action || fallback.action,
+        attachedImage: attachedImage || fallback.attachedImage
       };
     }
 
@@ -2571,7 +2786,8 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
       provider: chosenProvider,
       model: chosenModel,
       fallbackTriggered,
-      action
+      action,
+      attachedImage
     };
   }
 }

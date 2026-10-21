@@ -129,6 +129,12 @@ interface ChatMessage {
   sources?: SourceReference[];
   suggestedQuestions?: string[];
   action?: ActionPayload;
+  attachedImage?: {
+    url: string;
+    captionAr?: string;
+    captionEn?: string;
+    alt?: string;
+  };
   timestamp: string;
 }
 
@@ -159,6 +165,10 @@ export default function ChurchAiAssistant() {
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [isFooterVisible, setIsFooterVisible] = useState(false);
   const [userToken, setUserToken] = useState<string | null>(null);
+
+  // 5-second countdown on manual close state
+  const [isClosingCountdown, setIsClosingCountdown] = useState(false);
+  const [closingSecondsLeft, setClosingSecondsLeft] = useState(5);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -398,10 +408,25 @@ export default function ChurchAiAssistant() {
     };
   };
 
-  // Load chat history from localStorage on client mount
+  const FIVE_MINUTES_MS = 5 * 60 * 1000;
+
+  // Load chat history from localStorage on client mount & check 5-minute inactivity rule
   useEffect(() => {
     const firstName = getUserFirstName();
-    const saved = localStorage.getItem('church-ai-chat-history');
+
+    // Check 5-minute inactivity rule: if last message was > 5 minutes ago, delete chat!
+    const lastActiveStr = typeof window !== 'undefined' ? localStorage.getItem('church-ai-last-active-time') : null;
+    if (lastActiveStr) {
+      const elapsed = Date.now() - parseInt(lastActiveStr, 10);
+      if (elapsed >= FIVE_MINUTES_MS) {
+        localStorage.removeItem('church-ai-chat-history');
+        localStorage.removeItem('church-ai-last-active-time');
+        setMessages([getInitialMessage(firstName)]);
+        return;
+      }
+    }
+
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('church-ai-chat-history') : null;
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -425,14 +450,70 @@ export default function ChurchAiAssistant() {
       } catch {}
     }
     setMessages([getInitialMessage(firstName)]);
-  }, [language]);
+  }, [language, isOpen]);
 
-  // Save history on change
+  // Periodic inactivity watcher: every 5 seconds, if no new message for 5 minutes, clear chat!
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const interval = setInterval(() => {
+      const lastActiveStr = localStorage.getItem('church-ai-last-active-time');
+      if (lastActiveStr) {
+        const elapsed = Date.now() - parseInt(lastActiveStr, 10);
+        if (elapsed >= FIVE_MINUTES_MS) {
+          localStorage.removeItem('church-ai-chat-history');
+          localStorage.removeItem('church-ai-last-active-time');
+          setMessages([getInitialMessage(getUserFirstName())]);
+        }
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Save history on change and update last active time if user has messaged
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem('church-ai-chat-history', JSON.stringify(messages.slice(-20)));
+      const hasUserMsg = messages.some(m => m.role === 'user');
+      if (hasUserMsg) {
+        localStorage.setItem('church-ai-last-active-time', String(Date.now()));
+      }
     }
   }, [messages]);
+
+  // Handle Manual Close: triggers a 5-second countdown inside chat area (texting forbidden) then closes & resets chat
+  const handleRequestClose = () => {
+    if (isClosingCountdown) return;
+    setIsClosingCountdown(true);
+    setClosingSecondsLeft(5);
+  };
+
+  const handleCancelClose = () => {
+    setIsClosingCountdown(false);
+    setClosingSecondsLeft(5);
+  };
+
+  // 1-second interval timer for manual close countdown
+  useEffect(() => {
+    if (!isClosingCountdown) return;
+
+    if (closingSecondsLeft <= 0) {
+      // Countdown reached 0: close chat and completely delete session
+      localStorage.removeItem('church-ai-chat-history');
+      localStorage.removeItem('church-ai-last-active-time');
+      setMessages([getInitialMessage(getUserFirstName())]);
+      setIsClosingCountdown(false);
+      setIsOpen(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setClosingSecondsLeft(prev => prev - 1);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [isClosingCountdown, closingSecondsLeft]);
 
   // Scroll behavior:
   // When the latest message is an assistant reply, scroll to its beginning so the user reads from the top!
@@ -693,6 +774,7 @@ export default function ChurchAiAssistant() {
           nameAr: data.action.nameAr || data.action.labelAr,
           nameEn: data.action.nameEn || data.action.labelEn,
         } : undefined,
+        attachedImage: data.attachedImage || undefined,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
@@ -1043,7 +1125,7 @@ export default function ChurchAiAssistant() {
                   type="button"
                   onClick={e => {
                     e.stopPropagation();
-                    setIsOpen(false);
+                    handleRequestClose();
                   }}
                   title={isAr ? 'إغلاق' : 'Close'}
                   style={{
@@ -1198,17 +1280,18 @@ export default function ChurchAiAssistant() {
                 </button>
 
                 <button
-                  onClick={() => setIsOpen(false)}
-                  title={isAr ? 'إغلاق' : 'Close'}
+                  onClick={handleRequestClose}
+                  title={isAr ? 'إغلاق المحادثة' : 'Close chat'}
                   style={{
-                    background: 'none',
+                    background: isClosingCountdown ? 'rgba(231, 76, 60, 0.3)' : 'none',
                     border: 'none',
-                    color: 'rgba(255,255,255,0.6)',
+                    color: isClosingCountdown ? '#e74c3c' : 'rgba(255,255,255,0.6)',
                     cursor: 'pointer',
                     padding: '6px',
                     borderRadius: '6px',
                     display: 'flex',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   <X size={17} />
@@ -1304,6 +1387,58 @@ export default function ChurchAiAssistant() {
                         }}
                       >
                         {renderFormattedText(msg.text)}
+
+                        {/* Attached Image (Priest or Related Church Photo) */}
+                        {isAssistant && msg.attachedImage?.url && (
+                          <div
+                            style={{
+                              marginTop: '10px',
+                              marginBottom: '6px',
+                              borderRadius: '12px',
+                              overflow: 'hidden',
+                              border: '1px solid rgba(226, 183, 20, 0.4)',
+                              backgroundColor: 'rgba(0, 0, 0, 0.45)',
+                              boxShadow: '0 6px 20px rgba(0, 0, 0, 0.35)',
+                              maxWidth: '280px'
+                            }}
+                          >
+                            <img
+                              src={msg.attachedImage.url}
+                              alt={msg.attachedImage.alt || 'Church Photo'}
+                              style={{
+                                width: '100%',
+                                maxHeight: '200px',
+                                objectFit: 'cover',
+                                display: 'block',
+                                cursor: 'pointer',
+                                transition: 'transform 0.2s ease'
+                              }}
+                              onClick={() => {
+                                if (typeof window !== 'undefined') {
+                                  window.open(msg.attachedImage!.url, '_blank');
+                                }
+                              }}
+                            />
+                            {(msg.attachedImage.captionAr || msg.attachedImage.captionEn) && (
+                              <div
+                                style={{
+                                  padding: '7px 10px',
+                                  fontSize: '0.78rem',
+                                  color: 'var(--accent-gold, #e2b714)',
+                                  backgroundColor: 'rgba(0, 0, 0, 0.65)',
+                                  textAlign: isAr ? 'right' : 'left',
+                                  fontWeight: 600,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px'
+                                }}
+                              >
+                                <span>📷</span>
+                                <span>{isAr ? msg.attachedImage.captionAr : (msg.attachedImage.captionEn || msg.attachedImage.captionAr)}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* 1. Interactive Priest Appointment Booking Card */}
                         {isAssistant && msg.action && msg.action.actionId === 'book_appointment' && (() => {
@@ -2067,6 +2202,54 @@ export default function ChurchAiAssistant() {
                   position: 'relative'
                 }}
               >
+                {/* 5-Second Countdown Alert Banner on Manual Close */}
+                {isClosingCountdown && (
+                  <div
+                    style={{
+                      marginBottom: '10px',
+                      padding: '10px 14px',
+                      borderRadius: '12px',
+                      backgroundColor: 'rgba(231, 76, 60, 0.96)',
+                      color: '#fff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      boxShadow: '0 6px 20px rgba(231, 76, 60, 0.45)',
+                      animation: 'fadeIn 0.2s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '1.2rem', animation: 'spin 2s linear infinite' }}>⏳</span>
+                      <div>
+                        <div style={{ fontSize: '0.84rem', fontWeight: 800 }}>
+                          {isAr
+                            ? `سيتم إغلاق المحادثة ومسح الجلسة خلال ${closingSecondsLeft} ثوانٍ...`
+                            : `Closing chat & clearing session in ${closingSecondsLeft}s...`}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', opacity: 0.9 }}>
+                          {isAr ? 'الكتابة معطلة أثناء العد التنازلي' : 'Texting is disabled during countdown'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCancelClose}
+                      style={{
+                        backgroundColor: '#fff',
+                        color: '#c0392b',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '4px 10px',
+                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {isAr ? 'إلغاء' : 'Cancel'}
+                    </button>
+                  </div>
+                )}
+
                 {/* Dynamic FAQ Popover Menu */}
                 {isFaqMenuOpen && (
                   <div
@@ -2187,24 +2370,25 @@ export default function ChurchAiAssistant() {
                     value={inputText}
                     onChange={e => setInputText(e.target.value)}
                     placeholder={
-                      isAr
-                        ? 'اكتب استفسارك هنا...'
-                        : 'Ask your question here...'
+                      isClosingCountdown
+                        ? (isAr ? 'الكتابة معطلة — جاري إغلاق الجلسة...' : 'Texting disabled — closing session...')
+                        : (isAr ? 'اكتب استفسارك هنا...' : 'Ask your question here...')
                     }
                     maxLength={1000}
-                    disabled={isLoading}
+                    disabled={isLoading || isClosingCountdown}
                     style={{
                       flex: '1 1 0%',
                       minWidth: 0,
                       padding: '11px 14px',
                       borderRadius: '24px',
-                      backgroundColor: 'rgba(28, 33, 40, 0.9)',
+                      backgroundColor: isClosingCountdown ? 'rgba(28, 33, 40, 0.5)' : 'rgba(28, 33, 40, 0.9)',
                       border: '1px solid rgba(226, 183, 20, 0.25)',
-                      color: '#fff',
+                      color: isClosingCountdown ? 'rgba(255,255,255,0.4)' : '#fff',
                       fontSize: '0.88rem',
                       outline: 'none',
                       transition: 'border-color 0.2s ease',
-                      fontFamily: isAr ? 'var(--font-arabic)' : 'var(--font-english)'
+                      fontFamily: isAr ? 'var(--font-arabic)' : 'var(--font-english)',
+                      cursor: isClosingCountdown ? 'not-allowed' : 'text'
                     }}
                     onFocus={e => (e.target.style.borderColor = 'var(--accent-gold, #e2b714)')}
                     onBlur={e => (e.target.style.borderColor = 'rgba(226, 183, 20, 0.25)')}
@@ -2212,7 +2396,7 @@ export default function ChurchAiAssistant() {
 
                   <button
                     type="submit"
-                    disabled={!inputText.trim() || isLoading}
+                    disabled={!inputText.trim() || isLoading || isClosingCountdown}
                     aria-label={isAr ? 'إرسال السؤال' : 'Send question'}
                     style={{
                       width: '42px',

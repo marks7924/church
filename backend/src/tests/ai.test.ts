@@ -228,6 +228,51 @@ async function runAiIntegrationTests() {
   );
   assert(unknownTaskRes.action?.actionId === 'contact_real_person', 'Unknown task offers contact_real_person action');
 
+  // 22. SERVANTS SECTION KNOWLEDGE (<section id="servants-section">)
+  const servantsRes = await ChurchAiService.processChat('من هم الشمامسة والخدام الذين خرجوا من الكنيسة في قسم ثمار الخدمة؟', [], 'ar');
+  assert(
+    servantsRes.response.includes('ثمار الخدمة') &&
+    servantsRes.response.includes('عادل فهيم') &&
+    servantsRes.response.includes('متى الأنبا بولا') &&
+    servantsRes.response.includes('أمين عبد الملاك'),
+    'AI has complete knowledge of servants section (#servants-section honor roll)'
+  );
+
+  // 23. SINGLE PRIEST IMAGE ATTACHMENT TEST
+  // When asked about a specific priest (only 1)
+  const singlePriestRes = await ChurchAiService.processChat('متى ميعاد اعتراف أبونا مينا؟', [], 'ar');
+  assert(
+    Boolean(
+      singlePriestRes.attachedImage &&
+      typeof singlePriestRes.attachedImage.url === 'string' &&
+      singlePriestRes.attachedImage.url.length > 0 &&
+      (singlePriestRes.attachedImage.captionAr?.includes('مينا') || singlePriestRes.attachedImage.alt?.includes('مينا'))
+    ),
+    'Single priest query returns response + attached image of that specific priest'
+  );
+
+  // When query is general or mentions multiple priests, single priest image should not attach
+  const generalClergyRes = await ChurchAiService.processChat('من هم جميع الآباء الكهنة المتاحين للاعتراف؟', [], 'ar');
+  assert(
+    !generalClergyRes.attachedImage,
+    'General query with multiple priests does not attach a single priest image'
+  );
+
+  // 24. RELATED HELPFUL CHURCH IMAGES
+  // Pope Kyrillos VI photo
+  const popeRes = await ChurchAiService.processChat('من هو البابا كيرلس السادس؟', [], 'ar');
+  assert(
+    Boolean(popeRes.attachedImage && popeRes.attachedImage.url === '/images/pope k.jfif'),
+    'Pope Kyrillos VI query attaches verified Pope Kyrillos historical photo'
+  );
+
+  // St. Abu Sefein Shrine photo
+  const shrineRes = await ChurchAiService.processChat('أين يقع مزار الشهيد العظيم أبي سيفين بالكنيسة؟', [], 'ar');
+  assert(
+    Boolean(shrineRes.attachedImage && shrineRes.attachedImage.url === '/images/0 (1).jpg'),
+    'Abu Sefein shrine query attaches verified shrine photo'
+  );
+
   console.log(`\n=== TEST RESULTS: ${passedTests}/${totalTests} TESTS PASSED ===`);
   if (passedTests === totalTests) {
     console.log('🎉 ALL INTEGRATION & SECURITY TEST SUITES PASSED SUCCESSFULLY!');
