@@ -225,6 +225,7 @@ export default function ChurchAiAssistant() {
   const [isHandoffModalOpen, setIsHandoffModalOpen] = useState(false);
   const [handoffName, setHandoffName] = useState('');
   const [handoffPhone, setHandoffPhone] = useState('');
+  const [handoffEmail, setHandoffEmail] = useState('');
   const [handoffCategory, setHandoffCategory] = useState<'GENERAL' | 'PASTORAL' | 'MEMBERSHIP' | 'TECHNICAL'>('GENERAL');
   const [handoffMessage, setHandoffMessage] = useState('');
   const [isSubmittingHandoff, setIsSubmittingHandoff] = useState(false);
@@ -243,6 +244,7 @@ export default function ChurchAiAssistant() {
             setMembershipForm(prev => ({ ...prev, fullName: userObj.fullName, phone: userObj.phone || '' }));
             setHandoffName(userObj.fullName);
             setHandoffPhone(userObj.phone || '');
+            if (userObj.email) setHandoffEmail(userObj.email);
           }
         }
       } catch {}
@@ -619,6 +621,7 @@ export default function ChurchAiAssistant() {
         body: JSON.stringify({
           name: handoffName.trim(),
           phone: handoffPhone.trim(),
+          email: handoffEmail.trim() || undefined,
           category: handoffCategory,
           message: handoffMessage.trim()
         })
@@ -685,7 +688,11 @@ export default function ChurchAiAssistant() {
         text: data.response || (isAr ? 'عذراً، لم أتمكن من الحصول على الإجابة.' : 'Sorry, could not retrieve answer.'),
         sources: data.sources || [],
         suggestedQuestions: data.suggestedQuestions || [],
-        action: data.action || undefined,
+        action: data.action ? {
+          ...data.action,
+          nameAr: data.action.nameAr || data.action.labelAr,
+          nameEn: data.action.nameEn || data.action.labelEn,
+        } : undefined,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
@@ -1836,8 +1843,40 @@ export default function ChurchAiAssistant() {
                           </div>
                         )}
 
-                        {/* 3. General Action Link (Schedule / Trips / Donations) */}
-                        {isAssistant && msg.action && msg.action.redirectUrl && msg.action.actionId !== 'book_appointment' && msg.action.actionId !== 'register_membership' && (
+                        {/* 3. Special Handoff Modal Action: Contact Real Person / Email */}
+                        {isAssistant && msg.action && msg.action.actionId === 'contact_real_person' && (
+                          <div style={{ marginTop: '10px' }}>
+                            <button
+                              onClick={() => {
+                                setIsHandoffModalOpen(true);
+                                const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+                                if (lastUserMsg && !handoffMessage) {
+                                  setHandoffMessage(lastUserMsg.text);
+                                }
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '8px 14px',
+                                borderRadius: '8px',
+                                backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                                border: '1px solid rgba(59, 130, 246, 0.4)',
+                                color: '#60a5fa',
+                                fontSize: '0.85rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              <HeartHandshake size={14} />
+                              <span>{isAr ? (msg.action.nameAr || 'تواصل مع شخص حقيقي / إرسال بريد') : (msg.action.nameEn || 'Contact Real Person / Send Email')}</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* 4. General Action Link (Schedule / Trips / Donations / History) */}
+                        {isAssistant && msg.action && msg.action.redirectUrl && msg.action.actionId !== 'book_appointment' && msg.action.actionId !== 'register_membership' && msg.action.actionId !== 'contact_real_person' && (
                           <div style={{ marginTop: '10px' }}>
                             <button
                               onClick={() => {
@@ -2406,6 +2445,31 @@ export default function ChurchAiAssistant() {
                     onChange={e => setHandoffPhone(e.target.value)}
                     placeholder="01234567890"
                     required
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(0, 0, 0, 0.4)',
+                      border: '1px solid rgba(226, 183, 20, 0.25)',
+                      color: '#fff',
+                      fontSize: '0.85rem',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                      direction: 'ltr',
+                      textAlign: isAr ? 'right' : 'left'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, marginBottom: '4px', color: '#fff' }}>
+                    {isAr ? 'البريد الإلكتروني (اختياري للرد)' : 'Email (Optional)'}
+                  </label>
+                  <input
+                    type="email"
+                    value={handoffEmail}
+                    onChange={e => setHandoffEmail(e.target.value)}
+                    placeholder="user@example.com"
                     style={{
                       width: '100%',
                       padding: '9px 12px',

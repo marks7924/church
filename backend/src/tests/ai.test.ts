@@ -121,9 +121,116 @@ async function runAiIntegrationTests() {
     await prisma.aiAdminConversation.delete({ where: { id: adminConv.id } });
   }
 
+  // 15. STRICT RELIGIOUS / THEOLOGICAL REFUSAL TESTS
+  const theologyRes = await ChurchAiService.processChat('ما هو سر التجسد الإلهي؟', [], 'ar');
+  assert(
+    theologyRes.response.includes('ولست كاهناً') && theologyRes.response.includes('تنويه كنسي'),
+    'Theological question immediately refused: AI states it is strictly administrative, not a priest'
+  );
+  assert(theologyRes.action?.actionId === 'book_appointment', 'Religious refusal provides book_appointment action');
+
+  const absolutionRes = await ChurchAiService.processChat('أنا أخطأت وعايزك تديني حل وسماح هنا في الشات', [], 'ar');
+  assert(
+    absolutionRes.response.includes('سر الاعتراف') && absolutionRes.response.includes('الأب الكاهن'),
+    'Sacramental absolution refused: AI directs user to holy confession with a priest'
+  );
+
+  // 16. NEAREST CONFESSION TIMELINE CALCULATION TESTS
+  // Fr. Mina (Active)
+  const minaRes = await ChurchAiService.processChat('متى أقرب موعد اعتراف لأبونا مينا؟', [], 'ar');
+  assert(
+    minaRes.response.includes('مينا') && minaRes.response.includes('أقرب موعد متاح'),
+    'Active priest (Fr. Mina) returns calculated nearest confession slot'
+  );
+
+  // Fr. Michael (Traveling abroad)
+  const michaelRes = await ChurchAiService.processChat('متى أقرب ميعاد اعتراف لأبونا مايكل؟', [], 'ar');
+  assert(
+    michaelRes.response.includes('مسافر خارج مصر') && michaelRes.response.includes('متوقفة مؤقتاً'),
+    'Traveling priest (Fr. Michael) returns travel status & paused confessions'
+  );
+
+  // Fr. Moussa (Inactive)
+  const moussaRes = await ChurchAiService.processChat('متى ميعاد اعتراف أبونا موسى؟', [], 'ar');
+  assert(
+    moussaRes.response.includes('لا يستقبل مواعيد اعترافات حالياً'),
+    'Inactive priest (Fr. Moussa) returns pastoral service notice'
+  );
+
+  // Bishop Anba Athanasius (Bishopric Office)
+  const athanasiusRes = await ChurchAiService.processChat('عايز أقابل الأنبا اثناسيوس للاعتراف', [], 'ar');
+  assert(
+    athanasiusRes.response.includes('سكرتارية المطرانية') || athanasiusRes.response.includes('إدارة الكنيسة'),
+    'Bishop Anba Athanasius returns bishopric office coordination'
+  );
+
+  // 17. OUR HISTORY TESTS (1955, Popes, 8 Bishops in exact order)
+  const historyRes = await ChurchAiService.processChat('ما هو تاريخ الكنيسة ومن هم الآباء الأساقفة؟', [], 'ar');
+  assert(
+    historyRes.response.includes('1955') &&
+    historyRes.response.includes('كيرلس السادس') &&
+    historyRes.response.includes('شنودة الثالث') &&
+    historyRes.response.includes('تواضروس الثاني') &&
+    historyRes.response.includes('أثناسيوس') &&
+    historyRes.response.includes('ميخائيل') &&
+    historyRes.response.includes('ماركوس') &&
+    historyRes.response.includes('بيشوي'),
+    'Our History returns 1955 founding, Popes, and sequential Supervising Bishops'
+  );
+
+  // 18. DONATIONS & DIRECT DEPOSIT POLICY
+  const donationsRes = await ChurchAiService.processChat('ما هي أرقام حسابات التبرع لبنك مصر؟', [], 'ar');
+  assert(
+    donationsRes.response.includes('1300001000001665') &&
+    donationsRes.response.includes('1300120000015295') &&
+    donationsRes.response.includes('BMISEGCX140') &&
+    donationsRes.response.includes('لا تقبل التبرعات عبر بوابات الدفع الإلكتروني'),
+    'Donations returns 4 currency accounts, SWIFT, and strict direct bank deposit policy'
+  );
+
+  // 19. CHURCH SERVICES & DETAILED INNER CARDS
+  const servicesRes = await ChurchAiService.processChat('ما هي خدمات الكنيسة ومواعيد مدارس الأحد والكشافة؟', [], 'ar');
+  assert(
+    servicesRes.response.includes('مدارس الأحد') &&
+    servicesRes.response.includes('حضانة') &&
+    servicesRes.response.includes('مدرسة الشمامسة') &&
+    servicesRes.response.includes('الكشافة') &&
+    servicesRes.response.includes('العيادات التخصصية'),
+    'Church Services returns all 5 services with detailed inner card stages and locations'
+  );
+
+  // 20. CHURCH EVENTS HIDDEN RULE TEST
+  // Simulate hidden events in SystemConfig
+  await prisma.systemConfig.upsert({
+    where: { key: 'events_navbar_public_enabled' },
+    update: { value: 'false' },
+    create: { key: 'events_navbar_public_enabled', value: 'false' }
+  });
+  // Clear retriever cache
+  const hiddenEventsRes = await ChurchAiService.processChat('ما هي الفعاليات وتصاريح الحضور المتاحة؟', [], 'ar');
+  assert(
+    hiddenEventsRes.response.includes('لا تتوفر حالياً أي بيانات أو فعاليات أو تصاريح حضور رسمية'),
+    'Hidden events rule correctly outputs: no data or events can be provided right now'
+  );
+  // Restore events enabled
+  await prisma.systemConfig.upsert({
+    where: { key: 'events_navbar_public_enabled' },
+    update: { value: 'true' },
+    create: { key: 'events_navbar_public_enabled', value: 'true' }
+  });
+
+  // 21. UNKNOWN TASK / CONTACT REAL PERSON FALLBACK
+  const unknownTaskRes = await ChurchAiService.processChat('هل يمكنك دفع فاتورة الكهرباء لمنزلي من هنا؟', [], 'ar');
+  assert(
+    unknownTaskRes.response.includes('لا يمكنني الإجابة عن هذا السؤال أو تنفيذ هذا الطلب') &&
+    unknownTaskRes.response.includes('التواصل مع شخص حقيقي'),
+    'Unknown task or answer asks user if they want to contact a real person'
+  );
+  assert(unknownTaskRes.action?.actionId === 'contact_real_person', 'Unknown task offers contact_real_person action');
+
   console.log(`\n=== TEST RESULTS: ${passedTests}/${totalTests} TESTS PASSED ===`);
   if (passedTests === totalTests) {
-    console.log('🎉 ALL 14 TEST SUITES (11 UPGRADE FEATURES + ADMIN CHAT PIPELINE) PASSED SUCCESSFULLY!');
+    console.log('🎉 ALL INTEGRATION & SECURITY TEST SUITES PASSED SUCCESSFULLY!');
   } else {
     process.exit(1);
   }

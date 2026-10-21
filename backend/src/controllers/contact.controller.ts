@@ -26,18 +26,39 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   try {
+    // 24-hour rate limit check: strictly 1 contact message per day
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const existing = await prisma.contactMessage.findFirst({
+      where: {
+        createdAt: { gte: oneDayAgo },
+        OR: [
+          phone ? { phone: String(phone).trim() } : undefined,
+          email ? { email: String(email).trim().toLowerCase() } : undefined
+        ].filter(Boolean) as any[]
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (existing) {
+      return res.status(429).json({
+        error: 'Only one contact message is permitted every 24 hours. Your message has already been received.',
+        errorAr: 'عذراً، يُسمح بإرسال رسالة تواصل واحدة فقط كل 24 ساعة. رسالتك السابقة قيد المتابعة حالياً.'
+      });
+    }
+
     const contactMsg = await prisma.contactMessage.create({
       data: {
-        name,
-        email,
-        phone,
-        subject,
-        message
+        name: String(name).trim(),
+        email: String(email).trim().toLowerCase(),
+        phone: String(phone).trim(),
+        subject: String(subject).trim(),
+        message: String(message).trim()
       }
     });
 
     return res.status(201).json({
       message: 'Contact message submitted successfully.',
+      messageAr: 'تم إرسال رسالتك بنجاح. سيقوم سكرتير الكنيسة بمتابعتها.',
       id: contactMsg.id
     });
   } catch (error) {

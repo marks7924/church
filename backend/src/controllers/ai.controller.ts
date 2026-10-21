@@ -711,6 +711,28 @@ router.post('/support-request', async (req: Request, res: Response) => {
       });
     }
 
+    // Strict Rate Limit: 1 contact/support message per 24 hours per user/phone/email
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const existingRecent = await prisma.aiSupportRequest.findFirst({
+      where: {
+        createdAt: { gte: oneDayAgo },
+        OR: [
+          user?.id ? { userId: user.id } : undefined,
+          phone ? { phone: String(phone).trim() } : undefined,
+          email ? { email: String(email).trim().toLowerCase() } : undefined
+        ].filter(Boolean) as any[]
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (existingRecent) {
+      return res.status(429).json({
+        errorAr: `عذراً، يُسمح بإرسال رسالة تواصل واحدة فقط كل 24 ساعة. طلبك السابق قيد المتابعة حالياً برقم مرجعي (#${existingRecent.referenceCode}).`,
+        error: `Only one contact/support request is allowed every 24 hours. Your request (#${existingRecent.referenceCode}) is currently under review.`,
+        referenceCode: existingRecent.referenceCode
+      });
+    }
+
     const refCode = `REQ-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const supportRequest = await prisma.aiSupportRequest.create({
@@ -725,6 +747,21 @@ router.post('/support-request', async (req: Request, res: Response) => {
         status: 'PENDING'
       }
     });
+
+    // Mirror to standard contact message for complete administrative coverage
+    try {
+      await prisma.contactMessage.create({
+        data: {
+          name: String(name).trim(),
+          phone: String(phone).trim(),
+          email: email ? String(email).trim().toLowerCase() : (user?.email || 'contact@church.org'),
+          subject: `AI Support: ${category || 'GENERAL'} (#${refCode})`,
+          message: String(message).trim()
+        }
+      });
+    } catch (mirrorErr) {
+      console.warn('Could not mirror support request to contactMessage:', mirrorErr);
+    }
 
     logAction(
       user ? user.id : 'VISITOR',
