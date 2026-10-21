@@ -21,6 +21,7 @@ import facebookNewsRouter from './controllers/facebook-news.controller';
 import emailCenterRouter from './controllers/email-center.controller';
 import invitationRouter from './controllers/invitation.controller';
 import fyRouter from './controllers/fy.controller';
+import historyRouter from './controllers/history.controller';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -107,6 +108,7 @@ app.use('/api/facebook-news', facebookNewsRouter);
 app.use('/api/email-center', emailCenterRouter);
 app.use('/api/invitations', invitationRouter);
 app.use('/api/fy', fyRouter);
+app.use('/api/history', historyRouter);
 
 // Error Handling Middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

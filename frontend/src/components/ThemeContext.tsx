@@ -25,6 +25,14 @@ export const dictionary: TranslationDictionary = {
   nav_about: { ar: 'عن الكنيسة', en: 'About' },
   nav_contact: { ar: 'اتصل بنا', en: 'Contact' },
   nav_dashboard: { ar: 'لوحة التحكم', en: 'Dashboard' },
+  nav_history: { ar: 'تاريخ كنيستنا', en: 'Our History' },
+  history_begin: { ar: 'ابدأ الرحلة', en: 'Begin the Journey' },
+  history_explore: { ar: 'استكشف تاريخ الكنيسة', en: 'Explore All History' },
+  history_timeline: { ar: 'الخط الزمني', en: 'Historical Timeline' },
+  history_clergy: { ar: 'كهنة الكنيسة عبر التاريخ', en: 'Clergy Throughout History' },
+  history_visits: { ar: 'الزيارات التاريخية', en: 'Historic Visits' },
+  history_archive: { ar: 'الأرشيف التاريخي', en: 'Historical Archive' },
+  history_story_continues: { ar: 'والحكاية مستمرة', en: 'The Story Continues' },
   
   // Hero
   hero_title: { ar: 'كنيسه الشهيد العظيم ابو سيفين بحدائق القبه', en: 'One Holy Apostolic Coptic Orthodox Church' },

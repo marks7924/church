@@ -855,4 +855,158 @@ model FyMemberQuestionSubmission {
   @@index([status])
 }
 
+// ==========================================
+// 8. OUR HISTORY & HISTORICAL CLERGY ARCHIVE
+// ==========================================
+
+model HistorySettings {
+  id              String   @id @default("default-history-settings")
+  foundingYear    Int      @default(1955)
+  headlineAr      String   @default("لكل كنيسة حكاية... وهذه حكايتنا.")
+  headlineEn      String   @default("Every church has a story. This is ours.")
+  subheadlineAr   String   @default("منذ عام 1955")
+  subheadlineEn   String   @default("Since 1955")
+  introTextAr     String   @default("تاريخ كنيسة الشهيد العظيم أبي سيفين هو رحلة مباركة من الإيمان والخدمة والرعاية الروحية تمتد عبر أجيال من الآباء الأجلاء والشمامسة والخدام وشعب الكنيسة المبارك.")
+  introTextEn     String   @default("The history of St. Philopater Church is a blessed journey of faith, service, and pastoral care spanning generations of revered clergy, servants, and congregation.")
+  heroImageUrl    String?
+  updatedAt       DateTime @updatedAt
+}
+
+model HistoryChapter {
+  id              String   @id @default(uuid())
+  slug            String   @unique
+  titleAr         String
+  titleEn         String
+  shortIntroAr    String?
+  shortIntroEn    String?
+  narrativeAr     String
+  narrativeEn     String?
+  heroImageUrl    String?
+  orderIndex      Int      @default(0)
+  status          String   @default("PUBLISHED") // DRAFT, PUBLISHED, ARCHIVED
+  quoteText       String?
+  quoteSource     String?
+  documentsJson   String   @default("[]") // [{ titleAr, titleEn, url, type, size }]
+  galleryJson     String   @default("[]") // [{ url, captionAr, captionEn, credit }]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([slug])
+  @@index([orderIndex])
+  @@index([status])
+}
+
+model HistoryClergyRecord {
+  id                   String   @id @default(uuid())
+  ecclesiasticalNameAr String
+  ecclesiasticalNameEn String?
+  secularName          String?
+  isSecularNameVisible Boolean  @default(true)
+  avatarUrl            String?
+  serviceStartDate     String   // YYYY-MM-DD or YYYY
+  serviceEndDate       String?  // null if unknown or ongoing
+  datePrecision        String   @default("EXACT") // EXACT, YEAR_ONLY, APPROXIMATE
+  isOngoing            Boolean  @default(false)
+  clergyRole           String   @default("PRIEST") // PRIEST, BISHOP, MONK_PRIEST, ARCHPRIEST
+  titleAr              String?  // e.g. القمص, القس, الراهب القمص
+  titleEn              String?
+  bioAr                String?
+  bioEn                String?
+  orderIndex           Int      @default(0)
+  verificationStatus   String   @default("VERIFIED") // DRAFT, AWAITING_VERIFICATION, VERIFIED
+  verificationWarning  String?  // Administrative warning note
+  archivalNotes        String?
+  status               String   @default("PUBLISHED") // DRAFT, PUBLISHED, ARCHIVED
+  relatedEventsJson    String   @default("[]")
+  documentsJson        String   @default("[]")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([orderIndex])
+  @@index([status])
+  @@index([verificationStatus])
+}
+
+model HistoryEvent {
+  id                  String   @id @default(uuid())
+  titleAr             String
+  titleEn             String?
+  descriptionAr       String
+  descriptionEn       String?
+  eventDate           String   // YYYY-MM-DD or YYYY
+  year                Int
+  datePrecision       String   @default("YEAR_ONLY") // EXACT, YEAR_ONLY, APPROXIMATE, UNDATED
+  category            String   @default("FOUNDATION") // FOUNDATION, CONSTRUCTION, EXPANSION, CLERGY_APPOINTMENT, CELEBRATION, ANNIVERSARY, PAPAL_VISIT, EPISCOPAL_VISIT, MINISTRY, COMMUNITY
+  mainImageUrl        String?
+  galleryJson         String   @default("[]")
+  relatedClergyIds    String   @default("[]")
+  relatedChapterSlug  String?
+  sources             String?
+  verificationStatus  String   @default("VERIFIED") // DRAFT, AWAITING_VERIFICATION, VERIFIED
+  status              String   @default("PUBLISHED") // DRAFT, PUBLISHED, ARCHIVED
+  orderIndex          Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([year])
+  @@index([category])
+  @@index([status])
+}
+
+model HistoryVisit {
+  id                    String   @id @default(uuid())
+  visitorNameAr         String
+  visitorNameEn         String?
+  ecclesiasticalTitleAr String
+  ecclesiasticalTitleEn String?
+  visitTitleAr          String
+  visitTitleEn          String?
+  visitDate             String   // YYYY-MM-DD or YYYY
+  year                  Int
+  locationAr            String?
+  locationEn            String?
+  occasionAr            String?
+  occasionEn            String?
+  narrativeAr           String
+  narrativeEn           String?
+  mainImageUrl          String?
+  galleryJson           String   @default("[]")
+  documentsJson         String   @default("[]")
+  relatedClergyIds      String   @default("[]")
+  verificationStatus    String   @default("VERIFIED")
+  status                String   @default("PUBLISHED")
+  orderIndex            Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([year])
+  @@index([status])
+}
+
+model HistoryMediaItem {
+  id                   String   @id @default(uuid())
+  url                  String
+  titleAr              String
+  titleEn              String?
+  captionAr            String?
+  captionEn            String?
+  mediaType            String   @default("IMAGE") // IMAGE, DOCUMENT, VIDEO
+  year                 Int?
+  approximateDate      String?
+  category             String   @default("CHURCH_BUILDING") // CHURCH_BUILDING, CLERGY, VISIT, CELEBRATION, DOCUMENT, CEREMONY
+  photographerOrSource String?
+  archivalCredit       String?
+  altText              String?
+  isPublic             Boolean  @default(true)
+  status               String   @default("PUBLISHED")
+  orderIndex           Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([category])
+  @@index([status])
+  @@index([mediaType])
+}
+
+
 
