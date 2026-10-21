@@ -421,8 +421,8 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
           <div style="background-color: #f1f5f9; border-right: 4px solid #3b82f6; border-radius: 8px; padding: 14px 18px; margin: 16px 0;">
             <p style="margin: 4px 0;"><b>الفعالية:</b> ${event.titleAr}</p>
             <p style="margin: 4px 0;"><b>التاريخ:</b> ${new Date(event.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-            ${event.timeSlot ? `<p style="margin: 4px 0;"><b>الموعد:</b> ${event.timeSlot}</p>` : ''}
-            <p style="margin: 4px 0;"><b>مكان الحضور والقاعة:</b> ${loc.nameAr}</p>
+            ${event.startTime ? `<p style="margin: 4px 0;"><b>الموعد:</b> من الساعة ${event.startTime}${event.endTime ? ` إلى ${event.endTime}` : ''}</p>` : ''}
+            <p style="margin: 4px 0;"><b>مكان الحضور والقاعة:</b> ${event.locations?.find(l => l.id === locationId)?.nameAr || 'قاعة الكنيسة'}</p>
             <p style="margin: 4px 0;"><b>عدد المقاعد المحجوزة:</b> ${result.seatsGranted}</p>
           </div>
           <h3 style="font-size: 15px; color: #1e293b; margin: 16px 0 8px;">تفاصيل بطاقات الحضور الصادرة:</h3>
@@ -859,7 +859,7 @@ router.post(
                 <p style="margin: 4px 0;"><b>نوع الدعوة:</b> ${isVipPass ? '🌟 دعوة VIP خاصة' : 'بطاقة حضور قياسية'}</p>
                 <p style="margin: 4px 0;"><b>الفعالية:</b> ${event.titleAr}</p>
                 <p style="margin: 4px 0;"><b>التاريخ:</b> ${new Date(event.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                ${event.timeSlot ? `<p style="margin: 4px 0;"><b>الموعد:</b> ${event.timeSlot}</p>` : ''}
+                ${event.startTime ? `<p style="margin: 4px 0;"><b>الموعد:</b> من الساعة ${event.startTime}${event.endTime ? ` إلى ${event.endTime}` : ''}</p>` : ''}
                 <p style="margin: 4px 0;"><b>المكان:</b> ${location.nameAr}</p>
                 <p style="margin: 4px 0;"><b>اسم صاحب الدعوة:</b> ${inv.recipientName}</p>
               </div>
