@@ -151,7 +151,49 @@ const statements = [
   );`,
   `CREATE INDEX IF NOT EXISTS "HistoryMediaItem_category_idx" ON "HistoryMediaItem"("category");`,
   `CREATE INDEX IF NOT EXISTS "HistoryMediaItem_status_idx" ON "HistoryMediaItem"("status");`,
-  `CREATE INDEX IF NOT EXISTS "HistoryMediaItem_mediaType_idx" ON "HistoryMediaItem"("mediaType");`
+  `CREATE INDEX IF NOT EXISTS "HistoryMediaItem_mediaType_idx" ON "HistoryMediaItem"("mediaType");`,
+
+  // 7. Clergy Extensions (Deceased & Serving Abroad)
+  `ALTER TABLE "HistoryClergyRecord" ADD COLUMN IF NOT EXISTS "isDeceased" BOOLEAN NOT NULL DEFAULT false;`,
+  `ALTER TABLE "HistoryClergyRecord" ADD COLUMN IF NOT EXISTS "isServingAbroad" BOOLEAN NOT NULL DEFAULT false;`,
+  `ALTER TABLE "HistoryClergyRecord" ADD COLUMN IF NOT EXISTS "servingAbroadLocation" TEXT;`,
+
+  // 8. HistoryBishopRecord (Supervising Bishops)
+  `CREATE TABLE IF NOT EXISTS "HistoryBishopRecord" (
+    "id" TEXT PRIMARY KEY,
+    "nameAr" TEXT NOT NULL,
+    "nameEn" TEXT,
+    "titleAr" TEXT NOT NULL DEFAULT 'الأسقف العام',
+    "titleEn" TEXT DEFAULT 'General Bishop',
+    "episcopalPeriod" TEXT NOT NULL,
+    "avatarUrl" TEXT,
+    "bioAr" TEXT,
+    "bioEn" TEXT,
+    "orderIndex" INTEGER NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'PUBLISHED',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );`,
+  `CREATE INDEX IF NOT EXISTS "HistoryBishopRecord_orderIndex_idx" ON "HistoryBishopRecord"("orderIndex");`,
+  `CREATE INDEX IF NOT EXISTS "HistoryBishopRecord_status_idx" ON "HistoryBishopRecord"("status");`,
+
+  // 9. HistoryServantFruit (Deacons & Servants who originated from this church)
+  `CREATE TABLE IF NOT EXISTS "HistoryServantFruit" (
+    "id" TEXT PRIMARY KEY,
+    "fullNameAr" TEXT NOT NULL,
+    "fullNameEn" TEXT,
+    "currentRole" TEXT NOT NULL,
+    "ordinationYear" TEXT,
+    "currentChurchOrLocation" TEXT,
+    "avatarUrl" TEXT,
+    "notes" TEXT,
+    "orderIndex" INTEGER NOT NULL DEFAULT 0,
+    "status" TEXT NOT NULL DEFAULT 'PUBLISHED',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );`,
+  `CREATE INDEX IF NOT EXISTS "HistoryServantFruit_orderIndex_idx" ON "HistoryServantFruit"("orderIndex");`,
+  `CREATE INDEX IF NOT EXISTS "HistoryServantFruit_status_idx" ON "HistoryServantFruit"("status");`
 ];
 
 async function run() {

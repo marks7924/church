@@ -36,6 +36,7 @@ export default function Footer() {
         <div>
           <h4 style={{ color: 'var(--text-primary)', marginBottom: '1rem' }}>{t('quick_nav')}</h4>
           <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.9rem' }}>
+            <li><a href="/history" style={{ color: 'var(--text-secondary)' }}>{t('nav_history')}</a></li>
             <li><a href="/schedule" style={{ color: 'var(--text-secondary)' }}>{t('nav_schedule')}</a></li>
             <li><a href="/sermons" style={{ color: 'var(--text-secondary)' }}>{t('nav_sermons')}</a></li>
             <li><a href="/ministries" style={{ color: 'var(--text-secondary)' }}>{t('nav_ministries')}</a></li>

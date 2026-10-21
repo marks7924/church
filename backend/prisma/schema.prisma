@@ -907,6 +907,9 @@ model HistoryClergyRecord {
   serviceEndDate       String?  // null if unknown or ongoing
   datePrecision        String   @default("EXACT") // EXACT, YEAR_ONLY, APPROXIMATE
   isOngoing            Boolean  @default(false)
+  isDeceased           Boolean  @default(false)
+  isServingAbroad      Boolean  @default(false)
+  servingAbroadLocation String?
   clergyRole           String   @default("PRIEST") // PRIEST, BISHOP, MONK_PRIEST, ARCHPRIEST
   titleAr              String?  // e.g. القمص, القس, الراهب القمص
   titleEn              String?
@@ -1006,6 +1009,43 @@ model HistoryMediaItem {
   @@index([category])
   @@index([status])
   @@index([mediaType])
+}
+
+model HistoryBishopRecord {
+  id              String   @id @default(uuid())
+  nameAr          String
+  nameEn          String?
+  titleAr         String   @default("الأسقف العام")
+  titleEn         String?  @default("General Bishop")
+  episcopalPeriod String   // e.g. "2013 - حتى الآن"
+  avatarUrl       String?
+  bioAr           String?
+  bioEn           String?
+  orderIndex      Int      @default(0)
+  status          String   @default("PUBLISHED")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([orderIndex])
+  @@index([status])
+}
+
+model HistoryServantFruit {
+  id                      String   @id @default(uuid())
+  fullNameAr              String
+  fullNameEn              String?
+  currentRole             String   // e.g. "شماس دياكون", "كاهن مبارك", "راهب", "خادم مكرس"
+  ordinationYear          String?
+  currentChurchOrLocation String?  // e.g. "دير الشهيد مارمينا", "كنيسة العذراء"
+  avatarUrl               String?
+  notes                   String?
+  orderIndex              Int      @default(0)
+  status                  String   @default("PUBLISHED")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([orderIndex])
+  @@index([status])
 }
 
 

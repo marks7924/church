@@ -99,6 +99,20 @@ router.get('/', async (req: Request, res: Response) => {
       orderBy: { orderIndex: 'asc' }
     });
 
+    // 7. Supervising Bishops
+    const bishopWhere = isAdmin ? {} : { status: 'PUBLISHED' };
+    const bishops = await prisma.historyBishopRecord.findMany({
+      where: bishopWhere,
+      orderBy: { orderIndex: 'asc' }
+    });
+
+    // 8. Church Deacons & Consecrated Servants (ثمار الخدمة المباركة)
+    const fruitWhere = isAdmin ? {} : { status: 'PUBLISHED' };
+    const servantsFruits = await prisma.historyServantFruit.findMany({
+      where: fruitWhere,
+      orderBy: { orderIndex: 'asc' }
+    });
+
     return res.status(200).json({
       isAdmin,
       settings,
@@ -106,7 +120,9 @@ router.get('/', async (req: Request, res: Response) => {
       clergy,
       events,
       visits,
-      media
+      media,
+      bishops,
+      servantsFruits
     });
   } catch (error: any) {
     console.error('Error fetching history archive:', error);
@@ -289,6 +305,9 @@ router.post('/clergy', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthR
       serviceEndDate,
       datePrecision,
       isOngoing,
+      isDeceased,
+      isServingAbroad,
+      servingAbroadLocation,
       clergyRole,
       titleAr,
       titleEn,
@@ -314,6 +333,9 @@ router.post('/clergy', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthR
       calculatedWarning = `تاريخ بداية الخدمة (${serviceStartDate}) يسبق تأسيس الكنيسة عام 1955. يتطلب مراجعة الأرشيف.`;
     }
 
+    const finalEndDate = isOngoing ? null : (serviceEndDate || null);
+    const finalIsDeceased = Boolean(isDeceased || finalEndDate);
+
     const created = await prisma.historyClergyRecord.create({
       data: {
         ecclesiasticalNameAr,
@@ -322,9 +344,12 @@ router.post('/clergy', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthR
         isSecularNameVisible: isSecularNameVisible !== undefined ? Boolean(isSecularNameVisible) : true,
         avatarUrl,
         serviceStartDate,
-        serviceEndDate: isOngoing ? null : (serviceEndDate || null),
+        serviceEndDate: finalEndDate,
         datePrecision: datePrecision || 'EXACT',
         isOngoing: Boolean(isOngoing),
+        isDeceased: finalIsDeceased,
+        isServingAbroad: Boolean(isServingAbroad),
+        servingAbroadLocation: servingAbroadLocation || null,
         clergyRole: clergyRole || 'PRIEST',
         titleAr: titleAr || 'القمص',
         titleEn: titleEn || 'Hegumen',
@@ -360,6 +385,9 @@ router.put('/clergy/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: Au
       serviceEndDate,
       datePrecision,
       isOngoing,
+      isDeceased,
+      isServingAbroad,
+      servingAbroadLocation,
       clergyRole,
       titleAr,
       titleEn,
@@ -374,6 +402,15 @@ router.put('/clergy/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: Au
       documentsJson
     } = req.body;
 
+    const finalEndDate = isOngoing ? null : (serviceEndDate !== undefined ? (serviceEndDate === '' ? null : serviceEndDate) : undefined);
+    let finalIsDeceased: boolean | undefined = undefined;
+    if (isDeceased !== undefined) {
+      finalIsDeceased = Boolean(isDeceased);
+    }
+    if (finalEndDate) {
+      finalIsDeceased = true;
+    }
+
     const updated = await prisma.historyClergyRecord.update({
       where: { id },
       data: {
@@ -383,9 +420,12 @@ router.put('/clergy/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: Au
         isSecularNameVisible: isSecularNameVisible !== undefined ? Boolean(isSecularNameVisible) : undefined,
         avatarUrl,
         serviceStartDate,
-        serviceEndDate: isOngoing ? null : (serviceEndDate !== undefined ? (serviceEndDate === '' ? null : serviceEndDate) : undefined),
+        serviceEndDate: finalEndDate,
         datePrecision,
         isOngoing: isOngoing !== undefined ? Boolean(isOngoing) : undefined,
+        isDeceased: finalIsDeceased,
+        isServingAbroad: isServingAbroad !== undefined ? Boolean(isServingAbroad) : undefined,
+        servingAbroadLocation: servingAbroadLocation !== undefined ? (servingAbroadLocation === '' ? null : servingAbroadLocation) : undefined,
         clergyRole,
         titleAr,
         titleEn,
@@ -790,6 +830,190 @@ router.delete('/media/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: 
   } catch (error: any) {
     console.error('Error deleting media item:', error);
     return res.status(500).json({ error: 'Failed to delete media item.' });
+  }
+});
+
+// ==========================================
+// 8. SUPERVISING BISHOPS MANAGEMENT (Admin)
+// ==========================================
+router.post('/bishops', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      nameAr,
+      nameEn,
+      titleAr,
+      titleEn,
+      episcopalPeriod,
+      avatarUrl,
+      bioAr,
+      bioEn,
+      status,
+      orderIndex
+    } = req.body;
+
+    if (!nameAr || !episcopalPeriod) {
+      return res.status(400).json({ error: 'اسم الحبر الجليل وفترة الرعاية الكنسية مطلوبان.' });
+    }
+
+    const created = await prisma.historyBishopRecord.create({
+      data: {
+        nameAr,
+        nameEn,
+        titleAr: titleAr || 'الأسقف العام',
+        titleEn: titleEn || 'General Bishop',
+        episcopalPeriod,
+        avatarUrl,
+        bioAr,
+        bioEn,
+        status: status || 'PUBLISHED',
+        orderIndex: orderIndex !== undefined ? parseInt(orderIndex, 10) : 0
+      }
+    });
+
+    return res.status(201).json({ message: 'تمت إضافة الحبر الجليل بنجاح', bishop: created });
+  } catch (error: any) {
+    console.error('Error creating bishop record:', error);
+    return res.status(500).json({ error: 'Failed to create bishop record.' });
+  }
+});
+
+router.put('/bishops/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      nameAr,
+      nameEn,
+      titleAr,
+      titleEn,
+      episcopalPeriod,
+      avatarUrl,
+      bioAr,
+      bioEn,
+      status,
+      orderIndex
+    } = req.body;
+
+    const updated = await prisma.historyBishopRecord.update({
+      where: { id },
+      data: {
+        nameAr,
+        nameEn,
+        titleAr,
+        titleEn,
+        episcopalPeriod,
+        avatarUrl,
+        bioAr,
+        bioEn,
+        status,
+        orderIndex: orderIndex !== undefined ? parseInt(orderIndex, 10) : undefined
+      }
+    });
+
+    return res.status(200).json({ message: 'تم تحديث بيانات الحبر الجليل بنجاح', bishop: updated });
+  } catch (error: any) {
+    console.error('Error updating bishop record:', error);
+    return res.status(500).json({ error: 'Failed to update bishop record.' });
+  }
+});
+
+router.delete('/bishops/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.historyBishopRecord.delete({ where: { id } });
+    return res.status(200).json({ message: 'تم حذف سجل الحبر الجليل بنجاح' });
+  } catch (error: any) {
+    console.error('Error deleting bishop record:', error);
+    return res.status(500).json({ error: 'Failed to delete bishop record.' });
+  }
+});
+
+// ==========================================
+// 9. CHURCH SERVANTS & DEACONS FRUIT (Admin)
+// ==========================================
+router.post('/servants-fruits', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      fullNameAr,
+      fullNameEn,
+      currentRole,
+      ordinationYear,
+      currentChurchOrLocation,
+      avatarUrl,
+      notes,
+      status,
+      orderIndex
+    } = req.body;
+
+    if (!fullNameAr || !currentRole) {
+      return res.status(400).json({ error: 'الاسم والرتبة أو الخدمة الحالية مطلوبان.' });
+    }
+
+    const created = await prisma.historyServantFruit.create({
+      data: {
+        fullNameAr,
+        fullNameEn,
+        currentRole,
+        ordinationYear: ordinationYear ? String(ordinationYear) : null,
+        currentChurchOrLocation,
+        avatarUrl,
+        notes,
+        status: status || 'PUBLISHED',
+        orderIndex: orderIndex !== undefined ? parseInt(orderIndex, 10) : 0
+      }
+    });
+
+    return res.status(201).json({ message: 'تمت إضافة الخادم المبارك بنجاح', fruit: created });
+  } catch (error: any) {
+    console.error('Error creating servant fruit:', error);
+    return res.status(500).json({ error: 'Failed to create servant fruit.' });
+  }
+});
+
+router.put('/servants-fruits/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      fullNameAr,
+      fullNameEn,
+      currentRole,
+      ordinationYear,
+      currentChurchOrLocation,
+      avatarUrl,
+      notes,
+      status,
+      orderIndex
+    } = req.body;
+
+    const updated = await prisma.historyServantFruit.update({
+      where: { id },
+      data: {
+        fullNameAr,
+        fullNameEn,
+        currentRole,
+        ordinationYear: ordinationYear !== undefined ? (ordinationYear ? String(ordinationYear) : null) : undefined,
+        currentChurchOrLocation,
+        avatarUrl,
+        notes,
+        status,
+        orderIndex: orderIndex !== undefined ? parseInt(orderIndex, 10) : undefined
+      }
+    });
+
+    return res.status(200).json({ message: 'تم تحديث بيانات الخادم بنجاح', fruit: updated });
+  } catch (error: any) {
+    console.error('Error updating servant fruit:', error);
+    return res.status(500).json({ error: 'Failed to update servant fruit.' });
+  }
+});
+
+router.delete('/servants-fruits/:id', requireAuth, requireRoles(ADMIN_ROLES), async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.historyServantFruit.delete({ where: { id } });
+    return res.status(200).json({ message: 'تم حذف سجل الخادم بنجاح' });
+  } catch (error: any) {
+    console.error('Error deleting servant fruit:', error);
+    return res.status(500).json({ error: 'Failed to delete servant fruit.' });
   }
 });
 

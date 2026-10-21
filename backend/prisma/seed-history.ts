@@ -135,6 +135,7 @@ async function seedHistory() {
       serviceEndDate: '1982-07-09',
       datePrecision: 'EXACT',
       isOngoing: false,
+      isDeceased: true,
       clergyRole: 'ARCHPRIEST',
       titleAr: 'القمص',
       titleEn: 'Hegumen',
@@ -169,6 +170,7 @@ async function seedHistory() {
       serviceEndDate: '2011-04-23',
       datePrecision: 'EXACT',
       isOngoing: false,
+      isDeceased: true,
       clergyRole: 'ARCHPRIEST',
       titleAr: 'القمص',
       titleEn: 'Hegumen',
@@ -185,6 +187,7 @@ async function seedHistory() {
       serviceEndDate: '2012-11-08',
       datePrecision: 'EXACT',
       isOngoing: false,
+      isDeceased: true,
       clergyRole: 'ARCHPRIEST',
       titleAr: 'القمص',
       titleEn: 'Hegumen',
@@ -354,6 +357,8 @@ async function seedHistory() {
       serviceEndDate: null,
       datePrecision: 'EXACT',
       isOngoing: true,
+      isServingAbroad: true,
+      servingAbroadLocation: 'يخدم بالخارج حالياً',
       clergyRole: 'PRIEST',
       titleAr: 'القس',
       titleEn: 'Priest',
@@ -444,6 +449,86 @@ async function seedHistory() {
     });
     console.log('✓ Seeded 1936 Record for Admin Verification');
   }
+
+  // 5. Seed Supervising Bishops (الآباء الأساقفة المسؤولون عن الكنيسة)
+  const bishops = [
+    {
+      nameAr: 'الأنبا أثناسيوس',
+      nameEn: 'Bishop Anba Athanasius',
+      titleAr: 'الأسقف العام لمنطقة حدائق القبة والوايلي ومنشية الصدر',
+      titleEn: 'General Bishop of Hadayek Al Koba & El Wayli',
+      episcopalPeriod: '2021 — حتى الآن',
+      bioAr: 'راعي الإيبارشية الجليل، رُسم أسقفاً عاماً بيد صاحب الغبطة والقداسة البابا المعظم الأنبا تواضروس الثاني في 7 مارس 2021، ويقود الخدمة والرعاية الروحية بكل أمانة وتفانٍ وتطوير شامل لمباني وأنشطة الكنيسة.',
+      bioEn: 'General Bishop consecrated by Pope Tawadros II in 2021, shepherding the diocesan congregation with dedicated leadership.',
+      orderIndex: 1,
+      status: 'PUBLISHED'
+    },
+    {
+      nameAr: 'الأنبا مارتيروس',
+      nameEn: 'Bishop Anba Martyros',
+      titleAr: 'الأسقف العام لكنائس شرق السكة الحديد (فترة رعاية سابقة)',
+      titleEn: 'General Bishop of East Railway Churches (Former Pastoral Period)',
+      episcopalPeriod: '2001 — 2021',
+      bioAr: 'تولى رعاية كنائس القطاع ومن بينها كنيسة الشهيد أبي سيفين لسنوات طويلة زاخرة بالتعليم والتثبيت العقيدي والنهضات الروحية المباركة.',
+      bioEn: 'Shepherded the district churches including St. Philopater with rich spiritual teaching and theological heritage.',
+      orderIndex: 2,
+      status: 'PUBLISHED'
+    }
+  ];
+
+  for (const b of bishops) {
+    const existing = await prisma.historyBishopRecord.findFirst({ where: { nameAr: b.nameAr } });
+    if (existing) {
+      await prisma.historyBishopRecord.update({ where: { id: existing.id }, data: b });
+    } else {
+      await prisma.historyBishopRecord.create({ data: b });
+    }
+  }
+  console.log('✓ Seeded Supervising Bishops');
+
+  // 6. Seed Servants & Deacons Originated from this Church (ثمار الخدمة)
+  const servantsFruits = [
+    {
+      fullNameAr: 'الشماس المكرس د. عادل فهيم حنا',
+      fullNameEn: 'Deacon Dr. Adel Fahim Hanna',
+      currentRole: 'دياكون شماس كامل مكرس',
+      ordinationYear: '1985',
+      currentChurchOrLocation: 'خدمة التكريس وألحان الكنيسة القبطية',
+      notes: 'تتلمذ في فصول مدارس الأحد بالكنيسة منذ صباه، ورُسم دياكوناً وكرس حياته للخدمة والتعليم الطقسي والألحان.',
+      orderIndex: 1,
+      status: 'PUBLISHED'
+    },
+    {
+      fullNameAr: 'الراهب القمص متى الأنبا بولا',
+      fullNameEn: 'Fr. Matta Ava Paula',
+      currentRole: 'راهب قمص بدير القديس العظيم الأنبا بولا بالبحر الأحمر',
+      ordinationYear: '1994',
+      currentChurchOrLocation: 'دير الأنبا بولا بالبحر الأحمر',
+      notes: 'من أبناء وشباب الكنيسة المباركين الذين ترعرعوا في خدمة أبي سيفين ثم اختار طريق الرهبنة والتكريس الكامل.',
+      orderIndex: 2,
+      status: 'PUBLISHED'
+    },
+    {
+      fullNameAr: 'الخادم المكرس أمين عبد الملاك شنودة',
+      fullNameEn: 'Dedicated Servant Amin Abdel Malak',
+      currentRole: 'أمين عام مدارس الأحد والخدمة الأسرية',
+      ordinationYear: '1978',
+      currentChurchOrLocation: 'كنيسة الشهيد أبي سيفين بحدائق القبة',
+      notes: 'خدم أجيالاً متتالية من أطفال وشباب الكنيسة وقاد مسيرة إعداد الخدام لعقود من الزمان بالصبر والإخلاص.',
+      orderIndex: 3,
+      status: 'PUBLISHED'
+    }
+  ];
+
+  for (const s of servantsFruits) {
+    const existing = await prisma.historyServantFruit.findFirst({ where: { fullNameAr: s.fullNameAr } });
+    if (existing) {
+      await prisma.historyServantFruit.update({ where: { id: existing.id }, data: s });
+    } else {
+      await prisma.historyServantFruit.create({ data: s });
+    }
+  }
+  console.log('✓ Seeded Church Servants & Deacons (ثمار الخدمة)');
 
   console.log('--- Seeding Completed Successfully ---');
 }

@@ -136,7 +136,6 @@ export default function Navbar() {
     { name: t('nav_sermons'), path: '/sermons' },
     { name: t('nav_ministries'), path: '/ministries' },
     { name: t('nav_history'), path: '/history' },
-    { name: t('nav_about'), path: '/about' },
     { name: t('nav_donations'), path: '/donations' },
     { name: t('nav_contact'), path: '/contact' },
   ];
