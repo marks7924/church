@@ -10,11 +10,12 @@ import {
   Clock, ArrowUpRight, CheckCircle, FileText, Activity, AlertCircle,
   HeartHandshake, BookOpen, Layers, Zap, UserCheck
 } from 'lucide-react';
+import ChatLearnerView from './ChatLearnerView';
 
 interface AdminAiManagerProps {
   token: string | null;
   language: 'ar' | 'en';
-  initialSubTab?: 'admin-chat' | 'knowledge' | 'chat-logs' | 'evaluation-lab' | 'provider-health' | 'faqs' | 'overview' | 'playground' | 'analytics';
+  initialSubTab?: 'chat-learner' | 'admin-chat' | 'knowledge' | 'chat-logs' | 'evaluation-lab' | 'provider-health' | 'faqs' | 'overview' | 'playground' | 'analytics';
 }
 
 interface CustomFaq {
@@ -94,8 +95,8 @@ interface AiAnalytics {
 export default function AdminAiManager({ token, language, initialSubTab }: AdminAiManagerProps) {
   const isAr = language === 'ar';
 
-  type SubTabType = 'admin-chat' | 'knowledge' | 'chat-logs' | 'support-requests' | 'evaluation-lab' | 'provider-health' | 'faqs' | 'overview' | 'playground' | 'analytics';
-  const [activeSubTab, setActiveSubTab] = useState<SubTabType>(initialSubTab || 'admin-chat');
+  type SubTabType = 'chat-learner' | 'admin-chat' | 'knowledge' | 'chat-logs' | 'support-requests' | 'evaluation-lab' | 'provider-health' | 'faqs' | 'overview' | 'playground' | 'analytics';
+  const [activeSubTab, setActiveSubTab] = useState<SubTabType>(initialSubTab || 'chat-learner');
   const [settings, setSettings] = useState<AiSettings | null>(null);
   const [analytics, setAnalytics] = useState<AiAnalytics | null>(null);
   const [faqs, setFaqs] = useState<CustomFaq[]>([]);
@@ -990,6 +991,7 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
       {/* 2. Sub-Tabs Navigation (Fully responsive on Mobile and Desktop) */}
       <div className="admin-ai-subtabs">
         {[
+          { id: 'chat-learner', icon: <Sparkles size={16} />, labelAr: 'مدرّب الذكاء ومراقبة الجودة (Learner)', labelEn: 'Chat Learner & QA Engine' },
           { id: 'admin-chat', icon: <MessageSquare size={16} />, labelAr: 'محادثة وتدريب المعرفة', labelEn: 'AI Knowledge Chat' },
           { id: 'knowledge', icon: <Database size={16} />, labelAr: 'مصادر المعرفة وسجلات الـ RAG', labelEn: 'Knowledge Pipeline' },
           { id: 'chat-logs', icon: <FileText size={16} />, labelAr: 'سجلات المحادثات والمنشأ', labelEn: 'Chat Logs & Provenance' },
@@ -1014,6 +1016,13 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
           );
         })}
       </div>
+
+      {/* ========================================================= */}
+      {/* SUBTAB: CHAT LEARNER & QUALITY TRAINER (USER MASTER GOAL) */}
+      {/* ========================================================= */}
+      {activeSubTab === 'chat-learner' && (
+        <ChatLearnerView token={token} language={language} />
+      )}
 
       {/* ========================================================= */}
       {/* SUBTAB: AI KNOWLEDGE CHAT (NEW MASTER FEATURE)            */}

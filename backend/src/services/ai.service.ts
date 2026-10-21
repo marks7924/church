@@ -1,5 +1,6 @@
 import prisma from '../db';
 import { isBudgetExceeded, recordTokenUsage, getBudgetStatus, recordProviderCall, getProviderHealthMetrics } from '../utils/aiBudget';
+import { ChurchAiLearnerService } from './aiLearner.service';
 
 export interface AiChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -44,6 +45,7 @@ export interface AiChatResponse {
   fallbackTriggered?: boolean;
   action?: AiChatAction;
   attachedImage?: AiAttachedImage;
+  didBotSayIDontKnow?: boolean;
 }
 
 export interface ProviderResult {
@@ -1325,7 +1327,8 @@ export class ChurchAiService {
       sermons,
       liveStatus,
       news,
-      customFaqs
+      customFaqs,
+      learnedContext
     ] = await Promise.all([
       ChurchKnowledgeRetriever.getMassSchedules(),
       ChurchKnowledgeRetriever.getEventsNavbarPublicEnabled(),
@@ -1335,7 +1338,8 @@ export class ChurchAiService {
       ChurchKnowledgeRetriever.searchSermons(norm),
       ChurchKnowledgeRetriever.getLiveStatus(),
       ChurchKnowledgeRetriever.getLatestNews(),
-      ChurchKnowledgeRetriever.getCustomFaqs()
+      ChurchKnowledgeRetriever.getCustomFaqs(),
+      ChurchAiLearnerService.getActiveLearnedContext()
     ]);
 
     // Only fetch upcoming events if events page is not hidden by admin
@@ -1506,7 +1510,31 @@ export class ChurchAiService {
       });
     }
 
-    return { knowledgeText, sources, customFaqs, isEventsPublic, priests };
+    // 12. Chat Learner Rules (Dynamic Learned Q&A, Required Inclusions, Forbidden Words)
+    if (learnedContext && learnedContext.totalRules > 0) {
+      if (learnedContext.qaRules.length > 0) {
+        knowledgeText += `\n### Dynamic Learned Q&A (Official Answers Taught by Church Admins):\n`;
+        learnedContext.qaRules.forEach(r => {
+          knowledgeText += `- When asked: "${r.question}" -> Verified Answer: "${r.answer}"\n`;
+        });
+      }
+      if (learnedContext.includeRules.length > 0) {
+        knowledgeText += `\n### Mandatory Inclusions (Admin Quality Directives):\n`;
+        learnedContext.includeRules.forEach(r => {
+          knowledgeText += `- When answering questions related to "${r.topic}": Your response MUST include this specific point: "${r.required}"\n`;
+        });
+      }
+      if (learnedContext.forbiddenRules.length > 0) {
+        knowledgeText += `\n### STRICTLY FORBIDDEN WORDS & PHRASES (ADMIN DIRECTIVE):\n`;
+        knowledgeText += `You are STRICTLY FORBIDDEN from ever using the following words or phrases in any response:\n`;
+        learnedContext.forbiddenRules.forEach(r => {
+          knowledgeText += `- "${r.phrase}" (Reason/Directive: ${r.note})\n`;
+        });
+        knowledgeText += `If you are about to use any of these phrases, rephrase your thought completely without them.\n`;
+      }
+    }
+
+    return { knowledgeText, sources, customFaqs, isEventsPublic, priests, learnedContext };
   }
 
   /**
@@ -2607,7 +2635,32 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
     }
 
     // 2. Retrieve Grounded Context
-    const { knowledgeText, sources, customFaqs } = await ChurchAiService.buildContext(resolvedQuery, lang);
+    const { knowledgeText, sources, customFaqs, learnedContext } = await ChurchAiService.buildContext(resolvedQuery, lang);
+
+    // 2.1 Chat Learner Learned Q&A Quick Check
+    if (learnedContext?.qaRules && learnedContext.qaRules.length > 0) {
+      const normInput = normalizeQuery(userMessage);
+      const matched = learnedContext.qaRules.find(r => {
+        const qNorm = normalizeQuery(r.question);
+        return normInput.includes(qNorm) || (qNorm.length > 4 && normInput.includes(qNorm.slice(0, 15))) || (normInput.length > 4 && qNorm.includes(normInput));
+      });
+
+      if (matched) {
+        const sanitized = ChurchAiLearnerService.sanitizeOutput(matched.answer, learnedContext.forbiddenRules || []);
+        return {
+          response: sanitized,
+          sources: [{ title: lang === 'ar' ? 'إجابة معتمدة من إدارة الكنيسة' : 'Verified Church Knowledge', url: '/', type: 'general' }],
+          suggestedQuestions: lang === 'ar'
+            ? ['مواعيد قداسات الأسبوع', 'كيف أحجز موعد اعتراف مع أبونا؟', 'ما هي رحلات ومؤتمرات الكنيسة؟']
+            : ['This week\'s liturgy schedule', 'How to book confession?', 'What upcoming trips are available?'],
+          latencyMs: Date.now() - startTime,
+          tokensUsed: 0,
+          provider: 'chat-learner-engine',
+          model: 'church-learned-qa-v1',
+          didBotSayIDontKnow: false
+        };
+      }
+    }
 
     // 3. Detect Action Intent
     const action = ChurchAiService.detectActionIntent(userMessage, lang);
@@ -2794,8 +2847,11 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
       const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources, customFaqs, isEventsPublic, priests });
       const latencyMs = Date.now() - startTime;
       recordProviderCall('local', true, latencyMs);
+      const sanitizedFallback = ChurchAiLearnerService.sanitizeOutput(fallback.text, learnedContext?.forbiddenRules || []);
+      const didBotSayIDontKnow = ChurchAiLearnerService.detectIDontKnow(sanitizedFallback);
+
       return {
-        response: fallback.text,
+        response: sanitizedFallback,
         sources: fallback.matchedSources,
         suggestedQuestions: fallback.suggested,
         latencyMs,
@@ -2804,12 +2860,17 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
         model: 'church-grounded-v1',
         fallbackTriggered,
         action: action || fallback.action,
-        attachedImage: attachedImage || fallback.attachedImage
+        attachedImage: attachedImage || fallback.attachedImage,
+        didBotSayIDontKnow
       };
     }
 
     // Record token usage for budget governance
     recordTokenUsage(chosenTokens, chosenProvider);
+
+    // Sanitize output with Chat Learner forbidden phrases & detect "I don't know"
+    const sanitizedChosenText = ChurchAiLearnerService.sanitizeOutput(chosenText, learnedContext?.forbiddenRules || []);
+    const didBotSayIDontKnow = ChurchAiLearnerService.detectIDontKnow(sanitizedChosenText);
 
     // Determine matching source badges
     const norm = normalizeQuery(userMessage);
@@ -2829,7 +2890,7 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
       : ['This week\'s liturgy schedule', 'How to book confession?', 'What upcoming trips are available?'];
 
     return {
-      response: chosenText,
+      response: sanitizedChosenText,
       sources: matchedSources.length > 0 ? matchedSources : sources.slice(0, 3),
       suggestedQuestions: suggested,
       latencyMs: Date.now() - startTime,
@@ -2838,7 +2899,8 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
       model: chosenModel,
       fallbackTriggered,
       action,
-      attachedImage
+      attachedImage,
+      didBotSayIDontKnow
     };
   }
 }

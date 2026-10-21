@@ -5,6 +5,7 @@ import { ChurchAiService, ChurchKnowledgeRetriever, CHURCH_INFO } from '../servi
 import { ChurchAiActionService, ACTION_REGISTRY } from '../services/aiAction.service';
 import { ChurchAiAdminChatService } from '../services/aiAdminChat.service';
 import { ChurchAiEvaluationService } from '../services/aiEvaluation.service';
+import { ChurchAiLearnerService } from '../services/aiLearner.service';
 import { getBudgetStatus, getProviderHealthMetrics } from '../utils/aiBudget';
 import { requireAuth, requireRoles } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types';
@@ -1197,6 +1198,155 @@ router.get(
       });
     } catch (error) {
       return res.status(500).json({ error: 'Failed to fetch provider health metrics.' });
+    }
+  }
+);
+
+/**
+ * 33. Chat Learner: GET /api/ai/learner/rules
+ */
+router.get(
+  '/learner/rules',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { ruleType, search } = req.query;
+      const rules = await ChurchAiLearnerService.listLearnedRules({
+        ruleType: ruleType as string,
+        search: search as string
+      });
+      return res.status(200).json(rules);
+    } catch (error) {
+      console.error('Error listing learner rules:', error);
+      return res.status(500).json({ error: 'Failed to list learner rules.' });
+    }
+  }
+);
+
+/**
+ * 34. Chat Learner: POST /api/ai/learner/chat
+ */
+router.post(
+  '/learner/chat',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { message, history, language } = req.body;
+      if (!message || typeof message !== 'string' || message.trim().length === 0) {
+        return res.status(400).json({ error: 'Message content is required.' });
+      }
+
+      const lang = language === 'en' ? 'en' : 'ar';
+      const aiResult = await ChurchAiService.processChat(
+        message.trim(),
+        Array.isArray(history) ? history : [],
+        lang,
+        req.user ? { id: req.user.userId, name: req.user.email, email: req.user.email } : undefined
+      );
+
+      return res.status(200).json({
+        response: aiResult.response,
+        didBotSayIDontKnow: aiResult.didBotSayIDontKnow || ChurchAiLearnerService.detectIDontKnow(aiResult.response),
+        latencyMs: aiResult.latencyMs,
+        tokensUsed: aiResult.tokensUsed,
+        provider: aiResult.provider,
+        model: aiResult.model,
+        action: aiResult.action,
+        attachedImage: aiResult.attachedImage,
+        sources: aiResult.sources
+      });
+    } catch (error) {
+      console.error('Error in learner chat:', error);
+      return res.status(500).json({ error: 'Learner chat failed.' });
+    }
+  }
+);
+
+/**
+ * 35. Chat Learner: POST /api/ai/learner/feedback
+ */
+router.post(
+  '/learner/feedback',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const {
+        rating,
+        question,
+        botAnswer,
+        feedbackType,
+        requiredContent,
+        forbiddenPhrase,
+        correctAnswer,
+        notes
+      } = req.body;
+
+      if (!rating) {
+        return res.status(400).json({ error: 'Rating (GOOD, MODERATE, BAD) is required.' });
+      }
+
+      const saved = await ChurchAiLearnerService.saveFeedbackAndRule({
+        rating,
+        question: question || '',
+        botAnswer: botAnswer || '',
+        feedbackType: feedbackType || 'RATING_ONLY',
+        requiredContent,
+        forbiddenPhrase,
+        correctAnswer,
+        notes,
+        adminUserId: req.user?.userId
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Feedback and learning rule saved successfully.',
+        rule: saved
+      });
+    } catch (error) {
+      console.error('Error saving learner feedback:', error);
+      return res.status(500).json({ error: 'Failed to save learner feedback.' });
+    }
+  }
+);
+
+/**
+ * 36. Chat Learner: PUT /api/ai/learner/rules/:id
+ */
+router.put(
+  '/learner/rules/:id',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { titleAr, contentAr, status } = req.body;
+      const updated = await ChurchAiLearnerService.updateRule(id, { titleAr, contentAr, status }, req.user?.userId);
+      return res.status(200).json(updated);
+    } catch (error) {
+      console.error('Error updating learner rule:', error);
+      return res.status(500).json({ error: 'Failed to update learner rule.' });
+    }
+  }
+);
+
+/**
+ * 37. Chat Learner: DELETE /api/ai/learner/rules/:id
+ */
+router.delete(
+  '/learner/rules/:id',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.DEVELOPER, Role.CHURCH_ADMIN, Role.PRIEST, Role.SECRETARY]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      await ChurchAiLearnerService.deleteRule(id);
+      return res.status(200).json({ success: true, message: 'Rule deleted successfully.' });
+    } catch (error) {
+      console.error('Error deleting learner rule:', error);
+      return res.status(500).json({ error: 'Failed to delete learner rule.' });
     }
   }
 );
