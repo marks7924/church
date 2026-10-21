@@ -563,7 +563,7 @@ export default function HistoryPage() {
   const [editingMedia, setEditingMedia] = useState<HistoryMediaItem | null>(null);
   const [isCreatingMedia, setIsCreatingMedia] = useState(false);
 
-  // Check auth and load SWR cache
+  // Check auth and ensure cache is clear so real updated data is always loaded
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const uStr = localStorage.getItem('church-user');
@@ -576,26 +576,10 @@ export default function HistoryPage() {
         } catch (e) {}
       }
 
-      // SWR Cache 0ms load
-      const cached = localStorage.getItem('cached_history_data');
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (parsed && parsed.clergy) {
-            setSettings(parsed.settings || null);
-            setChapters(parsed.chapters || []);
-            setClergyList(parsed.clergy || []);
-            setPopes(parsed.popes || []);
-            setBishops(parsed.bishops || []);
-            setServantCategories(parsed.servantCategories || []);
-            setServantsFruits(parsed.servantsFruits || []);
-            setEvents(parsed.events || []);
-            setVisits(parsed.visits || []);
-            setMediaItems(parsed.media || []);
-            setLoading(false);
-          }
-        } catch (e) {}
-      }
+      // Clear any past cached history data so real updated data is always fetched directly
+      try {
+        localStorage.removeItem('cached_history_data');
+      } catch (e) {}
     }
   }, []);
 
@@ -628,12 +612,6 @@ export default function HistoryPage() {
         setEvents(data.events || []);
         setVisits(data.visits || []);
         setMediaItems(data.media || []);
-        
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('cached_history_data', JSON.stringify(data));
-          } catch (e) {}
-        }
       }
     } catch (err) {
       console.error('Error loading history:', err);
@@ -878,7 +856,7 @@ export default function HistoryPage() {
     return true;
   });
 
-  if (loading && chapters.length === 0 && popes.length === 0 && bishops.length === 0) {
+  if (loading) {
     return (
       <div className={styles.historyPage} dir={language === 'ar' ? 'rtl' : 'ltr'}>
         <div className={styles.historyLoadingState}>
