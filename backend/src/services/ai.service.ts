@@ -757,11 +757,11 @@ export function calculateNearestConfessionDate(
     targetPriest = priests.find(p => p.nameAr?.includes('موسى') || p.nameAr?.includes('موسي') || p.nameEn?.toLowerCase().includes('moussa'));
   } else if (norm.includes('فيلوباتير')) {
     targetPriest = priests.find(p => p.nameAr?.includes('فيلوباتير') || p.nameEn?.toLowerCase().includes('philopateer'));
-  } else if (norm.includes('يوحنا')) {
+  } else if (norm.includes('يوحنا جون') || (norm.includes('يوحنا') && !norm.includes('حنا') && !norm.includes('عبد النور') && !norm.includes('اول كاهن') && !norm.includes('أول كاهن'))) {
     targetPriest = priests.find(p => p.nameAr?.includes('يوحنا') || p.nameEn?.toLowerCase().includes('yohanna') || p.nameEn?.toLowerCase().includes('john'));
   } else if (norm.includes('كاراس')) {
     targetPriest = priests.find(p => p.nameAr?.includes('كاراس') || p.nameEn?.toLowerCase().includes('karas'));
-  } else if (norm.includes('اثناسيوس') || norm.includes('اثناسيوس') || norm.includes('سيدنا')) {
+  } else if (norm.includes('اثناسيوس') || norm.includes('سيدنا')) {
     targetPriest = priests.find(p => p.nameAr?.includes('اثناسيوس') || p.titleAr?.includes('الأنبا') || p.nameEn?.toLowerCase().includes('athanasius'));
   }
 
@@ -1384,15 +1384,16 @@ export class ChurchAiService {
     knowledgeText += `- Motto: ${historyData?.settings?.headlineAr || 'لكل كنيسة حكاية... وهذه حكايتنا.'} (${historyData?.settings?.subheadlineAr || 'منذ عام 1955'}).\n`;
     knowledgeText += `- Brief: ${historyData?.settings?.introTextAr || 'تاريخ كنيسة الشهيد العظيم أبي سيفين هو رحلة مباركة من الإيمان والخدمة والرعاية الروحية.'}\n`;
 
-    // Popes of Alexandria
+    // Popes of Alexandria & Locum Tenens
     if (historyData?.popes && historyData.popes.length > 0) {
-      knowledgeText += `• Popes of Alexandria & Locum Tenens (الآباء البطاركة وقائمقام البطريرك):\n`;
+      knowledgeText += `• Popes of Alexandria & Locum Tenens (الآباء البطاركة وقائمقام البطريرك المعاصرون لتاريخ الكنيسة):\n`;
+      knowledgeText += `  [تنبيه هام جداً: في تاريخ الكنيسة المعاصر منذ 1955، تولى منصب قائم مقام البطريرك اثنان فقط: الأنبا أنطونيوس مطران سوهاج عام 1971 بعد نياحة البابا كيرلس السادس، والأنبا باخوميوس مطران البحيرة عام 2012 بعد نياحة البابا شنوده الثالث].\n`;
       historyData.popes.forEach((p: any) => {
         const role = p.isLocumTenens ? 'قائمقام البطريرك' : `البابا رقم ${p.papalNumber || ''}`;
-        knowledgeText += `  - ${p.titleAr} ${p.nameAr} (${role}) | فترة حبريته: ${p.papacyPeriod} | الحالة: ${p.isDeceased ? 'متنيح' : 'أطال الله حياته'}\n`;
+        knowledgeText += `  - ${p.titleAr} ${p.nameAr} (${role}) | فترة حبريته/مسؤوليته: ${p.papacyPeriod} | الحالة: ${p.isDeceased ? 'متنيح' : 'أطال الله حياته'} ${p.locumContextAr ? `| سياق قائمقام: ${p.locumContextAr}` : ''}\n`;
       });
     } else {
-      knowledgeText += `• Popes of Alexandria:\n  - البابا كيرلس السادس (البابا 116، 1959-1971، متنيح)\n  - الأنبا أنطونيوس مطران سوهاج (قائمقام البطريرك 1971، متنيح)\n  - البابا شنودة الثالث (البابا 117، 1971-2012، متنيح)\n  - الأنبا باخوميوس مطران البحيرة (قائمقام البطريرك 2012، أطال الله حياته)\n  - البابا تواضروس الثاني (البابا 118، 2012 حتى الآن، أطال الله حياته)\n`;
+      knowledgeText += `• Popes of Alexandria & Locum Tenens:\n  - البابا كيرلس السادس (البابا 116، 1959-1971، متنيح)\n  - نيافة الأنبا أنطونيوس مطران سوهاج (قائمقام البطريرك 1971، متنيح)\n  - البابا شنودة الثالث (البابا 117، 1971-2012، متنيح)\n  - نيافة الأنبا باخوميوس مطران البحيرة (قائمقام البطريرك 2012، أطال الله حياته)\n  - البابا تواضروس الثاني (البابا 118، 2012 حتى الآن، أطال الله حياته)\n`;
     }
 
     // Supervising Bishops
@@ -1408,18 +1409,19 @@ export class ChurchAiService {
 
     // Historical Clergy & Milestones
     if (historyData?.clergy && historyData.clergy.length > 0) {
-      knowledgeText += `• Historical Serving Clergy:\n`;
-      historyData.clergy.slice(0, 8).forEach((c: any) => {
-        knowledgeText += `  - ${c.titleAr || 'القمص'} ${c.ecclesiasticalNameAr} | بدء الخدمة: ${c.serviceStartDate} ${c.isOngoing ? '(مستمر بالخدمة)' : (c.isServingAbroad ? `(مسافر بالخارج: ${c.servingAbroadLocation || ''})` : (c.isDeceased ? '(متنيح)' : ''))}\n`;
+      knowledgeText += `• Historical Serving Clergy (تاريخ الآباء الكهنة — تنبيه جوهري: أول كاهن في تاريخ الكنيسة هو المتنيح القمص يوحنا حنا (عبد النور حنا) سيم كاهناً في 8 سبتمبر 1955 وتنيح في 9 يوليو 1982. وهو يختلف تماماً عن القس يوحنا جون تاوضروس الذي سيم في 3 مارس 2013 ويخدم حالياً بالكنيسة):\n`;
+      historyData.clergy.forEach((c: any) => {
+        knowledgeText += `  - ${c.titleAr || 'القمص'} ${c.ecclesiasticalNameAr} ${c.secularName ? `(الاسم قبل الرسامة: ${c.secularName})` : ''} | تاريخ بدء الخدمة: ${c.serviceStartDate} ${c.serviceEndDate ? `حتى: ${c.serviceEndDate}` : ''} | الوضع: ${c.isOngoing ? 'مستمر بالخدمة حالياً' : (c.isServingAbroad ? `مسافر بالخارج: ${c.servingAbroadLocation || ''}` : (c.isDeceased ? 'متنيح' : 'سابق'))} ${c.archivalNotes ? `| ملاحظات: ${c.archivalNotes}` : ''}\n`;
       });
     }
 
     // Servants & Deacons Honor Roll (ثمار الخدمة — الشمامسة والخدام والآباء الذين خرجوا من الكنيسة) - <section id="servants-section">
     knowledgeText += `• Church Deacons & Consecrated Servants Honor Roll (ثمار الخدمة المباركة — الشمامسة والخدام والآباء الذين خرجوا من الكنيسة - قسم #servants-section):\n`;
     knowledgeText += `  - Section Intro: توثيق واعتزاز بكل شماس مبارك، وكاهن، وراهب، وخادم مكرس نما وترعرع في حضن هذه الكنيسة وأثمرت خدمته في كرم الرب.\n`;
+    knowledgeText += `  - CRITICAL RECORD: سيدنا نيافة الأنبا بافلي (الأسقف العام لكنائس قطاع المنتزه بالإسكندرية) هو أول أسقف من أبناء وشباب الكنيسة (مواليد 1967 أميل ناروز مكاري، خادم وشماس وأمين اجتماع الشباب، رُسم قساً باسم بولا ناروز 1999، وترهب باسم بولا السينائي 2011 بدير موسى النبي، وسيم أسقفاً عاماً 2014 بيد قداسة البابا تواضروس الثاني).\n`;
     if (historyData?.servantFruits && historyData.servantFruits.length > 0) {
       historyData.servantFruits.forEach((s: any) => {
-        knowledgeText += `  - ${s.fullNameAr} (${s.fullNameEn || ''}) | الصفة/الرتبة: ${s.currentRole} | سنة التكريس/الرسامة: ${s.ordinationYear || 'غير محدد'} | مكان الخدمة الحالي: ${s.currentChurchOrLocation || 'الكنيسة'} | نبذة: ${s.notes || ''}\n`;
+        knowledgeText += `  - ${s.fullNameAr} (${s.fullNameEn || ''}) | الصفة/الرتبة: ${s.currentRole} | سنة التكريس/الرسامة: ${s.ordinationYear || 'غير محدد'} | مكان الخدمة الحالي: ${s.currentChurchOrLocation || 'الكنيسة'} | نبذة وسيرة: ${s.notes || ''}\n`;
       });
     } else {
       knowledgeText += `  - الشماس المكرس د. عادل فهيم حنا (دياكون شماس كامل مكرس، رسامة 1985، خدمة التكريس وألحان الكنيسة القبطية - تتلمذ في مدارس الأحد بالكنيسة منذ صباه وكرس حياته للخدمة والتعليم الطقسي والألحان).\n`;
@@ -1716,7 +1718,37 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
       };
     }
 
-    // 4. Servants Section & Specific Servants (#servants-section)
+    // Historical Clergy: Fr. Youhanna Hanna (القمص يوحنا حنا) / First Priest
+    if (q.includes('يوحنا حنا') || q.includes('عبد النور حنا') || q.includes('اول كاهن') || q.includes('أول كاهن')) {
+      return {
+        url: '/images/FB_IMG_1782166149124.jpg',
+        captionAr: 'المتنيح القمص يوحنا حنا (أول كاهن رُسم على مذبح الكنيسة عام 1955م)',
+        captionEn: 'Fr. Youhanna Hanna (First Priest of the Church, 1955)',
+        alt: 'Fr. Youhanna Hanna'
+      };
+    }
+
+    // Blessed Fruit: H.G. Bishop Anba Pavly (الأنبا بافلي)
+    if (q.includes('بافلي') || q.includes('بافلى') || q.includes('اميل ناروز') || q.includes('أميل ناروز') || q.includes('بولا السينائي') || q.includes('بولا السينائى') || q.includes('pavly') || q.includes('bavly')) {
+      return {
+        url: '/images/22.png',
+        captionAr: 'سيدنا نيافة الأنبا بافلي الأسقف العام (أول أسقف من أبناء الكنيسة — ثمار الخدمة)',
+        captionEn: 'H.G. Bishop Anba Pavly (First Bishop from Church Youth — Blessed Fruit)',
+        alt: 'Bishop Anba Pavly'
+      };
+    }
+
+    // Popes & Locum Tenens (قائم مقام البابا)
+    if (q.includes('قائم مقام') || q.includes('قائمقام') || q.includes('باخوميوس') || q.includes('انطونيوس')) {
+      return {
+        url: '/images/pope s.jfif',
+        captionAr: 'الآباء البطاركة وقائمقام البطريرك في تاريخ الكنيسة',
+        captionEn: 'Popes and Locum Tenens in Church History',
+        alt: 'Popes & Locum Tenens'
+      };
+    }
+
+    // Servants Section & Specific Servants (#servants-section)
     if (q.includes('عادل فهيم') || q.includes('adel fahim')) {
       return {
         url: '/images/2.png',
@@ -1759,7 +1791,7 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
   static generateGroundedResponse(
     query: string,
     language: 'ar' | 'en',
-    context: { knowledgeText: string; sources: AiSourceReference[]; customFaqs?: CustomFaq[]; trackingRequest?: any; isEventsPublic?: boolean; priests?: any[] },
+    context: { knowledgeText: string; sources: AiSourceReference[]; customFaqs?: CustomFaq[]; trackingRequest?: any; isEventsPublic?: boolean; priests?: any[]; historyData?: any },
     user?: { id?: string; name?: string; email?: string }
   ): { text: string; matchedSources: AiSourceReference[]; suggested: string[]; action?: AiChatResponse['action']; attachedImage?: AiAttachedImage } {
     const q = normalizeQuery(query);
@@ -1857,14 +1889,196 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
       }
     }
 
-    // 1. Confession booking / Priests Directory & Nearest Date Calculation
-    if (
+    // 1. First Priest & Fr. Youhanna Hanna (المتنيح القمص يوحنا حنا — أول كاهن ومؤسس الكنيسة 1955)
+    const isFirstPriestQuery =
+      q.includes('اول كاهن') || q.includes('أول كاهن') ||
+      q.includes('يوحنا حنا') || q.includes('عبد النور حنا') ||
+      (q.includes('يوحنا') && q.includes('حنا')) ||
+      (q.includes('يوحنا') && (q.includes('مش يوحنا جون') || q.includes('مش جون'))) ||
+      ((q.includes('مين اول') || q.includes('من اول') || q.includes('اول اب')) && (q.includes('كاهن') || q.includes('ابونا'))) ||
+      q.includes('first priest');
+
+    if (isFirstPriestQuery) {
+      const text = isAr
+        ? `⛪ **أول كاهن في تاريخ كنيسة الشهيد العظيم أبي سيفين بحدائق القبة:**\n\n` +
+          `• **الاسم الكنسي:** المتنيح **القمص يوحنا حنا**.\n` +
+          `• **الاسم قبل الرسامة (العلماني):** الشماس عبد النور حنا.\n` +
+          `• **تاريخ الرسامة وبدء الخدمة:** سيم كاهناً مباركاً في **8 سبتمبر 1955م** (1955-09-08)، ليكون **أول كاهن يُسام على مذبح الكنيسة** مع انطلاق تأسيسها ورعايتها المباركة.\n` +
+          `• **نياحته:** تنيح بسلام في الرب في **9 يوليو 1982م** بعد خدمة رسولية وتأسيسية أمينة استمرت لأكثر من 26 عاماً في كرم الرب.\n\n` +
+          `⚠️ **توضيح كنسي هام:**\n` +
+          `المتنيح القمص يوحنا حنا (كاهن الكنيسة الأول والمؤسس 1955 – 1982) يختلف تماماً عن **أبونا القس يوحنا جون تاوضروس** (سيم قساً في 3 مارس 2013م) الكاهن الحالي المبارك والمستمر بالخدمة ورعاية شعب الكنيسة حتى الآن.\n\n` +
+          `يمكنك الاطلاع على السجل التاريخي الكامل لآباء الكنيسة عبر [صفحة تاريخ الكنيسة — الآباء الكهنة](/history).`
+        : `⛪ **The First Priest in the History of St. Philopateer Mercurius Church:**\n\n` +
+          `• **Ecclesiastical Name:** The late **Fr. Youhanna Hanna** (Hegumen).\n` +
+          `• **Secular Name:** Abdel-Nour Hanna.\n` +
+          `• **Ordination Date:** Ordained on **September 8, 1955** (1955-09-08), becoming the **very first priest ordained on the altar of the church** upon its foundation.\n` +
+          `• **Repose Date:** Slept in the Lord peacefully on **July 9, 1982** after 26 years of faithful pastoral ministry.\n\n` +
+          `⚠️ **Important Distinction:**\n` +
+          `Fr. Youhanna Hanna (1955 – 1982) was the founding first priest, entirely distinct from **Fr. Youhanna John Tawadros** (ordained March 3, 2013), our current actively serving priest.\n\n` +
+          `Explore our complete clergy history at [Our History — Historical Clergy](/history).`;
+
+      return {
+        text,
+        matchedSources: [{ title: isAr ? 'تاريخ الكنيسة والآباء الكهنة' : 'Church History & Clergy', url: '/history', type: 'clergy' }],
+        suggested: isAr
+          ? ['من هو أسقف الكنيسة الحالي؟', 'ثمار الخدمة والشمامسة', 'تاريخ تأسيس الكنيسة 1955']
+          : ['Who is the current Bishop?', 'Blessed Servants Roll', 'Church founding 1955'],
+        action: {
+          actionId: 'view_history',
+          labelAr: 'عرض سجل تاريخ الآباء الكهنة',
+          labelEn: 'View Historical Clergy',
+          nameAr: 'عرض سجل تاريخ الآباء الكهنة',
+          nameEn: 'View Historical Clergy',
+          redirectUrl: '/history'
+        },
+        attachedImage: {
+          url: '/images/FB_IMG_1782166149124.jpg',
+          captionAr: 'المتنيح القمص يوحنا حنا (أول كاهن ومؤسس الكنيسة عام 1955م)',
+          captionEn: 'Fr. Youhanna Hanna (First Priest & Founder 1955)',
+          alt: 'Fr. Youhanna Hanna'
+        }
+      };
+    }
+
+    // 2. Papal Locum Tenens (قائم مقام البابا / قائمقام البطريرك)
+    const isLocumTenensQuery =
+      q.includes('قائم مقام') || q.includes('قائمقام') ||
+      q.includes('locum tenens') || q.includes('locum') ||
+      ((q.includes('مين') || q.includes('من هو') || q.includes('من هم')) && (q.includes('قائم مقام') || q.includes('قائمقام')));
+
+    if (isLocumTenensQuery) {
+      const text = isAr
+        ? `👑 **الآباء المطارنة الذين تولوا منصب قائم مقام البطريرك المعاصرون لتاريخ الكنيسة:**\n\n` +
+          `في تاريخ الكنيسة القبطية الأرثوذكسية المعاصر (منذ تأسيس كنيستنا المباركة عام 1955م وحتى الآن)، تولى اثنان من الآباء المطارنة الأجلاء منصب **قائمقام البطريرك** لإدارة الكنيسة والقرعة الهيكلية المباركة:\n\n` +
+          `1. **المتنيح نيافة الأنبا أنطونيوس (مطران سوهاج والمنشاة):**\n` +
+          `   • **الفترة:** تولى منصب قائم مقام البطريرك عام **1971م** (من 9 مارس 1971م حتى 14 نوفمبر 1971م).\n` +
+          `   • **السياق:** تولى المسؤولية عقب نياحة القديس البابا كيرلس السادس (البابا 116)، وأدار المرحلة الانتقالية بحكمة حتى إجراء القرعة الهيكلية وتجليس مثلث الرحمات البابا شنوده الثالث (البابا 117).\n\n` +
+          `2. **أطال الله حياته نيافة الأنبا باخوميوس (مطران البحيرة ومطروح والخمس مدن الغربية):**\n` +
+          `   • **الفترة:** تولى منصب قائم مقام البطريرك عام **2012م** (من 17 مارس 2012م حتى 18 نوفمبر 2012م).\n` +
+          `   • **السياق:** تولى المسؤولية عقب نياحة معلم الأجيال قداسة البابا شنوده الثالث (البابا 117)، وقاد الكنيسة القبطية بأمانة رسولية وحكمة فائقة خلال مرحلة الترشيحات وإجراءات القرعة الهيكلية المباركة التي أسفرت عن اختيار وتجليس قداسة البابا تواضروس الثاني (البابا 118).\n\n` +
+          `يمكنك الاطلاع على السجل الوثائقي للبطاركة والزيارات البابوية عبر [صفحة تاريخ الكنيسة — البطاركة وقائم مقام البطريرك](/history#popes-section).`
+        : `👑 **Popes of Alexandria & Locum Tenens in Modern Church History:**\n\n` +
+          `During the modern history of our church (since its foundation in 1955), two venerable Metropolitans served as **Locum Tenens (قائمقام البطريرك)**:\n\n` +
+          `1. **The Late Metropolitan Anba Antonios of Sohag:**\n` +
+          `   • **Period:** Served as Locum Tenens in **1971** (March 9, 1971 – November 14, 1971).\n` +
+          `   • **Context:** Administered the transition following the departure of Pope Kyrillos VI until the enthronement of Pope Shenouda III.\n\n` +
+          `2. **H.E. Metropolitan Anba Pachomius of Beheira & Matrouh:**\n` +
+          `   • **Period:** Served as Locum Tenens in **2012** (March 17, 2012 – November 18, 2012).\n` +
+          `   • **Context:** Guided the Church with spiritual wisdom following the departure of Pope Shenouda III through the altar ballot and enthronement of Pope Tawadros II.\n\n` +
+          `Read more at [Our History — Popes & Locum Tenens](/history#popes-section).`;
+
+      return {
+        text,
+        matchedSources: [{ title: isAr ? 'الآباء البطاركة وقائم مقام البطريرك' : 'Popes & Locum Tenens', url: '/history#popes-section', type: 'general' }],
+        suggested: isAr
+          ? ['من هو أسقف الكنيسة الحالي؟', 'من هو أول كاهن في الكنيسة؟', 'سنة تأسيس الكنيسة 1955']
+          : ['Who is the current Bishop?', 'Who was the first priest?', 'Church founding year 1955'],
+        action: {
+          actionId: 'view_history',
+          labelAr: 'عرض تاريخ البطاركة وقائمقام البطريرك',
+          labelEn: 'View Popes & Locum Tenens',
+          nameAr: 'عرض تاريخ البطاركة وقائمقام البطريرك',
+          nameEn: 'View Popes & Locum Tenens',
+          redirectUrl: '/history#popes-section'
+        },
+        attachedImage: {
+          url: '/images/pope s.jfif',
+          captionAr: 'الآباء البطاركة وقائمقام البطريرك في تاريخ الكنيسة',
+          captionEn: 'Popes and Locum Tenens in Church History',
+          alt: 'Popes and Locum Tenens'
+        }
+      };
+    }
+
+    // 3. H.G. Bishop Anba Pavly (سيدنا نيافة الأنبا بافلي — ثمار الخدمة المباركة)
+    const isPavlyQuery =
+      q.includes('بافلي') || q.includes('بافلى') ||
+      q.includes('اميل ناروز') || q.includes('أميل ناروز') ||
+      q.includes('بولا ناروز') || q.includes('بولا السينائي') || q.includes('بولا السينائى') ||
+      q.includes('pavly') || q.includes('bavly') ||
+      ((q.includes('اول اسقف') || q.includes('أول أسقف')) && (q.includes('ابناء الكنيس') || q.includes('ثمار الخدم')));
+
+    if (isPavlyQuery) {
+      const text = isAr
+        ? `🕊️ **سيدنا نيافة الأنبا بافلي (الأسقف العام لكنائس قطاع المنتزه بالإسكندرية — ثمار الخدمة):**\n\n` +
+          `يُعد نيافته **أول أسقف يُسام من أبناء وشباب كنيسة الشهيد العظيم أبي سيفين بحدائق القبة**، ونموذجاً مباركاً لثمار التربية والخدمة الكنسية الأصيلة:\n\n` +
+          `• **الميلاد والنشأة:**\n` +
+          `  - وُلد في 22 فبراير 1967م باسم **"أميل ناروز مكاري"**.\n` +
+          `  - نشأ وتربى في فصول مدارس الأحد بكنيستنا حتى صار خادماً أميناً بها.\n` +
+          `  - حصل على بكالوريوس الهندسة (قسم إلكترونيات) عام 1991م، وعمل بالمجال الهندسي وأسس شركة صيانة حاسبات قبل تكريسه الكامل.\n\n` +
+          `• **الخدمة والتكريس بالكنيسة:**\n` +
+          `  - رُسم شماساً عام 1981م بيد المتنيح الأنبا فام أسقف طما.\n` +
+          `  - خدم بمدارس الأحد، وكان مسؤولاً عن الكلمات الروحية لخورس الشمامسة أثناء حصة الألحان، كما خدم بفصل إعداد الخدام وتولى أمانة اجتماع الشباب بالكنيسة.\n\n` +
+          `• **الكهنوت والرهبنة:**\n` +
+          `  - سيم كاهناً متبتلاً في **14 نوفمبر 1999م** بيد مثلث الرحمات البابا شنوده الثالث باسم **"القس بولا ناروز"** لخدمة الشباب بشبه جزيرة سيناء مع المتنيح الأنبا مكاري.\n` +
+          `  - رُقي لرتبة القمصية وصار وكيلاً لمطرانية جنوب سيناء عام 2009م.\n` +
+          `  - ترهب باسم **"الراهب القمص بولا السينائي"** بدير القديس العظيم موسى النبي بسيناء عام 2011م (وكان أول راهب بالدير المبارك).\n\n` +
+          `• **الرتبة الأسقفية:**\n` +
+          `  - سيم أسقفاً عاماً مباركاً في **1 يونيو 2014م** (2014-06-01) بيد قداسة البابا المعظم الأنبا تواضروس الثاني باسم **"الأنبا بافلي"**.\n` +
+          `  - كُلف بالخدمة ورعاية كنائس قطاع المنتزه بالإسكندرية، وهو أول أسقف من أبناء كنيسة أبي سيفين بحدائق القبة.\n\n` +
+          `يمكنك الاطلاع على لوحة شرف ثمار الخدمة عبر [صفحة تاريخنا — ثمار الخدمة](/history#servants-section).`
+        : `🕊️ **H.G. Bishop Anba Pavly (General Bishop of Montaza Sector, Alexandria — Blessed Fruit):**\n\n` +
+          `His Grace is the **first Bishop called from the youth and children of St. Philopateer Mercurius Church in Hadayek Al-Koba**:\n\n` +
+          `• **Early Life & Education:**\n` +
+          `  - Born on February 22, 1967 as **Emil Narouz Makary**.\n` +
+          `  - Nurtured in Sunday School at this church and graduated with a B.Sc. in Electronics Engineering in 1991.\n` +
+          `• **Service in the Church:**\n` +
+          `  - Ordained deacon in 1981 by the late Bishop Anba Fam; served Sunday School, youth ministry, and servants preparation.\n` +
+          `• **Priesthood & Monasticism:**\n` +
+          `  - Ordained celibate priest on November 14, 1999 by Pope Shenouda III as **Fr. Paula Narouz** for Sinai youth ministry.\n` +
+          `  - Elevated to Hegumen & Vicar of South Sinai Diocese in 2009.\n` +
+          `  - Took monastic vows as **Fr. Paula El-Sinai** at St. Moses the Prophet Monastery in 2011 (first monk in the monastery).\n` +
+          `• **Episcopate:**\n` +
+          `  - Consecrated General Bishop on **June 1, 2014** by Pope Tawadros II as **Anba Pavly**, supervising churches of Montaza, Alexandria.\n\n` +
+          `See the complete honor roll at [Our History — Servants Section](/history#servants-section).`;
+
+      return {
+        text,
+        matchedSources: [{ title: isAr ? 'ثمار الخدمة والشمامسة' : 'Blessed Servants & Deacons', url: '/history#servants-section', type: 'general' }],
+        suggested: isAr
+          ? ['من هو أول كاهن في الكنيسة؟', 'الشمامسة المكرسون (د. عادل فهيم)', 'تاريخ الكنيسة وأساقفتها']
+          : ['Who was the first priest?', 'Deacon Dr. Adel Fahim', 'Church History & Bishops'],
+        action: {
+          actionId: 'view_history',
+          labelAr: 'عرض ثمار الخدمة بقسم التاريخ',
+          labelEn: 'View Servants Section',
+          nameAr: 'عرض ثمار الخدمة بقسم التاريخ',
+          nameEn: 'View Servants Section',
+          redirectUrl: '/history#servants-section'
+        },
+        attachedImage: {
+          url: '/images/22.png',
+          captionAr: 'سيدنا نيافة الأنبا بافلي (أول أسقف من أبناء الكنيسة — ثمار الخدمة)',
+          captionEn: 'H.G. Bishop Anba Pavly (Blessed Fruit of Church Service)',
+          alt: 'Bishop Anba Pavly'
+        }
+      };
+    }
+
+    // 4. Confession booking / Priests Directory & Nearest Date Calculation
+    const isHistoryQuery =
+      q.includes('تاريخ') || q.includes('تاسيس') || q.includes('تأسيس') ||
+      q.includes('نشاه') || q.includes('نشأة') || q.includes('1955') ||
+      q.includes('سيرة') || q.includes('سيره') || q.includes('متنيح') ||
+      q.includes('اول كاهن') || q.includes('أول كاهن') || q.includes('رسامة') ||
+      q.includes('اسقف') || q.includes('اساقف') || q.includes('مطران') ||
+      q.includes('بطريرك') || q.includes('بابا') || q.includes('قائم مقام') || q.includes('قائمقام') ||
+      q.includes('بافلي') || q.includes('بافلى') || q.includes('عادل فهيم') || q.includes('متى الانبا بولا') ||
+      q.includes('امين عبد الملاك') || q.includes('ثمار الخدم') || q.includes('خدام خرجوا');
+
+    const isConfessionQuery = !isHistoryQuery && (
       q.includes('اعتراف') || q.includes('اعترف') || q.includes('اعترافات') || q.includes('معترف') ||
-      q.includes('ابونا') || q.includes('سيدنا') || q.includes('كاهن') || 
-      q.includes('كاراس') || q.includes('مينا') || q.includes('فيلوباتير') || q.includes('يوحنا') || 
-      q.includes('مايكل') || q.includes('موسى') || q.includes('موسي') || q.includes('اثناسيوس') ||
-      q.includes('confession') || q.includes('confess') || q.includes('priest') || q.includes('bishop')
-    ) {
+      q.includes('موعد') || q.includes('ميعاد') || q.includes('جلسة') || q.includes('حجز') ||
+      q.includes('مقابلة') || q.includes('confession') || q.includes('confess') ||
+      (q.includes('ابونا') && !q.includes('مين هو')) ||
+      (q.includes('كاهن') && !q.includes('مين اول') && !q.includes('اول كاهن') && !q.includes('من هو')) ||
+      (q.includes('يوحنا جون') && !q.includes('حنا')) ||
+      (q.includes('كاراس') && !q.includes('تاريخ')) ||
+      (q.includes('فيلوباتير') && !q.includes('تاريخ') && !q.includes('مزار')) ||
+      (q.includes('مينا') && !q.includes('تاريخ') && !q.includes('مارمينا'))
+    );
+
+    if (isConfessionQuery) {
       const priestsList = context.priests || [];
       const result = calculateNearestConfessionDate(query, priestsList, language);
 
@@ -1873,7 +2087,8 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
         matchedSources: context.sources.filter(s => s.type === 'clergy'),
         suggested: isAr
           ? ['حجز موعد اعتراف', 'مواعيد القداسات هذا الأسبوع', 'أين تقع الكنيسة؟']
-          : ['Book confession appointment', 'Mass schedules', 'Church location']
+          : ['Book confession appointment', 'Mass schedules', 'Church location'],
+        action: ChurchAiService.detectActionIntent(query, language)
       };
     }
 
@@ -2337,18 +2552,44 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
       };
     }
 
-    // 2. Church History & Supervising Bishops
-    if (
-      q.includes('تاريخ') || q.includes('تاريخ الكنيسة') || q.includes('اساقفة') || q.includes('الاساقفة') ||
-      q.includes('نشاه') || q.includes('تاسيس') || q.includes('1955') ||
-      q.includes('church history') || q.includes('history of the church') || q.includes('bishops')
-    ) {
+    // 2. Church History, Historical Clergy, Blessed Fruits & Popes
+    const isHistoryAction =
+      q.includes('تاريخ') || q.includes('تاسيس') || q.includes('تأسيس') || q.includes('1955') ||
+      q.includes('نشاه') || q.includes('نشأة') || q.includes('church history') ||
+      q.includes('اول كاهن') || q.includes('أول كاهن') || q.includes('يوحنا حنا') || q.includes('عبد النور') ||
+      q.includes('قائم مقام') || q.includes('قائمقام') || q.includes('locum') ||
+      q.includes('بافلي') || q.includes('بافلى') || q.includes('اميل ناروز') || q.includes('أميل ناروز') ||
+      q.includes('ثمار الخدم') || q.includes('خدام خرجوا') || q.includes('شمامسة خرجوا') ||
+      q.includes('اساقفة') || q.includes('الاساقفة') || q.includes('بطاركة') || q.includes('سيرة') || q.includes('متنيح') ||
+      q.includes('مش يوحنا جون') || q.includes('مش جون') || q.includes('bishops');
+
+    if (isHistoryAction) {
+      if (q.includes('بافلي') || q.includes('بافلى') || q.includes('ثمار الخدم') || q.includes('عادل فهيم') || q.includes('متى الانبا بولا')) {
+        return {
+          actionId: 'view_history',
+          labelAr: 'عرض ثمار الخدمة بقسم التاريخ',
+          labelEn: 'View Servants Section',
+          nameAr: 'عرض ثمار الخدمة بقسم التاريخ',
+          nameEn: 'View Servants Section',
+          redirectUrl: '/history#servants-section'
+        };
+      }
+      if (q.includes('قائم مقام') || q.includes('قائمقام') || q.includes('بطريرك') || q.includes('بابا')) {
+        return {
+          actionId: 'view_history',
+          labelAr: 'تاريخ البطاركة وقائمقام البطريرك',
+          labelEn: 'Popes & Locum Tenens History',
+          nameAr: 'تاريخ البطاركة وقائمقام البطريرك',
+          nameEn: 'Popes & Locum Tenens History',
+          redirectUrl: '/history#popes-section'
+        };
+      }
       return {
         actionId: 'view_history',
-        labelAr: 'تاريخ الكنيسة والآباء الأساقفة',
-        labelEn: 'Church History & Bishops',
-        nameAr: 'تاريخ الكنيسة والآباء الأساقفة',
-        nameEn: 'Church History & Bishops',
+        labelAr: 'تاريخ الكنيسة والآباء الكهنة',
+        labelEn: 'Church History & Clergy',
+        nameAr: 'تاريخ الكنيسة والآباء الكهنة',
+        nameEn: 'Church History & Clergy',
         redirectUrl: '/history'
       };
     }
@@ -2365,16 +2606,23 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
       };
     }
 
-    if (
-      q.includes('اعتراف') || q.includes('موعد مع ابونا') || q.includes('جلسة اعتراف') || 
-      q.includes('مقابلة مع ابونا') || q.includes('كاراس') || q.includes('مينا') || 
-      q.includes('فيلوباتير') || q.includes('يوحنا') || q.includes('book confession') || 
-      q.includes('confession appointment') || q.includes('appointment')
-    ) {
+    const hasBookingIntent =
+      q.includes('اعتراف') || q.includes('اعترف') || q.includes('موعد مع ابونا') || q.includes('جلسة اعتراف') || 
+      q.includes('مقابلة مع ابونا') || q.includes('book confession') || 
+      q.includes('confession appointment') || q.includes('appointment');
+
+    const mentionsCurrentPriest =
+      q.includes('كاراس') || q.includes('مينا') || q.includes('فيلوباتير') || 
+      (q.includes('يوحنا جون') || (q.includes('يوحنا') && !q.includes('حنا') && !q.includes('عبد النور') && !q.includes('اول'))) ||
+      q.includes('مايكل') || q.includes('موسى') || q.includes('موسي');
+
+    if (hasBookingIntent || (mentionsCurrentPriest && (q.includes('ابونا') || q.includes('القس') || q.includes('القمص') || q.includes('موعد') || q.includes('ميعاد')))) {
       let targetPriest = 'القمص مينا عزت';
       if (q.includes('كاراس')) targetPriest = 'القس كاراس عزيز';
       else if (q.includes('فيلوباتير')) targetPriest = 'القمص فيلوباتير عزمي';
-      else if (q.includes('يوحنا')) targetPriest = 'القس يوحنا جون';
+      else if (q.includes('يوحنا جون') || (q.includes('يوحنا') && !q.includes('حنا') && !q.includes('عبد النور'))) targetPriest = 'القس يوحنا جون';
+      else if (q.includes('مايكل')) targetPriest = 'القس مايكل اسحاق';
+      else if (q.includes('موسى') || q.includes('موسي')) targetPriest = 'القس موسى عريان';
       else if (q.includes('مينا')) targetPriest = 'القمص مينا عزت';
 
       return {
@@ -2603,9 +2851,19 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
     }
 
     // 0.2 Confession Nearest Date Calculation
-    const isNearestConfessionQuery =
+    const isHistoricalExclusion =
+      normUserMsg.includes('اول كاهن') || normUserMsg.includes('أول كاهن') ||
+      normUserMsg.includes('يوحنا حنا') || normUserMsg.includes('عبد النور') ||
+      normUserMsg.includes('بافلي') || normUserMsg.includes('بافلى') ||
+      normUserMsg.includes('اميل ناروز') || normUserMsg.includes('أميل ناروز') ||
+      normUserMsg.includes('قائم مقام') || normUserMsg.includes('قائمقام') ||
+      normUserMsg.includes('تاريخ') || normUserMsg.includes('سيرة') ||
+      normUserMsg.includes('تاسيس') || normUserMsg.includes('تأسيس') ||
+      normUserMsg.includes('مش يوحنا') || normUserMsg.includes('مين هو') || normUserMsg.includes('من هو');
+
+    const isNearestConfessionQuery = !isHistoricalExclusion &&
       (normUserMsg.includes('اقرب') || normUserMsg.includes('قريب') || normUserMsg.includes('nearest') || normUserMsg.includes('next') || normUserMsg.includes('متى') || normUserMsg.includes('امتى') || normUserMsg.includes('ميعاد') || normUserMsg.includes('موعد') || normUserMsg.includes('when')) &&
-      (normUserMsg.includes('اعتراف') || normUserMsg.includes('كاهن') || normUserMsg.includes('ابونا') || normUserMsg.includes('confession') || normUserMsg.includes('priest') || normUserMsg.includes('مينا') || normUserMsg.includes('مايكل') || normUserMsg.includes('موسى') || normUserMsg.includes('موسي') || normUserMsg.includes('فيلوباتير') || normUserMsg.includes('يوحنا') || normUserMsg.includes('كاراس') || normUserMsg.includes('اثناسيوس'));
+      (normUserMsg.includes('اعتراف') || normUserMsg.includes('كاهن') || normUserMsg.includes('ابونا') || normUserMsg.includes('confession') || normUserMsg.includes('priest') || normUserMsg.includes('مينا') || normUserMsg.includes('مايكل') || normUserMsg.includes('موسى') || normUserMsg.includes('موسي') || normUserMsg.includes('فيلوباتير') || (normUserMsg.includes('يوحنا') && !normUserMsg.includes('حنا') && !normUserMsg.includes('عبد النور')) || normUserMsg.includes('كاراس') || normUserMsg.includes('اثناسيوس'));
 
     if (isNearestConfessionQuery) {
       const priests = await ChurchKnowledgeRetriever.getClergyDirectory();
@@ -2862,9 +3120,8 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
       }
     }
 
-    // 7. Grounded Local Engine Fallback (If no provider keys or all external offline)
     if (!chosenText) {
-      const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources, customFaqs, isEventsPublic, priests });
+      const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources, customFaqs, isEventsPublic, priests, historyData }, currentUser);
       const latencyMs = Date.now() - startTime;
       recordProviderCall('local', true, latencyMs);
       const sanitizedFallback = ChurchAiLearnerService.sanitizeOutput(fallback.text, learnedContext?.forbiddenRules || []);
