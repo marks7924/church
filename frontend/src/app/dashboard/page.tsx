@@ -9,7 +9,7 @@ import { formatTimeSlot, formatDateTime } from '../../utils/format';
 import { 
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
   Calendar, CheckCircle, HelpCircle, ArrowRight, ArrowLeft, Send, Plus, Video, FileText, ChevronDown, Scissors, Clock, Sparkles, MessageSquare,
-  Facebook, Mail, QrCode, Search, UserPlus, Edit3, Trash2, ChevronUp, AlertTriangle, BookOpen
+  Facebook, Mail, QrCode, Search, UserPlus, Edit3, Trash2, ChevronUp, AlertTriangle, BookOpen, LayoutDashboard
 } from 'lucide-react';
 import PriestScheduleManager from '../../components/PriestScheduleManager';
 import ImageCropModal from '../../components/ImageCropModal';
@@ -590,16 +590,6 @@ const initialAddMemberFormState = {
 
       fetchMyInvitations(savedToken);
 
-      if (['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(parsedUser.role)) {
-        fetch(`${API_URL}/invitations/admin/reopen-alerts`, {
-          headers: { Authorization: `Bearer ${savedToken}` }
-        })
-          .then(res => res.json())
-          .then(data => {
-            if (Array.isArray(data)) setReopenAlerts(data);
-          })
-          .catch(() => {});
-      }
 
       const urlParams = new URLSearchParams(window.location.search);
       const tabParam = urlParams.get('tab');
@@ -1914,7 +1904,7 @@ const initialAddMemberFormState = {
   }
 
   return (
-    <div className="container dashboard-main-container" style={{ padding: 'clamp(1rem, 3vw, 2.5rem) clamp(0.75rem, 2vw, 1.25rem)', width: '100%', maxWidth: '1300px', boxSizing: 'border-box', overflowX: 'hidden' }}>
+    <div className="container dashboard-main-container" style={{ padding: 'clamp(1rem, 3vw, 2.5rem) clamp(0.75rem, 2vw, 1.25rem)', width: '100%', maxWidth: '1540px', boxSizing: 'border-box', overflowX: 'hidden' }}>
       
       {/* Impersonation Alert Banner */}
       {impersonatorBackup && (
@@ -2009,78 +1999,6 @@ const initialAddMemberFormState = {
         )}
       </div>
 
-      {/* Admin Capacity Reopening Alerts for Full Events */}
-      {reopenAlerts && reopenAlerts.length > 0 && (
-        <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {reopenAlerts.map(alert => (
-            <div
-              key={alert.locationId}
-              style={{
-                background: 'linear-gradient(135deg, rgba(231, 76, 60, 0.22) 0%, rgba(180, 20, 20, 0.12) 100%)',
-                border: '1.5px solid #e74c3c',
-                borderRadius: '12px',
-                padding: '16px 20px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '14px',
-                boxShadow: '0 4px 20px rgba(231, 76, 60, 0.35)'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <ShieldAlert size={28} style={{ color: '#ff6b6b', flexShrink: 0 }} />
-                <div>
-                  <b style={{ color: '#ff6b6b', fontSize: '1rem', display: 'block' }}>
-                    {language === 'ar' ? '⚠️ تنبيه إداري: شغور مقاعد بعد اكتمال العدد' : '⚠️ Admin Notice: Freed Seats in Full Event'}
-                  </b>
-                  <p style={{ margin: '4px 0 0', color: '#ffffff', fontSize: '0.88rem' }}>
-                    {language === 'ar'
-                      ? `تم إلغاء حجز في الفعالية (${alert.eventTitleAr}) - الموقع (${alert.locationNameAr}) بعد اكتمال العدد! هل ترغب في إعادة فتح التقديم للمقاعد الشاغرة المتبقية (${alert.availableSeats} مقعد)؟`
-                      : `A booking was cancelled in (${alert.eventTitleAr}) after reaching full capacity! Reopen application for remaining seats (${alert.availableSeats})?`}
-                  </p>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <button
-                  type="button"
-                  onClick={() => handleResolveReopenAlert(alert.locationId, 'reopen')}
-                  style={{
-                    background: 'var(--accent-green)',
-                    color: '#ffffff',
-                    border: 'none',
-                    padding: '8px 16px',
-                    borderRadius: '6px',
-                    fontWeight: 800,
-                    fontSize: '0.82rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {language === 'ar' ? `نعم، إعادة فتح التقديم لـ ${alert.availableSeats} مقعد` : `Yes, Reopen for ${alert.availableSeats} seats`}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleResolveReopenAlert(alert.locationId, 'keep_closed')}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.12)',
-                    color: '#ffffff',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    padding: '8px 16px',
-                    borderRadius: '6px',
-                    fontWeight: 600,
-                    fontSize: '0.82rem',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {language === 'ar' ? 'لا، إبقاء التقديم مغلقاً' : 'No, Keep Closed'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Member 24h Admin Cancellation Alert Banner */}
       {myInvitations && myInvitations.filter(i => i.showAdminAlert24h).length > 0 && (
         <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -2121,238 +2039,34 @@ const initialAddMemberFormState = {
         </div>
       )}
 
-      {/* Unified Phone & Desktop Navigation Container */}
-      <div className="dashboard-mobile-nav-container">
-        {/* Mobile Tab Dropdown Button */}
-        <button 
-          type="button"
-          className="dashboard-mobile-menu-btn" 
-          onClick={() => setIsMobileTabMenuOpen(true)}
-          aria-label={language === 'ar' ? 'تغيير قسم لوحة التحكم' : 'Change Dashboard Section'}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, overflow: 'hidden' }}>
-            <span style={{ color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-              {getAvailableTabs().find(t => t.id === activeTab)?.icon}
-            </span>
-            <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', textAlign: 'start' }}>
-              <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', display: 'block', fontWeight: 500 }}>
-                {language === 'ar' ? 'القسم الحالي:' : 'Current Section:'}
-              </span>
-              <strong style={{ color: 'var(--text-primary)', fontSize: '0.92rem' }}>
-                {(() => {
-                  const currentTab = getAvailableTabs().find(t => t.id === activeTab);
-                  return currentTab ? (language === 'ar' ? currentTab.labelAr : currentTab.labelEn) : '';
-                })()}
-              </strong>
-            </span>
+      {/* Mobile Tab Dropdown Button (Visible on phones/tablets <= 1024px) */}
+      <button 
+        type="button"
+        className="dashboard-mobile-menu-btn" 
+        onClick={() => setIsMobileTabMenuOpen(true)}
+        aria-label={language === 'ar' ? 'تغيير قسم لوحة التحكم' : 'Change Dashboard Section'}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, overflow: 'hidden' }}>
+          <span style={{ color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            {getAvailableTabs().find(t => t.id === activeTab)?.icon}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-gold)', fontSize: '0.82rem', fontWeight: 700, backgroundColor: 'rgba(226, 183, 20, 0.1)', padding: '6px 10px', borderRadius: '6px', flexShrink: 0 }}>
-            <span>{language === 'ar' ? 'الأقسام' : 'Sections'}</span>
-            <ChevronDown size={16} />
+          <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', textAlign: 'start' }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', display: 'block', fontWeight: 500 }}>
+              {language === 'ar' ? 'القسم الحالي:' : 'Current Section:'}
+            </span>
+            <strong style={{ color: 'var(--text-primary)', fontSize: '0.92rem' }}>
+              {(() => {
+                const currentTab = getAvailableTabs().find(t => t.id === activeTab);
+                return currentTab ? (language === 'ar' ? currentTab.labelAr : currentTab.labelEn) : '';
+              })()}
+            </strong>
           </span>
-        </button>
-
-        {/* Modern Organized Dashboard Navigation Header */}
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.02)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: '16px',
-          padding: '16px',
-          marginBottom: '2rem',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
-          backdropFilter: 'blur(10px)'
-        }}>
-          {/* Top Controls: Category Segmented Bar + Quick Search (Hidden on Mobile phones) */}
-          {getAvailableTabs().length > 3 && (
-            <>
-              <style dangerouslySetInnerHTML={{ __html: `
-                @media (max-width: 768px) {
-                  .dashboard-top-filter-bar {
-                    display: none !important;
-                  }
-                }
-              `}} />
-              <div 
-                className="dashboard-top-filter-bar"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px',
-                  flexWrap: 'wrap',
-                  paddingBottom: '14px',
-                  marginBottom: '14px',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.06)'
-                }}
-              >
-              {/* Category Segmented Control Chips */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                {[
-                  { id: 'ALL', labelAr: '✨ الكل', labelEn: '✨ All', count: getAvailableTabs().length },
-                  { id: 'personal', labelAr: '👤 الحساب', labelEn: '👤 Account', count: getAvailableTabs().filter(t => t.category === 'personal').length },
-                  { id: 'pastoral_events', labelAr: '🏛️ الرعوية والفعاليات', labelEn: '🏛️ Pastoral & Events', count: getAvailableTabs().filter(t => t.category === 'pastoral_events').length },
-                  { id: 'media', labelAr: '📢 الإعلام والتواصل', labelEn: '📢 Media & Alerts', count: getAvailableTabs().filter(t => t.category === 'media').length },
-                  { id: 'admin', labelAr: '⚙️ الإدارة والنظام', labelEn: '⚙️ Administration', count: getAvailableTabs().filter(t => t.category === 'admin').length },
-                ].filter(cat => cat.id === 'ALL' || cat.count > 0).map(cat => {
-                  const isCatActive = dashboardTabCategory === cat.id;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setDashboardTabCategory(cat.id as any)}
-                      style={{
-                        padding: '6px 14px',
-                        borderRadius: '20px',
-                        border: isCatActive ? '1px solid var(--accent-gold)' : '1px solid rgba(255, 255, 255, 0.08)',
-                        background: isCatActive ? 'rgba(226, 183, 20, 0.16)' : 'rgba(255, 255, 255, 0.03)',
-                        color: isCatActive ? 'var(--accent-gold)' : 'var(--text-secondary)',
-                        fontSize: '0.8rem',
-                        fontWeight: isCatActive ? 700 : 500,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        transition: 'all 0.2s ease',
-                        boxShadow: isCatActive ? '0 2px 8px rgba(226, 183, 20, 0.2)' : 'none'
-                      }}
-                    >
-                      <span>{language === 'ar' ? cat.labelAr : cat.labelEn}</span>
-                      <span style={{
-                        fontSize: '0.72rem',
-                        padding: '1px 6px',
-                        borderRadius: '10px',
-                        background: isCatActive ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.08)',
-                        color: isCatActive ? '#000000' : 'var(--text-secondary)',
-                        fontWeight: 700
-                      }}>
-                        {cat.count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Quick Search Input */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '6px 12px',
-                borderRadius: '20px',
-                background: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                minWidth: '200px',
-                maxWidth: '280px',
-                flex: '1 1 auto'
-              }}>
-                <Search size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-                <input
-                  type="text"
-                  value={tabSearchQuery}
-                  onChange={(e) => setTabSearchQuery(e.target.value)}
-                  placeholder={language === 'ar' ? 'بحث سريع في الأقسام...' : 'Search sections...'}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#ffffff',
-                    fontSize: '0.8rem',
-                    width: '100%',
-                    outline: 'none'
-                  }}
-                />
-                {tabSearchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setTabSearchQuery('')}
-                    style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 0 }}
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
-          </>
-          )}
-
-          {/* Tab Buttons Grid / Flex Wrap */}
-          <div 
-            className="dashboard-tabs-scrollable" 
-            style={{ 
-              display: 'flex', 
-              flexWrap: 'wrap',
-              gap: '10px', 
-              touchAction: 'pan-x'
-            }}
-          >
-            {getAvailableTabs()
-              .filter(tab => {
-                if (dashboardTabCategory !== 'ALL' && tab.category !== dashboardTabCategory) {
-                  return false;
-                }
-                if (tabSearchQuery.trim()) {
-                  const q = tabSearchQuery.toLowerCase();
-                  return (
-                    (tab.labelAr && tab.labelAr.toLowerCase().includes(q)) ||
-                    (tab.labelEn && tab.labelEn.toLowerCase().includes(q))
-                  );
-                }
-                return true;
-              })
-              .map(tab => {
-                const isActive = activeTab === tab.id;
-                return (
-                  <button 
-                    key={tab.id}
-                    type="button"
-                    className={`dashboard-tab-btn ${isActive ? 'dashboard-tab-btn-active' : ''}`}
-                    onClick={() => setActiveTab(tab.id)}
-                    style={{
-                      padding: '10px 18px',
-                      borderRadius: '12px',
-                      border: isActive ? '1px solid var(--accent-gold)' : '1px solid rgba(255, 255, 255, 0.08)',
-                      background: isActive 
-                        ? 'linear-gradient(135deg, rgba(226, 183, 20, 0.22) 0%, rgba(226, 183, 20, 0.08) 100%)' 
-                        : 'rgba(255, 255, 255, 0.03)',
-                      color: isActive ? 'var(--accent-gold)' : 'var(--text-primary)',
-                      cursor: 'pointer',
-                      fontWeight: isActive ? 800 : 600,
-                      fontSize: '0.86rem',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '9px',
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0,
-                      minHeight: '44px',
-                      touchAction: 'manipulation',
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                      boxShadow: isActive ? '0 4px 16px rgba(226, 183, 20, 0.22)' : 'none',
-                      position: 'relative'
-                    }}
-                  >
-                    <span style={{ 
-                      display: 'flex', 
-                      alignItems: 'center',
-                      color: isActive ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.65)'
-                    }}>
-                      {tab.icon}
-                    </span>
-                    <span>{language === 'ar' ? tab.labelAr : tab.labelEn}</span>
-                    {isActive && (
-                      <span style={{
-                        width: '6px',
-                        height: '6px',
-                        borderRadius: '50%',
-                        background: 'var(--accent-gold)',
-                        boxShadow: '0 0 8px var(--accent-gold)',
-                        display: 'inline-block'
-                      }} />
-                    )}
-                  </button>
-                );
-              })}
-          </div>
-        </div>
-      </div>
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-gold)', fontSize: '0.82rem', fontWeight: 700, backgroundColor: 'rgba(226, 183, 20, 0.1)', padding: '6px 10px', borderRadius: '6px', flexShrink: 0 }}>
+          <span>{language === 'ar' ? 'الأقسام' : 'Sections'}</span>
+          <ChevronDown size={16} />
+        </span>
+      </button>
 
       {/* Mobile Drawer (Bottom Sheet) for Dashboard Tabs */}
       {isMobileTabMenuOpen && (
@@ -2433,6 +2147,339 @@ const initialAddMemberFormState = {
           </div>
         </div>
       )}
+
+      {/* Scoped CSS for Side Navigation and Responsive Layout */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media (max-width: 1024px) {
+          .dashboard-layout-wrapper {
+            flex-direction: column !important;
+          }
+          .dashboard-side-nav {
+            display: none !important;
+          }
+          .dashboard-mobile-menu-btn {
+            display: flex !important;
+          }
+        }
+        @media (min-width: 1025px) {
+          .dashboard-mobile-menu-btn {
+            display: none !important;
+          }
+        }
+        .dashboard-side-nav::-webkit-scrollbar {
+          width: 5px;
+        }
+        .dashboard-side-nav::-webkit-scrollbar-thumb {
+          background: rgba(226, 183, 20, 0.3);
+          border-radius: 10px;
+        }
+        .dashboard-side-nav-btn:hover {
+          background: rgba(255, 255, 255, 0.08) !important;
+          border-color: rgba(226, 183, 20, 0.35) !important;
+          color: #ffffff !important;
+          transform: translateX(-3px);
+        }
+        [dir="ltr"] .dashboard-side-nav-btn:hover {
+          transform: translateX(3px);
+        }
+      `}} />
+
+      {/* Main Dashboard Layout: Side-Nav Bar + Content View */}
+      <div 
+        className="dashboard-layout-wrapper"
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          gap: '24px',
+          width: '100%',
+          boxSizing: 'border-box'
+        }}
+      >
+        {/* Modern Organized Side Navigation Bar */}
+        <aside 
+          className="dashboard-side-nav"
+          style={{
+            width: '280px',
+            minWidth: '280px',
+            maxWidth: '280px',
+            flexShrink: 0,
+            position: 'sticky',
+            top: '20px',
+            maxHeight: 'calc(100vh - 40px)',
+            overflowY: 'auto',
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '16px',
+            padding: '16px 12px',
+            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.25)',
+            backdropFilter: 'blur(12px)',
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
+          {/* Side-Nav Header */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingBottom: '12px',
+            marginBottom: '12px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                background: 'linear-gradient(135deg, rgba(226, 183, 20, 0.25) 0%, rgba(226, 183, 20, 0.08) 100%)',
+                border: '1px solid var(--accent-gold)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--accent-gold)'
+              }}>
+                <LayoutDashboard size={16} />
+              </div>
+              <div>
+                <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#ffffff', display: 'block', lineHeight: 1.2 }}>
+                  {language === 'ar' ? 'أقسام لوحة التحكم' : 'Navigation Menu'}
+                </span>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                  {language === 'ar' ? `${getAvailableTabs().length} قسم متاح` : `${getAvailableTabs().length} sections`}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Search Input */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 12px',
+            borderRadius: '10px',
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            marginBottom: '12px',
+            width: '100%',
+            boxSizing: 'border-box'
+          }}>
+            <Search size={14} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+            <input
+              type="text"
+              value={tabSearchQuery}
+              onChange={(e) => setTabSearchQuery(e.target.value)}
+              placeholder={language === 'ar' ? 'بحث سريع في الأقسام...' : 'Search sections...'}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#ffffff',
+                fontSize: '0.82rem',
+                width: '100%',
+                outline: 'none'
+              }}
+            />
+            {tabSearchQuery && (
+              <button
+                type="button"
+                onClick={() => setTabSearchQuery('')}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: 0 }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Category Filter Chips */}
+          {getAvailableTabs().length > 3 && (
+            <div style={{
+              display: 'flex',
+              gap: '6px',
+              flexWrap: 'wrap',
+              paddingBottom: '12px',
+              marginBottom: '12px',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.06)'
+            }}>
+              {[
+                { id: 'ALL', labelAr: '✨ الكل', labelEn: '✨ All', count: getAvailableTabs().length },
+                { id: 'personal', labelAr: '👤 الحساب', labelEn: '👤 Account', count: getAvailableTabs().filter(t => t.category === 'personal').length },
+                { id: 'pastoral_events', labelAr: '🏛️ الرعوية', labelEn: '🏛️ Pastoral', count: getAvailableTabs().filter(t => t.category === 'pastoral_events').length },
+                { id: 'media', labelAr: '📢 الإعلام', labelEn: '📢 Media', count: getAvailableTabs().filter(t => t.category === 'media').length },
+                { id: 'admin', labelAr: '⚙️ الإدارة', labelEn: '⚙️ Admin', count: getAvailableTabs().filter(t => t.category === 'admin').length },
+              ].filter(cat => cat.id === 'ALL' || cat.count > 0).map(cat => {
+                const isCatActive = dashboardTabCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setDashboardTabCategory(cat.id as any)}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '16px',
+                      border: isCatActive ? '1px solid var(--accent-gold)' : '1px solid rgba(255, 255, 255, 0.08)',
+                      background: isCatActive ? 'rgba(226, 183, 20, 0.16)' : 'rgba(255, 255, 255, 0.03)',
+                      color: isCatActive ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                      fontSize: '0.74rem',
+                      fontWeight: isCatActive ? 700 : 500,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      transition: 'all 0.2s ease',
+                      boxShadow: isCatActive ? '0 2px 8px rgba(226, 183, 20, 0.2)' : 'none'
+                    }}
+                  >
+                    <span>{language === 'ar' ? cat.labelAr : cat.labelEn}</span>
+                    <span style={{
+                      fontSize: '0.68rem',
+                      padding: '0px 5px',
+                      borderRadius: '8px',
+                      background: isCatActive ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.08)',
+                      color: isCatActive ? '#000000' : 'var(--text-secondary)',
+                      fontWeight: 700
+                    }}>
+                      {cat.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Vertical Side-Nav Items List */}
+          <div 
+            className="dashboard-side-nav-items"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              width: '100%',
+              boxSizing: 'border-box'
+            }}
+          >
+            {getAvailableTabs()
+              .filter(tab => {
+                if (dashboardTabCategory !== 'ALL' && tab.category !== dashboardTabCategory) {
+                  return false;
+                }
+                if (tabSearchQuery.trim()) {
+                  const q = tabSearchQuery.toLowerCase();
+                  return (
+                    (tab.labelAr && tab.labelAr.toLowerCase().includes(q)) ||
+                    (tab.labelEn && tab.labelEn.toLowerCase().includes(q))
+                  );
+                }
+                return true;
+              })
+              .map(tab => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={`dashboard-side-nav-btn ${isActive ? 'dashboard-side-nav-btn-active' : ''}`}
+                    onClick={() => setActiveTab(tab.id)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: isActive ? '1px solid var(--accent-gold)' : '1px solid rgba(255, 255, 255, 0.06)',
+                      background: isActive 
+                        ? 'linear-gradient(135deg, rgba(226, 183, 20, 0.22) 0%, rgba(226, 183, 20, 0.06) 100%)' 
+                        : 'rgba(255, 255, 255, 0.02)',
+                      color: isActive ? 'var(--accent-gold)' : 'var(--text-primary)',
+                      fontWeight: isActive ? 800 : 600,
+                      fontSize: '0.86rem',
+                      cursor: 'pointer',
+                      boxShadow: isActive ? '0 4px 16px rgba(226, 183, 20, 0.2)' : 'none',
+                      textAlign: 'start',
+                      boxSizing: 'border-box',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, overflow: 'hidden' }}>
+                      <span style={{
+                        color: isActive ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.65)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        flexShrink: 0
+                      }}>
+                        {tab.icon}
+                      </span>
+                      <span style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        fontSize: '0.84rem'
+                      }}>
+                        {language === 'ar' ? tab.labelAr : tab.labelEn}
+                      </span>
+                    </div>
+                    {isActive && (
+                      <span style={{
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        background: 'var(--accent-gold)',
+                        boxShadow: '0 0 8px var(--accent-gold)',
+                        flexShrink: 0,
+                        display: 'inline-block'
+                      }} />
+                    )}
+                  </button>
+                );
+              })}
+
+            {/* Empty search state */}
+            {getAvailableTabs().filter(tab => {
+              if (dashboardTabCategory !== 'ALL' && tab.category !== dashboardTabCategory) return false;
+              if (tabSearchQuery.trim()) {
+                const q = tabSearchQuery.toLowerCase();
+                return (
+                  (tab.labelAr && tab.labelAr.toLowerCase().includes(q)) ||
+                  (tab.labelEn && tab.labelEn.toLowerCase().includes(q))
+                );
+              }
+              return true;
+            }).length === 0 && (
+              <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+                <p style={{ margin: 0 }}>{language === 'ar' ? 'لا توجد أقسام مطابقة للبحث' : 'No matching sections'}</p>
+                <button
+                  type="button"
+                  onClick={() => { setTabSearchQuery(''); setDashboardTabCategory('ALL'); }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--accent-gold)',
+                    cursor: 'pointer',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    marginTop: '8px',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  {language === 'ar' ? 'إعادة ضبط البحث' : 'Reset search'}
+                </button>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* Main Dashboard Content Area */}
+        <div 
+          className="dashboard-content-area"
+          style={{
+            flex: '1 1 0%',
+            minWidth: 0,
+            width: '100%',
+            boxSizing: 'border-box'
+          }}
+        >
 
       {/* TABS VIEW RENDER */}
 
@@ -7612,6 +7659,9 @@ const initialAddMemberFormState = {
           <BibleAdminManager token={token} />
         </div>
       )}
+
+        </div>
+      </div>
 
       {/* InstaPay Receipt Preview Modal */}
       {viewingReceiptUrl && (

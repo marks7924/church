@@ -205,32 +205,115 @@ a {
   }
 }
 
-/* Dashboard Main Container & Mobile Navigation */
+/* Dashboard Main Container & Layout */
 .dashboard-main-container {
   width: 100% !important;
-  max-width: 1300px !important;
+  max-width: 1540px !important;
   margin: 0 auto !important;
   box-sizing: border-box !important;
   overflow-x: hidden !important;
 }
 
-.dashboard-mobile-nav-container {
+.dashboard-layout-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
   width: 100%;
-  margin-bottom: 1.5rem;
+  position: relative;
 }
 
-.dashboard-tabs-scrollable::-webkit-scrollbar {
-  display: none;
+/* Modern Side Navigation Bar */
+.dashboard-side-nav {
+  width: 300px;
+  min-width: 300px;
+  max-width: 300px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 1.5rem;
+  max-height: calc(100vh - 3rem);
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(12px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(226, 183, 20, 0.25) transparent;
+  z-index: 20;
 }
 
-/* Dashboard Tab Buttons Mobile Spacing */
-.dashboard-tab-btn {
-  white-space: nowrap !important;
-  flex-shrink: 0 !important;
-  user-select: none;
+.dashboard-side-nav::-webkit-scrollbar {
+  width: 5px;
+}
+.dashboard-side-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dashboard-side-nav::-webkit-scrollbar-thumb {
+  background: rgba(226, 183, 20, 0.25);
+  border-radius: 10px;
+}
+.dashboard-side-nav::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-gold);
 }
 
-/* Dashboard Mobile Menu Bottom Sheet styles */
+.dashboard-side-nav-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dashboard-side-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.86rem;
+  min-height: 44px;
+  text-align: start;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  touch-action: manipulation;
+  box-sizing: border-box;
+}
+
+.dashboard-side-nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(226, 183, 20, 0.3);
+  color: #ffffff;
+  transform: translateX(-2px);
+}
+
+[dir="ltr"] .dashboard-side-nav-item:hover {
+  transform: translateX(2px);
+}
+
+.dashboard-side-nav-item-active {
+  border: 1px solid var(--accent-gold) !important;
+  background: linear-gradient(135deg, rgba(226, 183, 20, 0.22) 0%, rgba(226, 183, 20, 0.06) 100%) !important;
+  color: var(--accent-gold) !important;
+  font-weight: 800 !important;
+  box-shadow: 0 4px 16px rgba(226, 183, 20, 0.2) !important;
+}
+
+.dashboard-content-area {
+  flex: 1 1 0%;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Mobile & Desktop Responsive Navigation Controls */
 .dashboard-mobile-menu-btn {
   display: flex;
   width: 100%;
@@ -242,7 +325,7 @@ a {
   cursor: pointer;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   box-shadow: var(--shadow-sm);
   transition: all var(--transition-fast);
   min-height: 52px;
@@ -257,22 +340,13 @@ a {
   .dashboard-mobile-menu-btn {
     display: none !important;
   }
-  .dashboard-tabs-scrollable {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 10px !important;
-    width: 100% !important;
-    overflow-x: visible !important;
-    margin-bottom: 2rem !important;
-  }
-  .dashboard-tab-btn {
-    flex: 0 0 auto !important;
-    white-space: nowrap !important;
-  }
 }
 
 @media (max-width: 1024px) {
-  .dashboard-tabs-scrollable {
+  .dashboard-layout-wrapper {
+    display: block !important;
+  }
+  .dashboard-side-nav {
     display: none !important;
   }
   .dashboard-mobile-menu-btn {
