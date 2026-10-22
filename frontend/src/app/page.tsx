@@ -991,7 +991,7 @@ export default function Home() {
         </section>
 
         {/* Upcoming events / Activities */}
-        <section className={styles.rowSection}>
+        <section id="trips-section" className={styles.rowSection}>
           <h2 className={styles.rowTitle}>{language === 'ar' ? 'الرحلات والمؤتمرات الكنسية' : 'Trips & Church Conferences'}</h2>
           {loadingEvents && events.length === 0 ? (
             <div className={styles.netflixGrid}>

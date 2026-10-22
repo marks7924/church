@@ -5,9 +5,10 @@ import {
   User, Lock, ShieldCheck, Mail, Phone, Calendar, Clock, MapPin, 
   CheckCircle2, AlertTriangle, X, Edit3, Send, QrCode, Users, 
   Sparkles, ExternalLink, RefreshCw, Key, Bell, Check, ChevronRight,
-  HelpCircle, Eye, EyeOff, ShieldAlert
+  HelpCircle, Eye, EyeOff, ShieldAlert, Camera, Upload, Trash2
 } from 'lucide-react';
 import VipInvitationCard from './VipInvitationCard';
+import ImageCropModal from './ImageCropModal';
 import { API_URL } from '../config';
 
 interface MemberProfileHubProps {
@@ -48,6 +49,23 @@ export default function MemberProfileHub({
   const [editPhone, setEditPhone] = useState<string>(initialUser?.phone || '');
   const [editAvatarUrl, setEditAvatarUrl] = useState<string>(initialUser?.avatarUrl || '');
   const [isSavingProfile, setIsSavingProfile] = useState<boolean>(false);
+
+  // Avatar Image Crop states
+  const [isCropModalOpen, setIsCropModalOpen] = useState<boolean>(false);
+  const [cropImageSrc, setCropImageSrc] = useState<string>('');
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Edit Profile Sub-tabs: 'info' | 'security'
+  const [editModalTab, setEditModalTab] = useState<'info' | 'security'>('info');
+  const [securityChangeType, setSecurityChangeType] = useState<'EMAIL' | 'PASSWORD'>('EMAIL');
+  const [newEmailInput, setNewEmailInput] = useState<string>('');
+  const [newPasswordInput, setNewPasswordInput] = useState<string>('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState<string>('');
+  const [securityOtpInput, setSecurityOtpInput] = useState<string>('');
+  const [isSendingOtp, setIsSendingOtp] = useState<boolean>(false);
+  const [otpSentNotice, setOtpSentNotice] = useState<string | null>(null);
+  const [isVerifyingSecurity, setIsVerifyingSecurity] = useState<boolean>(false);
+  const [securityFeedback, setSecurityFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Correction Request Modal
   const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState<boolean>(false);
@@ -154,6 +172,122 @@ export default function MemberProfileHub({
       setErrorMsg(err.message || 'Error saving profile.');
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  // Avatar Image Selection & Crop Handlers
+  const handleAvatarFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert(isAr ? 'حجم الصورة يجب ألا يتجاوز 5 ميجابايت' : 'Image size must not exceed 5MB');
+        e.target.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCropImageSrc(reader.result as string);
+        setIsCropModalOpen(true);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCropComplete = (croppedDataUrl: string) => {
+    setEditAvatarUrl(croppedDataUrl);
+    setIsCropModalOpen(false);
+  };
+
+  // Security OTP Handlers (Change Email / Password)
+  const handleRequestSecurityOtp = async () => {
+    if (!token) return;
+    setIsSendingOtp(true);
+    setSecurityFeedback(null);
+    setOtpSentNotice(null);
+    try {
+      const res = await fetch(`${API_URL}/auth/profile/request-security-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ type: securityChangeType })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setOtpSentNotice(isAr ? (data.messageAr || data.message) : data.message);
+      } else {
+        setSecurityFeedback({ message: data.errorAr || data.error || 'Failed to send OTP', type: 'error' });
+      }
+    } catch (err) {
+      setSecurityFeedback({ message: isAr ? 'خطأ في الاتصال بالخادم' : 'Connection error', type: 'error' });
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const handleVerifySecurityChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    if (!securityOtpInput.trim()) {
+      setSecurityFeedback({ message: isAr ? 'يرجى إدخال كود التحقق (OTP)' : 'Please enter OTP', type: 'error' });
+      return;
+    }
+    if (securityChangeType === 'PASSWORD') {
+      if (newPasswordInput.length < 8) {
+        setSecurityFeedback({ message: isAr ? 'يجب ألا تقل كلمة المرور عن 8 أحرف' : 'Password must be at least 8 characters', type: 'error' });
+        return;
+      }
+      if (newPasswordInput !== confirmPasswordInput) {
+        setSecurityFeedback({ message: isAr ? 'كلمتا المرور غير متطابقتين' : 'Passwords do not match', type: 'error' });
+        return;
+      }
+    }
+    if (securityChangeType === 'EMAIL' && !newEmailInput.trim()) {
+      setSecurityFeedback({ message: isAr ? 'يرجى إدخال البريد الإلكتروني الجديد' : 'Please enter new email', type: 'error' });
+      return;
+    }
+
+    setIsVerifyingSecurity(true);
+    setSecurityFeedback(null);
+    try {
+      const res = await fetch(`${API_URL}/auth/profile/verify-security-change`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          type: securityChangeType,
+          otp: securityOtpInput.trim(),
+          newEmail: securityChangeType === 'EMAIL' ? newEmailInput.trim() : undefined,
+          newPassword: securityChangeType === 'PASSWORD' ? newPasswordInput : undefined
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSecurityFeedback({ message: isAr ? (data.messageAr || data.message) : data.message, type: 'success' });
+        if (data.user) {
+          setProfileData((prev: any) => ({ ...prev, ...data.user }));
+          if (onProfileUpdated) onProfileUpdated(data.user);
+        }
+        if (data.accessToken && typeof window !== 'undefined') {
+          localStorage.setItem('church-token', data.accessToken);
+          if (data.refreshToken) localStorage.setItem('church-refresh-token', data.refreshToken);
+        }
+        setSecurityOtpInput('');
+        setNewPasswordInput('');
+        setConfirmPasswordInput('');
+        setNewEmailInput('');
+        setOtpSentNotice(null);
+        await loadFreshData();
+      } else {
+        setSecurityFeedback({ message: data.errorAr || data.error || 'Verification failed', type: 'error' });
+      }
+    } catch (err) {
+      setSecurityFeedback({ message: isAr ? 'خطأ في الاتصال بالخادم' : 'Connection error', type: 'error' });
+    } finally {
+      setIsVerifyingSecurity(false);
     }
   };
 
@@ -641,23 +775,21 @@ export default function MemberProfileHub({
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0 0 12px 0' }}>
                     {isAr ? 'لا توجد مواعيد اعتراف محجوزة حالياً.' : 'No upcoming appointments scheduled.'}
                   </p>
-                  {onNavigateTab && (
-                    <button
-                      onClick={() => onNavigateTab('confessions')}
-                      style={{
-                        padding: '8px 14px',
-                        borderRadius: '6px',
-                        backgroundColor: 'rgba(226, 183, 20, 0.1)',
-                        border: '1px solid rgba(226, 183, 20, 0.3)',
-                        color: 'var(--accent-gold)',
-                        fontSize: '0.82rem',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {isAr ? 'حجز موعد جديد ⛪' : 'Book Session ⛪'}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => { window.location.href = '/#priest-section'; }}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '6px',
+                      backgroundColor: 'rgba(226, 183, 20, 0.1)',
+                      border: '1px solid rgba(226, 183, 20, 0.3)',
+                      color: 'var(--accent-gold)',
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {isAr ? 'حجز موعد جديد ⛪' : 'Book Session ⛪'}
+                  </button>
                 </div>
               )}
             </div>
@@ -771,7 +903,7 @@ export default function MemberProfileHub({
               ⛪ {isAr ? 'الخدمات والروابط السريعة' : 'Quick Pastoral Links'}
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
-              <a href="/bible" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 600 }}>
+              <a href="/fy/bible" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 600 }}>
                 <span>📖</span>
                 <span>{isAr ? 'الكتاب المقدس وخطة القراءة' : 'Holy Bible & Reading Plan'}</span>
               </a>
@@ -779,11 +911,11 @@ export default function MemberProfileHub({
                 <span>🎙️</span>
                 <span>{isAr ? 'عظات الآباء والدروس' : 'Sermons & Spiritual Talks'}</span>
               </a>
-              <a href="/events" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 600 }}>
+              <a href="/#trips-section" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 600 }}>
                 <span>🚌</span>
                 <span>{isAr ? 'رحلات وفعاليات الكنيسة' : 'Church Trips & Events'}</span>
               </a>
-              <a href="/fy" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 600 }}>
+              <a href="/fy/questions" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 600 }}>
                 <span>❓</span>
                 <span>{isAr ? 'أسئلة الشباب والإيمان (FY)' : 'Faith & Youth Questions'}</span>
               </a>
@@ -1372,23 +1504,21 @@ export default function MemberProfileHub({
                 </p>
               </div>
 
-              {onNavigateTab && (
-                <button
-                  onClick={() => onNavigateTab('confessions')}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '6px',
-                    backgroundColor: 'rgba(226, 183, 20, 0.15)',
-                    border: '1px solid rgba(226, 183, 20, 0.35)',
-                    color: 'var(--accent-gold)',
-                    fontSize: '0.85rem',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  {isAr ? 'حجز موعد جديد +' : 'Book Session +'}
-                </button>
-              )}
+              <button
+                onClick={() => { window.location.href = '/#priest-section'; }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(226, 183, 20, 0.15)',
+                  border: '1px solid rgba(226, 183, 20, 0.35)',
+                  color: 'var(--accent-gold)',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                {isAr ? 'حجز موعد جديد +' : 'Book Session +'}
+              </button>
             </div>
 
             {myBookings.length > 0 ? (
@@ -1461,24 +1591,46 @@ export default function MemberProfileHub({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {[
-                { key: 'email', labelAr: 'إشعارات البريد الإلكتروني (تأكيد الحجوزات والمواعيد)', labelEn: 'Email Notifications' },
-                { key: 'sms', labelAr: 'رسائل SMS على الهاتف المسجل', labelEn: 'SMS Mobile Alerts' },
-                { key: 'events', labelAr: 'تنبيهات الفعاليات والرحلات الجديدة', labelEn: 'New Event Announcements' },
-                { key: 'reminders', labelAr: 'تذكير قبل موعد الفعالية أو الاعتراف بـ 24 ساعة', labelEn: '24-hour Event Reminders' }
+                { key: 'email', labelAr: 'إشعارات البريد الإلكتروني (تأكيد الحجوزات والمواعيد)', labelEn: 'Email Notifications', disabled: false },
+                { key: 'sms', labelAr: 'رسائل SMS على الهاتف المسجل', labelEn: 'SMS Mobile Alerts', disabled: true },
+                { key: 'events', labelAr: 'تنبيهات الفعاليات والرحلات الجديدة', labelEn: 'New Event Announcements', disabled: false },
+                { key: 'reminders', labelAr: 'تذكير قبل موعد الفعالية أو الاعتراف بـ 24 ساعة', labelEn: '24-hour Event Reminders', disabled: false }
               ].map(item => (
-                <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '10px 14px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <input
-                    type="checkbox"
-                    checked={(notificationPrefs as any)[item.key]}
-                    onChange={e => {
-                      const updated = { ...notificationPrefs, [item.key]: e.target.checked };
-                      handleSaveNotificationPrefs(updated);
-                    }}
-                    style={{ width: '18px', height: '18px', accentColor: 'var(--accent-gold)', cursor: 'pointer' }}
-                  />
-                  <span style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>
-                    {isAr ? item.labelAr : item.labelEn}
-                  </span>
+                <label
+                  key={item.key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    opacity: item.disabled ? 0.5 : 1,
+                    cursor: item.disabled ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input
+                      type="checkbox"
+                      disabled={item.disabled}
+                      checked={item.disabled ? false : (notificationPrefs as any)[item.key]}
+                      onChange={e => {
+                        if (item.disabled) return;
+                        const updated = { ...notificationPrefs, [item.key]: e.target.checked };
+                        handleSaveNotificationPrefs(updated);
+                      }}
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--accent-gold)', cursor: item.disabled ? 'not-allowed' : 'pointer' }}
+                    />
+                    <span style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+                      {isAr ? item.labelAr : item.labelEn}
+                    </span>
+                  </div>
+                  {item.disabled && (
+                    <span style={{ fontSize: '0.74rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(231, 76, 60, 0.15)', color: '#ff6b6b', border: '1px solid rgba(231, 76, 60, 0.3)', fontWeight: 600 }}>
+                      {isAr ? 'معطّل مؤقتاً' : 'Temporarily Disabled'}
+                    </span>
+                  )}
                 </label>
               ))}
             </div>
@@ -1528,11 +1680,11 @@ export default function MemberProfileHub({
       )}
 
       {/* ======================================================== */}
-      {/* MODAL 1: EDIT PROFILE (PERMITTED FIELDS ONLY)            */}
+      {/* MODAL 1: EDIT PROFILE (PERMITTED FIELDS & SECURITY OTP)  */}
       {/* ======================================================== */}
       {isEditModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
-          <div style={{ backgroundColor: 'var(--bg-primary, #0f1015)', border: '1px solid var(--border-color)', borderRadius: '14px', maxWidth: '500px', width: '100%', padding: '1.75rem', direction: isAr ? 'rtl' : 'ltr', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
+          <div style={{ backgroundColor: 'var(--bg-primary, #0f1015)', border: '1px solid var(--border-color)', borderRadius: '16px', maxWidth: '540px', width: '100%', padding: '1.75rem', direction: isAr ? 'rtl' : 'ltr', boxShadow: '0 25px 70px rgba(0,0,0,0.85)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--accent-gold)', fontWeight: 800 }}>
                 ✏️ {isAr ? 'تعديل البيانات الشخصية' : 'Edit Profile'}
@@ -1540,70 +1692,379 @@ export default function MemberProfileHub({
               <button onClick={() => setIsEditModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={20} /></button>
             </div>
 
-            <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  {isAr ? 'الاسم الكامل:' : 'Full Name:'}
-                </label>
-                <input
-                  type="text"
-                  value={editFullName}
-                  onChange={e => setEditFullName(e.target.value)}
-                  required
-                  minLength={3}
-                  maxLength={100}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                />
-              </div>
+            {/* Sub-Tabs: Info vs Security */}
+            <div style={{ display: 'flex', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '10px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <button
+                type="button"
+                onClick={() => setEditModalTab('info')}
+                style={{
+                  flex: 1,
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: editModalTab === 'info' ? 'var(--accent-gold)' : 'transparent',
+                  color: editModalTab === 'info' ? '#000000' : 'var(--text-secondary)',
+                  fontWeight: 700,
+                  fontSize: '0.84rem',
+                  cursor: 'pointer',
+                  transition: '0.2s'
+                }}
+              >
+                👤 {isAr ? 'البيانات الشخصية والصورة' : 'Personal & Photo'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditModalTab('security')}
+                style={{
+                  flex: 1,
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: editModalTab === 'security' ? 'var(--accent-gold)' : 'transparent',
+                  color: editModalTab === 'security' ? '#000000' : 'var(--text-secondary)',
+                  fontWeight: 700,
+                  fontSize: '0.84rem',
+                  cursor: 'pointer',
+                  transition: '0.2s'
+                }}
+              >
+                🔐 {isAr ? 'تغيير البريد أو كلمة المرور (OTP)' : 'Security & Credentials (OTP)'}
+              </button>
+            </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  {isAr ? 'رقم الهاتف المحمول:' : 'Mobile Phone:'}
-                </label>
-                <input
-                  type="tel"
-                  value={editPhone}
-                  onChange={e => setEditPhone(e.target.value)}
-                  placeholder="01xxxxxxxxx"
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                />
-              </div>
+            {/* TAB 1: General Personal Info & Avatar Photo */}
+            {editModalTab === 'info' ? (
+              <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    {isAr ? 'الاسم الكامل:' : 'Full Name:'}
+                  </label>
+                  <input
+                    type="text"
+                    value={editFullName}
+                    onChange={e => setEditFullName(e.target.value)}
+                    required
+                    minLength={3}
+                    maxLength={100}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  />
+                </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  {isAr ? 'رابط الصورة الشخصية (Avatar URL):' : 'Avatar Image URL:'}
-                </label>
-                <input
-                  type="url"
-                  value={editAvatarUrl}
-                  onChange={e => setEditAvatarUrl(e.target.value)}
-                  placeholder="https://..."
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                />
-              </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    {isAr ? 'رقم الهاتف المحمول:' : 'Mobile Phone:'}
+                  </label>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={e => setEditPhone(e.target.value)}
+                    placeholder="01xxxxxxxxx"
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  />
+                </div>
 
-              {/* Locked note in edit form */}
-              <div style={{ padding: '8px 12px', borderRadius: '6px', backgroundColor: 'rgba(226, 183, 20, 0.08)', border: '1px dashed rgba(226, 183, 20, 0.3)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                🔒 {isAr ? 'الرقم القومي وتاريخ الميلاد والنوع وحالة العضوية حقول مقفلة ومحمية أمنياً.' : 'Identity fields (National ID, DOB, Gender) are locked.'}
-              </div>
+                {/* Avatar Section: Upload from Device & Crop + Direct URL */}
+                <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '10px', padding: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '0.84rem', color: 'var(--accent-gold)', fontWeight: 700, marginBottom: '10px' }}>
+                    📷 {isAr ? 'الصورة الشخصية (الملف الشخصي):' : 'Profile Picture:'}
+                  </label>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  style={{ padding: '10px 18px', borderRadius: '6px', backgroundColor: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', cursor: 'pointer' }}
-                >
-                  {isAr ? 'إلغاء' : 'Cancel'}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingProfile}
-                  style={{ padding: '10px 22px', borderRadius: '6px', backgroundColor: 'var(--accent-gold)', color: '#000', fontWeight: 700, border: 'none', cursor: 'pointer' }}
-                >
-                  {isSavingProfile ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ التعديلات' : 'Save Changes')}
-                </button>
-              </div>
-            </form>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '14px' }}>
+                    <div style={{
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: '50%',
+                      overflow: 'hidden',
+                      backgroundColor: 'rgba(226, 183, 20, 0.15)',
+                      border: '2px solid var(--accent-gold)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      {editAvatarUrl ? (
+                        <img src={editAvatarUrl} alt="Avatar Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--accent-gold)' }}>
+                          {(editFullName || 'U').charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="image/*"
+                        onChange={handleAvatarFileSelect}
+                        style={{ display: 'none' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{
+                          padding: '8px 14px',
+                          borderRadius: '6px',
+                          backgroundColor: 'rgba(226, 183, 20, 0.15)',
+                          border: '1px solid rgba(226, 183, 20, 0.4)',
+                          color: 'var(--accent-gold)',
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          width: 'fit-content'
+                        }}
+                      >
+                        <Upload size={14} />
+                        {isAr ? 'رفع صورة وقصها من الجهاز' : 'Upload & Crop Image'}
+                      </button>
+
+                      {editAvatarUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setEditAvatarUrl('')}
+                          style={{
+                            padding: '4px 8px',
+                            background: 'none',
+                            border: 'none',
+                            color: '#ff6b6b',
+                            fontSize: '0.75rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            width: 'fit-content'
+                          }}
+                        >
+                          <Trash2 size={12} />
+                          {isAr ? 'إزالة الصورة الحالية' : 'Remove picture'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                      {isAr ? 'أو أدخل رابط الصورة مباشرة (URL):' : 'Or paste image URL:'}
+                    </label>
+                    <input
+                      type="url"
+                      value={editAvatarUrl}
+                      onChange={e => setEditAvatarUrl(e.target.value)}
+                      placeholder="https://..."
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.85rem', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Locked note in edit form */}
+                <div style={{ padding: '8px 12px', borderRadius: '6px', backgroundColor: 'rgba(226, 183, 20, 0.08)', border: '1px dashed rgba(226, 183, 20, 0.3)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                  🔒 {isAr ? 'الرقم القومي وتاريخ الميلاد والنوع وحالة العضوية حقول مقفلة ومحمية أمنياً.' : 'Identity fields (National ID, DOB, Gender) are locked.'}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(false)}
+                    style={{ padding: '10px 18px', borderRadius: '6px', backgroundColor: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                  >
+                    {isAr ? 'إلغاء' : 'Cancel'}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingProfile}
+                    style={{ padding: '10px 22px', borderRadius: '6px', backgroundColor: 'var(--accent-gold)', color: '#000', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+                  >
+                    {isSavingProfile ? (isAr ? 'جارٍ الحفظ...' : 'Saving...') : (isAr ? 'حفظ التعديلات' : 'Save Changes')}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* TAB 2: Security Credentials (Email & Password with OTP) */
+              <form onSubmit={handleVerifySecurityChange} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Switcher: Email vs Password */}
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setSecurityChangeType('EMAIL'); setOtpSentNotice(null); setSecurityFeedback(null); }}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: `1px solid ${securityChangeType === 'EMAIL' ? 'var(--accent-gold)' : 'var(--border-color)'}`,
+                      background: securityChangeType === 'EMAIL' ? 'rgba(226, 183, 20, 0.15)' : 'transparent',
+                      color: securityChangeType === 'EMAIL' ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                      fontWeight: 700,
+                      fontSize: '0.84rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ✉️ {isAr ? 'تغيير البريد الإلكتروني' : 'Change Email'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setSecurityChangeType('PASSWORD'); setOtpSentNotice(null); setSecurityFeedback(null); }}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: `1px solid ${securityChangeType === 'PASSWORD' ? 'var(--accent-gold)' : 'var(--border-color)'}`,
+                      background: securityChangeType === 'PASSWORD' ? 'rgba(226, 183, 20, 0.15)' : 'transparent',
+                      color: securityChangeType === 'PASSWORD' ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                      fontWeight: 700,
+                      fontSize: '0.84rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🔑 {isAr ? 'تغيير كلمة المرور' : 'Change Password'}
+                  </button>
+                </div>
+
+                {securityChangeType === 'EMAIL' ? (
+                  <>
+                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'block' }}>{isAr ? 'البريد الإلكتروني الحالي المسجل:' : 'Current Email:'}</span>
+                      <strong style={{ fontSize: '0.92rem', color: '#ffffff' }}>{profileData?.email || initialUser?.email}</strong>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                        {isAr ? 'البريد الإلكتروني الجديد:' : 'New Email Address:'}
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={newEmailInput}
+                        onChange={e => setNewEmailInput(e.target.value)}
+                        placeholder="new-email@example.com"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                        {isAr ? 'كلمة المرور الجديدة (8 أحرف على الأقل):' : 'New Password (min 8 chars):'}
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        minLength={8}
+                        value={newPasswordInput}
+                        onChange={e => setNewPasswordInput(e.target.value)}
+                        placeholder="••••••••"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                        {isAr ? 'تأكيد كلمة المرور الجديدة:' : 'Confirm New Password:'}
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        minLength={8}
+                        value={confirmPasswordInput}
+                        onChange={e => setConfirmPasswordInput(e.target.value)}
+                        placeholder="••••••••"
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Step 1: Send OTP Button */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(226, 183, 20, 0.05)', padding: '12px 14px', borderRadius: '8px', border: '1px dashed rgba(226, 183, 20, 0.3)' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    {isAr ? 'يتطلب التعديل إرسال كود تحقق أمني لبريدك الإلكتروني الحالي' : 'Requires security OTP sent to current email'}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRequestSecurityOtp}
+                    disabled={isSendingOtp}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '6px',
+                      background: 'var(--accent-gold)',
+                      color: '#000',
+                      fontWeight: 700,
+                      fontSize: '0.8rem',
+                      border: 'none',
+                      cursor: isSendingOtp ? 'not-allowed' : 'pointer',
+                      flexShrink: 0
+                    }}
+                  >
+                    {isSendingOtp ? (isAr ? 'جاري الإرسال...' : 'Sending...') : (isAr ? 'إرسال كود التحقق 📩' : 'Send OTP 📩')}
+                  </button>
+                </div>
+
+                {otpSentNotice && (
+                  <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(46, 204, 113, 0.12)', border: '1px solid #2ecc71', color: '#2ecc71', fontSize: '0.84rem', fontWeight: 600 }}>
+                    ✓ {otpSentNotice}
+                  </div>
+                )}
+
+                {/* Step 2: OTP Input & Final Submit */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                    {isAr ? 'أدخل رمز التحقق (OTP) المكوّن من 6 أرقام:' : 'Enter 6-digit OTP:'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    placeholder="123456"
+                    value={securityOtpInput}
+                    onChange={e => setSecurityOtpInput(e.target.value.replace(/\D/g, ''))}
+                    style={{ width: '100%', padding: '12px', borderRadius: '6px', backgroundColor: 'var(--bg-card)', border: '1.5px solid var(--accent-gold)', color: '#ffffff', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '6px', boxSizing: 'border-box', fontFamily: 'monospace' }}
+                  />
+                </div>
+
+                {securityFeedback && (
+                  <div style={{
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: securityFeedback.type === 'success' ? 'rgba(46, 204, 113, 0.12)' : 'rgba(231, 76, 60, 0.12)',
+                    border: securityFeedback.type === 'success' ? '1px solid #2ecc71' : '1px solid #e74c3c',
+                    color: securityFeedback.type === 'success' ? '#2ecc71' : '#ff6b6b',
+                    fontSize: '0.84rem'
+                  }}>
+                    {securityFeedback.message}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(false)}
+                    style={{ padding: '10px 18px', borderRadius: '6px', backgroundColor: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                  >
+                    {isAr ? 'إغلاق' : 'Close'}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isVerifyingSecurity || !securityOtpInput.trim()}
+                    style={{
+                      padding: '10px 22px',
+                      borderRadius: '6px',
+                      backgroundColor: 'var(--accent-gold)',
+                      color: '#000',
+                      fontWeight: 700,
+                      border: 'none',
+                      cursor: isVerifyingSecurity || !securityOtpInput.trim() ? 'not-allowed' : 'pointer',
+                      opacity: !securityOtpInput.trim() ? 0.6 : 1
+                    }}
+                  >
+                    {isVerifyingSecurity ? (isAr ? 'جاري التحقق والتحديث...' : 'Verifying...') : (isAr ? 'تأكيد التحديث عبر OTP' : 'Confirm & Update')}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -1759,6 +2220,15 @@ export default function MemberProfileHub({
           </div>
         </div>
       )}
+
+      {/* Image Crop Modal for Avatar */}
+      <ImageCropModal
+        isOpen={isCropModalOpen}
+        imageUrl={cropImageSrc}
+        aspectRatioPreset="circle"
+        onClose={() => setIsCropModalOpen(false)}
+        onCropComplete={handleCropComplete}
+      />
 
     </div>
   );

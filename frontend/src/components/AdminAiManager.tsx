@@ -1557,6 +1557,25 @@ export default function AdminAiManager({ token, language, initialSubTab }: Admin
                           #{req.referenceCode}
                         </span>
 
+                        {(req.category === 'IDENTITY_CORRECTION' || (req.referenceCode && req.referenceCode.startsWith('CORR'))) && (
+                          <span
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              backgroundColor: 'rgba(231, 76, 60, 0.15)',
+                              border: '1px solid rgba(231, 76, 60, 0.4)',
+                              color: '#ff6b6b',
+                              fontSize: '0.74rem',
+                              fontWeight: 700,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            🔒 {isAr ? 'طلب تصحيح هوية' : 'Identity Correction'}
+                          </span>
+                        )}
+
                         <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
                           {req.name}
                         </span>

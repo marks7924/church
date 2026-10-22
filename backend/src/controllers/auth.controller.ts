@@ -952,6 +952,182 @@ router.post('/request-identity-correction', requireAuth, async (req: AuthRequest
   }
 });
 
+// 9.1 Request Security OTP for Email or Password Change
+router.post('/profile/request-security-otp', requireAuth, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.userId;
+  const { type } = req.body; // 'EMAIL' or 'PASSWORD'
+
+  if (type !== 'EMAIL' && type !== 'PASSWORD') {
+    return res.status(400).json({ error: 'Invalid change type. Must be EMAIL or PASSWORD.' });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    const otpCode = generateOTP();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { otpCode, otpExpiry }
+    });
+
+    const isEmailChange = type === 'EMAIL';
+    const emailHtml = formatChurchEmailHtml({
+      titleAr: isEmailChange ? 'رمز التحقق لتغيير البريد الإلكتروني' : 'رمز التحقق لتغيير كلمة المرور',
+      titleEn: isEmailChange ? 'Email Change Verification Code' : 'Password Change Verification Code',
+      badge: 'أمان الحساب',
+      badgeColor: '#b45309',
+      contentHtml: `
+        <p>أهلاً بك يا <b>${user.fullName}</b>،</p>
+        <p>لقد تم طلب رمز تحقق (OTP) من خلال ملفك الشخصي لتغيير <b>${isEmailChange ? 'البريد الإلكتروني' : 'كلمة المرور'}</b> الخاصة بحسابك:</p>
+        <div style="text-align: center; margin: 24px 0;">
+          <div style="display: inline-block; background-color: #f8fafc; border: 2px dashed #d97706; padding: 14px 28px; border-radius: 12px;">
+            <span style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #b45309; font-family: monospace;">${otpCode}</span>
+          </div>
+        </div>
+        <p style="font-size: 13px; color: #64748b; text-align: center;">صلاحية هذا الرمز هي <b>10 دقائق</b>. إذا لم تكن أنت من طلب هذا التغيير، يرجى تجاهل هذه الرسالة والتأكد من أمان حسابك فوراً.</p>
+      `
+    });
+
+    sendEmail(
+      user.email,
+      isEmailChange ? 'رمز التحقق لتغيير البريد الإلكتروني — كنيسة الشهيد أبي سيفين' : 'رمز التحقق لتغيير كلمة المرور — كنيسة الشهيد أبي سيفين',
+      emailHtml
+    ).catch(err => console.error('Failed to send security OTP email:', err));
+
+    return res.status(200).json({
+      success: true,
+      message: 'Verification code sent to your email address.',
+      messageAr: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني المسجل بنجاح (صالح لمدة 10 دقائق).'
+    });
+  } catch (error) {
+    console.error('Error requesting security OTP:', error);
+    return res.status(500).json({ error: 'Server error requesting verification code.' });
+  }
+});
+
+// 9.2 Verify OTP and Complete Email or Password Change
+router.post('/profile/verify-security-change', requireAuth, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.userId;
+  const { type, otp, newEmail, newPassword } = req.body;
+
+  if (type !== 'EMAIL' && type !== 'PASSWORD') {
+    return res.status(400).json({ error: 'Invalid change type. Must be EMAIL or PASSWORD.' });
+  }
+
+  if (!otp || typeof otp !== 'string') {
+    return res.status(400).json({ error: 'Verification code is required.', errorAr: 'رمز التحقق مطلوب.' });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    // Validate OTP
+    if (!user.otpCode || !user.otpExpiry || user.otpCode !== otp.trim()) {
+      return res.status(400).json({
+        error: 'Invalid verification code.',
+        errorAr: 'رمز التحقق غير صحيح، يرجى التأكد وإعادة المحاولة.'
+      });
+    }
+
+    if (new Date() > new Date(user.otpExpiry)) {
+      return res.status(400).json({
+        error: 'Verification code has expired. Please request a new code.',
+        errorAr: 'انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد.'
+      });
+    }
+
+    if (type === 'EMAIL') {
+      if (!newEmail || typeof newEmail !== 'string') {
+        return res.status(400).json({ error: 'New email address is required.', errorAr: 'البريد الإلكتروني الجديد مطلوب.' });
+      }
+
+      const cleanNewEmail = newEmail.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanNewEmail)) {
+        return res.status(400).json({ error: 'Invalid email address format.', errorAr: 'صيغة البريد الإلكتروني الجديد غير صالحة.' });
+      }
+
+      const existing = await prisma.user.findUnique({
+        where: { email: cleanNewEmail }
+      });
+
+      if (existing && existing.id !== user.id) {
+        return res.status(400).json({
+          error: 'This email address is already in use by another account.',
+          errorAr: 'هذا البريد الإلكتروني مسجل بالفعل بحساب آخر.'
+        });
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          email: cleanNewEmail,
+          otpCode: null,
+          otpExpiry: null
+        }
+      });
+
+      const tokens = generateTokens(updatedUser);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { refreshToken: tokens.refreshToken }
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Email address updated successfully.',
+        messageAr: 'تم تحديث البريد الإلكتروني بنجاح.',
+        user: {
+          id: updatedUser.id,
+          email: updatedUser.email,
+          fullName: updatedUser.fullName,
+          role: updatedUser.role,
+          phone: updatedUser.phone,
+          avatarUrl: updatedUser.avatarUrl
+        },
+        ...tokens
+      });
+    } else {
+      // PASSWORD CHANGE
+      if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+        return res.status(400).json({
+          error: 'New password must be at least 8 characters long.',
+          errorAr: 'يجب ألا تقل كلمة المرور الجديدة عن 8 أحرف.'
+        });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: hashedPassword,
+          otpCode: null,
+          otpExpiry: null
+        }
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Password changed successfully.',
+        messageAr: 'تم تغيير كلمة المرور بنجاح.'
+      });
+    }
+  } catch (error) {
+    console.error('Error verifying security change:', error);
+    return res.status(500).json({ error: 'Server error completing security change.' });
+  }
+});
+
 // 10. Update Language
 router.patch('/language', requireAuth, async (req: AuthRequest, res: Response) => {
   const { language } = req.body;

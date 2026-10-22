@@ -126,7 +126,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
 
   // Tabs structure based on role
-  const [activeTab, setActiveTab] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<string>('my-profile');
   const [isMobileTabMenuOpen, setIsMobileTabMenuOpen] = useState(false);
 
   // Data states
@@ -696,13 +696,8 @@ const initialAddMemberFormState = {
 
       if (tabParam) {
         setActiveTab(tabParam);
-      } else if (['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(parsedUser.role)) {
-        setActiveTab('members');
-      } else if (parsedUser.role === 'TRIP_MANAGER') {
-        setActiveTab('trips');
-      } else if (['PRIEST', 'BISHOP'].includes(parsedUser.role)) {
-        setActiveTab('confessions');
       } else {
+        // Default landing page for all members and admins is My Profile & Account
         setActiveTab('my-profile');
       }
 
