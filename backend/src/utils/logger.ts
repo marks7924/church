@@ -1,4 +1,5 @@
 import prisma from '../db';
+import { redactSensitiveData } from './security';
 
 export async function logAction(
   userId: string,
@@ -14,7 +15,7 @@ export async function logAction(
         userEmail: email,
         userName: fullName,
         action,
-        details
+        details: redactSensitiveData(details)
       }
     });
   } catch (error) {

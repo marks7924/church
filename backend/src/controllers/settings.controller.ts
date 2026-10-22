@@ -6,13 +6,27 @@ import { Role } from '@prisma/client';
 
 const router = Router();
 
-// 1. Get All System Settings (Public)
+// Sensitive key substrings that must NEVER be returned in public settings
+const SENSITIVE_KEY_PATTERNS = [
+  'key', 'secret', 'token', 'pass', 'password', 'ai_', 'groq', 'openai',
+  'gemini', 'smtp', 'credential', 'private', 'admin_', 'webhook', 'firebase'
+];
+
+function isSensitiveKey(key: string): boolean {
+  const lower = key.toLowerCase();
+  return SENSITIVE_KEY_PATTERNS.some(pattern => lower.includes(pattern));
+}
+
+// 1. Get Public System Settings (Safe public keys only: images, banners, titles)
 router.get('/', async (req: Request, res: Response) => {
   try {
     const configs = await prisma.systemConfig.findMany();
     const configMap: { [key: string]: string } = {};
     configs.forEach(c => {
-      configMap[c.key] = c.value;
+      // Strictly exclude any sensitive credentials or keys
+      if (!isSensitiveKey(c.key)) {
+        configMap[c.key] = c.value;
+      }
     });
 
     return res.status(200).json(configMap);

@@ -8,8 +8,14 @@ import { AuthRequest } from '../types';
 
 const router = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_church_jwt_secret_key';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'super_secret_church_jwt_refresh_secret_key';
+import {
+  getJwtSecret,
+  getJwtRefreshSecret,
+  enforceRateLimit,
+  recordOtpFailure,
+  resetOtpAttempts,
+  getOtpFailures
+} from '../utils/security';
 
 async function isEmailVerificationRequired(): Promise<boolean> {
   const config = await prisma.systemConfig.findUnique({
@@ -31,24 +37,47 @@ function generateTokens(user: { id: string; email: string; role: string; fullNam
     fullName: user.fullName,
     isVerified: user.isVerified
   };
-  const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
-  const refreshToken = jwt.sign({ userId: user.id }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+  const accessToken = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
+  const refreshToken = jwt.sign({ userId: user.id }, getJwtRefreshSecret(), { expiresIn: '7d' });
   return { accessToken, refreshToken };
 }
 
 // 1. Register User
 router.post('/register', async (req: Request, res: Response) => {
+  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'anonymous';
+  const rateLimit = enforceRateLimit(`register:${clientIp}`, { limit: 10, windowMs: 60 * 60 * 1000, blockDurationMs: 60 * 60 * 1000 });
+  if (!rateLimit.allowed) {
+    return res.status(429).json({
+      error: `Too many registration attempts. Please try again in ${rateLimit.retryAfterSeconds} seconds.`,
+      errorAr: 'تم تجاوز الحد المسموح به من محاولات التسجيل. يرجى المحاولة لاحقاً.'
+    });
+  }
+
   const { email, password, fullName, phone, nationalId } = req.body;
 
   if (!email || !password || !fullName || !nationalId) {
     return res.status(400).json({ error: 'Required fields missing: email, password, fullName, nationalId' });
   }
 
+  if (typeof password !== 'string' || password.length < 8) {
+    return res.status(400).json({
+      error: 'Password must be at least 8 characters long.',
+      errorAr: 'يجب ألا تقل كلمة المرور عن 8 أحرف.'
+    });
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email.trim())) {
+    return res.status(400).json({ error: 'Invalid email address format.', errorAr: 'صيغة البريد الإلكتروني غير صالحة.' });
+  }
+
   try {
     // Check duplication
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanNationalId = nationalId.trim();
     const existingUser = await prisma.user.findFirst({
       where: {
-        OR: [{ email }, { nationalId }]
+        OR: [{ email: cleanEmail }, { nationalId: cleanNationalId }]
       }
     });
 
@@ -139,6 +168,15 @@ router.post('/register', async (req: Request, res: Response) => {
 
 // 2. Verify OTP
 router.post('/verify-otp', async (req: Request, res: Response) => {
+  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'anonymous';
+  const rateLimit = enforceRateLimit(`verify-otp:${clientIp}`, { limit: 15, windowMs: 60 * 1000, blockDurationMs: 5 * 60 * 1000 });
+  if (!rateLimit.allowed) {
+    return res.status(429).json({
+      error: `Too many OTP verification attempts. Please wait ${rateLimit.retryAfterSeconds} seconds before trying again.`,
+      errorAr: 'تم تجاوز الحد الأقصى لمحاولات التحقق. يرجى الانتظار والمحاولة مرة أخرى.'
+    });
+  }
+
   const { email, code } = req.body;
 
   if (!email || !code) {
@@ -146,7 +184,8 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
   }
 
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
 
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
@@ -161,16 +200,38 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
     }
 
     if (user.otpExpiry < new Date()) {
+      resetOtpAttempts(cleanEmail);
       return res.status(400).json({ error: 'OTP expired. Please request a new code.' });
     }
 
-    if (user.otpCode !== code) {
-      return res.status(400).json({ error: 'Invalid OTP code.' });
+    if (user.otpCode !== String(code).trim()) {
+      const failures = recordOtpFailure(cleanEmail);
+      if (failures >= 5) {
+        // Invalidate OTP on 5th failed attempt to prevent brute force
+        await prisma.user.update({
+          where: { email: cleanEmail },
+          data: { otpCode: null, otpExpiry: null }
+        });
+        resetOtpAttempts(cleanEmail);
+        return res.status(400).json({
+          error: 'Too many invalid attempts. For your security, this verification code has been invalidated. Please request a new code.',
+          errorAr: 'تم إدخال الرمز خطأ 5 مرات. تم إلغاء صلاحية هذا الرمز لحماية حسابك، يرجى طلب كود جديد.'
+        });
+      }
+
+      const remaining = 5 - failures;
+      return res.status(400).json({
+        error: `Invalid OTP code. ${remaining} attempts remaining before code is invalidated.`,
+        errorAr: `كود التحقق غير صحيح. متبقي ${remaining} محاولات قبل إلغاء الرمز.`
+      });
     }
+
+    // Success: reset attempts
+    resetOtpAttempts(cleanEmail);
 
     // Set verified
     const updatedUser = await prisma.user.update({
-      where: { email },
+      where: { email: cleanEmail },
       data: {
         isVerified: true,
         otpCode: null,
@@ -203,45 +264,53 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
 
 // 3. Login
 router.post('/login', async (req: Request, res: Response) => {
+  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'anonymous';
   const { email, password } = req.body;
 
   if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required.' });
+    return res.status(400).json({
+      error: 'Email and password are required.',
+      errorAr: 'يرجى إدخال البريد الإلكتروني وكلمة المرور.'
+    });
+  }
+
+  const cleanEmail = String(email).trim().toLowerCase();
+
+  // Rate Limiting & Account Lockout: Max 10 attempts per 15 minutes per IP/Email
+  const rateLimit = enforceRateLimit(`login:${clientIp}:${cleanEmail}`, {
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 15 * 60 * 1000
+  });
+
+  if (!rateLimit.allowed) {
+    return res.status(429).json({
+      error: `Too many failed login attempts. Account temporarily locked. Please try again in ${rateLimit.retryAfterSeconds} seconds.`,
+      errorAr: `تم تجاوز عدد المحاولات الخاطئة. تم إيقاف تسجيل الدخول مؤقتاً لمدة ${Math.ceil((rateLimit.retryAfterSeconds || 60) / 60)} دقيقة للحماية.`
+    });
   }
 
   try {
-    let user = await prisma.user.findUnique({
-      where: { email },
+    const user = await prisma.user.findUnique({
+      where: { email: cleanEmail },
       include: { familyProfile: true }
     });
 
-    // Support alias for demo priest account 'priest@church.org'
-    if (!user && email.toLowerCase() === 'priest@church.org') {
-      user = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { email: 'fr.mina@church.org' },
-            { role: 'PRIEST' }
-          ]
-        },
-        include: { familyProfile: true }
+    // Constant-time-like uniform error response to prevent user enumeration
+    if (!user) {
+      return res.status(401).json({
+        error: 'Invalid email or password.',
+        errorAr: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'
       });
     }
 
-    if (!user) {
-      const isSuperAdminEmail = email === 'superadmin@church.org' || email === 'marksamer010@gmail.com' || (process.env.SUPER_ADMIN_EMAIL && email === process.env.SUPER_ADMIN_EMAIL);
-      if (isSuperAdminEmail) {
-        return res.status(401).json({ error: 'Email not found.' });
-      }
-      return res.status(401).json({ error: 'Invalid email or password.' });
-    }
-
-    const isValidPassword = bcrypt.compareSync(password, user.passwordHash) || (email.toLowerCase() === 'priest@church.org' && password === 'Password123');
+    // Verify password strictly against bcrypt hash (NO BACKDOORS ALLOWED)
+    const isValidPassword = bcrypt.compareSync(password, user.passwordHash);
     if (!isValidPassword) {
-      if (user.role === 'SUPER_ADMIN' || user.role === 'DEVELOPER') {
-        return res.status(401).json({ error: 'Incorrect password.' });
-      }
-      return res.status(401).json({ error: 'Invalid email or password.' });
+      return res.status(401).json({
+        error: 'Invalid email or password.',
+        errorAr: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'
+      });
     }
 
     // Check if email verification is mandatory
@@ -322,7 +391,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
   }
 
   try {
-    const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as { userId: string };
+    const decoded = jwt.verify(refreshToken, getJwtRefreshSecret()) as { userId: string };
     
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId }
@@ -348,10 +417,27 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
 // 5. Forgot Password
 router.post('/forgot-password', async (req: Request, res: Response) => {
+  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'anonymous';
   const { email } = req.body;
 
   if (!email) {
     return res.status(400).json({ error: 'Email is required.' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  // Rate Limiting: Max 3 requests per 15 minutes per IP/Email to stop spam and quota exhaustion
+  const rateLimit = enforceRateLimit(`forgot-pw:${clientIp}:${cleanEmail}`, {
+    limit: 3,
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 15 * 60 * 1000
+  });
+
+  if (!rateLimit.allowed) {
+    return res.status(429).json({
+      error: `Too many password reset requests. Please wait ${rateLimit.retryAfterSeconds} seconds before requesting again.`,
+      errorAr: 'تم إرسال عدة طلبات لاستعادة كلمة المرور. يرجى الانتظار والمحاولة لاحقاً.'
+    });
   }
 
   try {
@@ -409,16 +495,36 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
 
 // 5b. Resend OTP Code
 router.post('/resend-otp', async (req: Request, res: Response) => {
+  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'anonymous';
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email is required.' });
   }
 
+  const cleanEmail = email.trim().toLowerCase();
+
+  // Rate Limiting: Max 3 resend attempts per 15 minutes per IP/Email
+  const rateLimit = enforceRateLimit(`resend-otp:${clientIp}:${cleanEmail}`, {
+    limit: 3,
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 15 * 60 * 1000
+  });
+
+  if (!rateLimit.allowed) {
+    return res.status(429).json({
+      error: `Too many resend requests. Please wait ${rateLimit.retryAfterSeconds} seconds before requesting a new code.`,
+      errorAr: 'تم إرسال عدة طلبات لإعادة إرسال الكود. يرجى الانتظار والمحاولة لاحقاً.'
+    });
+  }
+
   try {
-    const cleanEmail = email.trim().toLowerCase();
     const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (!user) {
-      return res.status(404).json({ error: 'User not found.', errorAr: 'المستخدم غير موجود.' });
+      // Return 200 to prevent user enumeration
+      return res.status(200).json({
+        success: true,
+        messageAr: 'إذا كان البريد مسجلاً، تم إرسال كود تحقق جديد بنجاح.'
+      });
     }
 
     const otpCode = generateOTP();
@@ -459,22 +565,46 @@ router.post('/resend-otp', async (req: Request, res: Response) => {
 
 // 6. Reset Password
 router.post('/reset-password', async (req: Request, res: Response) => {
+  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'anonymous';
   const { email, code, newPassword } = req.body;
 
   if (!email || !code || !newPassword) {
     return res.status(400).json({ error: 'Email, OTP code, and newPassword are required.' });
   }
 
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
+    return res.status(400).json({
+      error: 'New password must be at least 8 characters long.',
+      errorAr: 'يجب ألا تقل كلمة المرور الجديدة عن 8 أحرف.'
+    });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  // Rate Limiting: Max 5 attempts per 15 minutes
+  const rateLimit = enforceRateLimit(`reset-pw:${clientIp}:${cleanEmail}`, {
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+    blockDurationMs: 15 * 60 * 1000
+  });
+
+  if (!rateLimit.allowed) {
+    return res.status(429).json({
+      error: `Too many password reset attempts. Please wait ${rateLimit.retryAfterSeconds} seconds before trying again.`,
+      errorAr: 'تم تجاوز عدد محاولات إعادة تعيين كلمة المرور. يرجى الانتظار والمحاولة لاحقاً.'
+    });
+  }
+
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || user.otpCode !== code || !user.otpExpiry || user.otpExpiry < new Date()) {
-      return res.status(400).json({ error: 'Invalid or expired OTP code.' });
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+    if (!user || user.otpCode !== String(code).trim() || !user.otpExpiry || user.otpExpiry < new Date()) {
+      return res.status(400).json({ error: 'Invalid or expired OTP code.', errorAr: 'كود التأكيد غير صحيح أو منتهي الصلاحية.' });
     }
 
     const passwordHash = bcrypt.hashSync(newPassword, 10);
 
     await prisma.user.update({
-      where: { email },
+      where: { email: cleanEmail },
       data: {
         passwordHash,
         otpCode: null,

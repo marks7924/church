@@ -3,7 +3,7 @@ import * as jwt from 'jsonwebtoken';
 import { Role } from '@prisma/client';
 import { AuthRequest, UserPayload } from '../types';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_church_jwt_secret_key';
+import { getJwtSecret } from '../utils/security';
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
@@ -14,7 +14,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   const token = authHeader.split(' ')[1];
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as UserPayload;
+    const payload = jwt.verify(token, getJwtSecret()) as UserPayload;
     req.user = payload;
     next();
   } catch (error) {

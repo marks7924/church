@@ -26,56 +26,93 @@ import historyRouter from './controllers/history.controller';
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// Global Middleware
-const allowedOrigins = process.env.APP_URL
+// Security: Disable X-Powered-By header to obscure technology stack
+app.disable('x-powered-by');
+
+// Security Headers Middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
+// Global API Rate Limiting: 120 requests/min per IP to prevent DoS scraping
+import { enforceRateLimit } from './utils/security';
+app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'anonymous';
+  const check = enforceRateLimit(`global-api:${clientIp}`, {
+    limit: 120,
+    windowMs: 60 * 1000,
+    blockDurationMs: 60 * 1000
+  });
+
+  if (!check.allowed) {
+    return res.status(429).json({
+      error: `Too many requests from this IP. Please wait ${check.retryAfterSeconds} seconds.`,
+      errorAr: 'تم تجاوز الحد المسموح به من الطلبات مؤقتاً. يرجى الانتظار والمحاولة لاحقاً.'
+    });
+  }
+  next();
+});
+
+// Global Middleware & Strict CORS Configuration
+const configuredOrigins = process.env.APP_URL
   ? process.env.APP_URL.split(',').map(url => url.trim().replace(/\/$/, ''))
   : ['http://localhost:3000', 'https://church-ruby-beta.vercel.app'];
 
+const localhostRegex = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
+const trustedChurchDomainRegex = /^https:\/\/church-[a-z0-9-]+-marks7924s-projects\.vercel\.app$/i;
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, or Postman)
+    // Allow requests with no origin (mobile native apps, internal microservices, curl)
     if (!origin) return callback(null, true);
     
     const cleanOrigin = origin.replace(/\/$/, '');
     
-    // Check if origin matches allowedOrigins, ends with vercel.app, or is localhost
+    // Strict origin validation: exact allowed origins, strict localhost dev, or official team preview regex
     const isAllowed = 
-      allowedOrigins.includes('*') ||
-      allowedOrigins.includes(cleanOrigin) ||
-      cleanOrigin.endsWith('.vercel.app') ||
-      cleanOrigin.includes('localhost');
+      configuredOrigins.includes(cleanOrigin) ||
+      cleanOrigin === 'https://church-ruby-beta.vercel.app' ||
+      localhostRegex.test(cleanOrigin) ||
+      trustedChurchDomainRegex.test(cleanOrigin);
 
     if (isAllowed) {
       callback(null, true);
     } else {
-      callback(null, false);
+      callback(new Error('CORS policy: This origin is not allowed by Access-Control-Allow-Origin.'));
     }
   },
   credentials: true
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// Safe payload limits (prevent memory exhaustion DoS)
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ limit: '2mb', extended: true }));
 
 import prisma from './db';
 
-// Test connection
+// Hardened Health Check (Never leak raw database error details to anonymous callers)
 const healthHandler = async (req: Request, res: Response) => {
   let dbStatus = 'disconnected';
-  let dbError = null;
   try {
     await prisma.$queryRaw`SELECT 1`;
     dbStatus = 'connected';
   } catch (err: any) {
-    dbError = err.message || String(err);
+    console.error('[DATABASE_HEALTH_CHECK_FAILURE]:', err.message || err);
   }
 
-  const statusCode = dbStatus === 'connected' ? 200 : 500;
+  const statusCode = dbStatus === 'connected' ? 200 : 503;
   res.status(statusCode).json({
-    status: dbStatus === 'connected' ? 'OK' : 'DATABASE_ERROR',
+    status: dbStatus === 'connected' ? 'OK' : 'DEGRADED',
     database: dbStatus,
-    dbError,
-    timestamp: new Date(),
-    version: '1.0.0'
+    timestamp: new Date().toISOString(),
+    version: '1.1.0'
   });
 };
 
@@ -110,21 +147,24 @@ app.use('/api/invitations', invitationRouter);
 app.use('/api/fy', fyRouter);
 app.use('/api/history', historyRouter);
 
-// Error Handling Middleware
+// Error Handling Middleware (Safe against stack and internals leakage)
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error('Unhandled server error:', err);
-  const origin = req.headers.origin;
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  console.error('[UNHANDLED_SERVER_ERROR]:', err);
+
+  const isCorsError = err && typeof err.message === 'string' && err.message.includes('CORS');
+  if (isCorsError) {
+    return res.status(403).json({ error: 'CORS Forbidden: Origin not allowed.' });
   }
-  res.status(500).json({ 
-    error: 'Internal Server Error', 
-    message: err.message || String(err)
+
+  const isProd = process.env.NODE_ENV === 'production';
+  return res.status(500).json({ 
+    error: 'Internal Server Error',
+    message: isProd ? 'An unexpected internal error occurred. Please contact church technical administration.' : (err.message || String(err)),
+    timestamp: new Date().toISOString()
   });
 });
 
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+if (require.main === module && (process.env.NODE_ENV !== 'production' || !process.env.VERCEL)) {
   app.listen(PORT, () => {
     console.log(`\n🚀 Church Platform backend listening at http://localhost:${PORT}`);
     console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}\n`);
