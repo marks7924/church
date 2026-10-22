@@ -1044,7 +1044,10 @@ export async function callGeminiProvider(
           const errText = await response.text();
           lastError = `Gemini HTTP ${response.status} (${curModel}): ${errText.slice(0, 200)}`;
           console.error('[Gemini API Error]', lastError);
-          // If model not found (404) or bad request, try next model
+          // If key is invalid or unauthorized, break immediately to avoid wasting time retrying
+          if (response.status === 400 || response.status === 401 || response.status === 403) {
+            break;
+          }
           continue;
         }
 
@@ -4244,9 +4247,11 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
     }
 
     if (!chosenText) {
+      const localStart = Date.now();
       const fallback = ChurchAiService.generateGroundedResponse(userMessage, lang, { knowledgeText, sources, customFaqs, isEventsPublic, priests, historyData }, currentUser);
-      const latencyMs = Date.now() - startTime;
-      recordProviderCall('local', true, latencyMs);
+      const localExecutionMs = Date.now() - localStart;
+      const totalLatencyMs = Date.now() - startTime;
+      recordProviderCall('local', true, localExecutionMs);
       const sanitizedFallback = ChurchAiLearnerService.sanitizeOutput(fallback.text, learnedContext?.forbiddenRules || []);
       const didBotSayIDontKnow = ChurchAiLearnerService.detectIDontKnow(sanitizedFallback);
 
