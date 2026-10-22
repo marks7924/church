@@ -7,6 +7,7 @@
     "dev": "ts-node src/index.ts",
     "build": "prisma generate && tsc",
     "test": "ts-node src/tests/ai.test.ts",
+    "test:security": "ts-node src/tests/security.test.ts",
     "vercel-build": "prisma generate",
     "start": "prisma db push && node dist/index.js",
     "prisma:generate": "prisma generate",
