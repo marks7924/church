@@ -1044,8 +1044,8 @@ export async function callGeminiProvider(
           const errText = await response.text();
           lastError = `Gemini HTTP ${response.status} (${curModel}): ${errText.slice(0, 200)}`;
           console.error('[Gemini API Error]', lastError);
-          // If key is invalid or unauthorized, break immediately to avoid wasting time retrying
-          if (response.status === 400 || response.status === 401 || response.status === 403) {
+          // If key is invalid, unauthorized, or model not found, break immediately to avoid wasting time retrying
+          if (response.status === 400 || response.status === 401 || response.status === 403 || response.status === 404) {
             break;
           }
           continue;
@@ -4259,7 +4259,7 @@ STRICT OPERATIONAL BOUNDARIES & RULES:
         response: sanitizedFallback,
         sources: fallback.matchedSources,
         suggestedQuestions: fallback.suggested,
-        latencyMs,
+        latencyMs: totalLatencyMs,
         tokensUsed: Math.round(fallback.text.length / 4),
         provider: 'local-knowledge-engine',
         model: 'church-grounded-v1',
