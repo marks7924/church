@@ -4,6 +4,8 @@ import { requireAuth, requireRoles } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types';
 import { sendEmail, sendSMS, sendPushNotification } from '../services/notification.service';
 import { Role, MembershipStatus } from '@prisma/client';
+import { getCanonicalFamilyMembership } from '../services/familyMembership.service';
+import { validateAndParseEgyptianNationalId, normalizeEgyptianNationalId } from '../utils/nationalId';
 
 const router = Router();
 
@@ -41,6 +43,24 @@ router.post('/register-profile', requireAuth, async (req: AuthRequest, res: Resp
   }
 
   try {
+    // Check if user is already covered under a family membership as an assigned member
+    const canonical = await getCanonicalFamilyMembership(userId);
+    if (canonical.hasMembership && !canonical.isPrimaryHead) {
+      return res.status(400).json({
+        error: 'You are already covered under a family membership. Assigned family members do not need to submit independent applications.',
+        errorAr: 'أنت مسجل بالفعل ضمن ملف عضوية أسرية معتمد أو قيد المراجعة. لا يتطلب من أفراد الأسرة تقديم طلبات عضوية منفصلة.'
+      });
+    }
+
+    // Validate Family Head National ID
+    const natIdValidation = validateAndParseEgyptianNationalId(nationalId);
+    if (!natIdValidation.isValid) {
+      return res.status(400).json({
+        error: natIdValidation.error || 'Invalid National ID for family head.',
+        errorAr: natIdValidation.errorAr || 'الرقم القومي لرب الأسرة غير صالح.'
+      });
+    }
+
     // Check if user already has a profile
     const existingProfile = await prisma.familyHead.findUnique({
       where: { userId }
@@ -146,24 +166,32 @@ router.post('/register-profile', requireAuth, async (req: AuthRequest, res: Resp
   }
 });
 
-// 2. Get own profile status
+// 2. Get own profile status (Handles both Primary Head and covered Family Members)
 router.get('/my-profile', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const canonical = await getCanonicalFamilyMembership(req.user!.userId);
+
+    if (!canonical.hasMembership || !canonical.canonicalId) {
+      return res.status(404).json({ error: 'No profile submitted yet.', canonical });
+    }
+
     const profile = await prisma.familyHead.findUnique({
-      where: { userId: req.user!.userId }
+      where: { id: canonical.canonicalId }
     });
 
     if (!profile) {
-      return res.status(404).json({ error: 'No profile submitted yet.' });
+      return res.status(404).json({ error: 'Profile not found.' });
     }
 
     return res.status(200).json({
       ...profile,
-      children: JSON.parse(profile.childrenJson),
-      relatives: JSON.parse(profile.relativesJson),
-      servants: JSON.parse(profile.servantsJson)
+      canonical,
+      children: JSON.parse(profile.childrenJson || '[]'),
+      relatives: JSON.parse(profile.relativesJson || '[]'),
+      servants: JSON.parse(profile.servantsJson || '[]')
     });
   } catch (error) {
+    console.error('Error retrieving member profile:', error);
     return res.status(500).json({ error: 'Server error retrieving profile.' });
   }
 });

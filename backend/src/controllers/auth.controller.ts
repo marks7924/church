@@ -5,6 +5,8 @@ import prisma from '../db';
 import { sendEmail, formatChurchEmailHtml } from '../services/notification.service';
 import { requireAuth } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types';
+import { validateAndParseEgyptianNationalId, maskEgyptianNationalId } from '../utils/nationalId';
+import { getCanonicalFamilyMembership } from '../services/familyMembership.service';
 
 const router = Router();
 
@@ -78,6 +80,16 @@ router.post('/register', async (req: Request, res: Response) => {
     // Check duplication
     const cleanEmail = email.trim().toLowerCase();
     const cleanNationalId = nationalId.trim();
+
+    // Authoritative Egyptian National ID Validation
+    const natIdValidation = validateAndParseEgyptianNationalId(cleanNationalId);
+    if (!natIdValidation.isValid) {
+      return res.status(400).json({
+        error: natIdValidation.error || 'Invalid Egyptian National ID.',
+        errorAr: natIdValidation.errorAr || 'الرقم القومي المصري غير صالح.'
+      });
+    }
+
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [{ email: cleanEmail }, { nationalId: cleanNationalId }]
@@ -99,12 +111,17 @@ router.post('/register', async (req: Request, res: Response) => {
         passwordHash,
         fullName: fullName.trim(),
         phone: phone ? phone.trim() : null,
-        nationalId: nationalId.trim(),
+        nationalId: cleanNationalId,
         role: 'MEMBER',
         isVerified: !requireVerification,
         otpCode,
         otpExpiry
       }
+    });
+
+    // Automatically check and link to canonical family membership if registered under family head
+    getCanonicalFamilyMembership(user.id).catch(err => {
+      console.error('Error auto-linking family membership upon registration:', err);
     });
 
     if (requireVerification) {
@@ -644,6 +661,7 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
       where: { id: req.user.userId },
       include: {
         familyProfile: true,
+        linkedFamilyHead: true,
         priestProfile: true
       }
     });
@@ -652,8 +670,31 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    const isApprovedMember = user.familyProfile?.status === 'APPROVED';
+    // Resolve Canonical Shared Family Membership (Head or Member)
+    const canonicalFamily = await getCanonicalFamilyMembership(user.id);
+
+    // Derived Egyptian National ID Fields (authoritative, dynamic)
+    const natIdResult = validateAndParseEgyptianNationalId(user.nationalId);
+
+    const isApprovedMember = canonicalFamily.status === 'APPROVED';
     const isStaffOrPriest = ['PRIEST', 'BISHOP', 'SUPER_ADMIN', 'CHURCH_ADMIN', 'SECRETARY', 'DEVELOPER'].includes(user.role);
+
+    // Fetch live statistics backed by real database data
+    const [upcomingAppointmentsCount, activeInvitationsCount] = await Promise.all([
+      prisma.appointment.count({
+        where: {
+          memberId: user.id,
+          date: { gte: new Date() },
+          status: { in: ['PENDING', 'APPROVED'] }
+        }
+      }),
+      prisma.eventInvitation.count({
+        where: {
+          userId: user.id,
+          status: 'ACTIVE'
+        }
+      })
+    ]);
 
     const userPayload = {
       id: user.id,
@@ -661,18 +702,47 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
       fullName: user.fullName,
       phone: user.phone,
       nationalId: user.nationalId,
+      maskedNationalId: natIdResult.isValid ? natIdResult.maskedId : (user.nationalId ? maskEgyptianNationalId(user.nationalId) : null),
+      avatarUrl: user.avatarUrl || null,
       role: user.role,
       roles: Array.isArray(user.roles) && user.roles.length > 0 ? user.roles : [user.role],
       isBanned: user.isBanned || false,
       banReason: user.banReason || null,
       isVerified: user.isVerified || isApprovedMember,
       isChurchMember: isStaffOrPriest || isApprovedMember,
-      hasFamilyProfile: !!user.familyProfile,
-      familyProfileStatus: user.familyProfile?.status || null,
-      familyProfileNotes: user.familyProfile?.notes || null,
-      familyProfileUpdatedAt: user.familyProfile?.updatedAt || null,
+      memberSince: user.createdAt,
       language: user.language,
-      familyProfile: user.familyProfile,
+      notificationPreferences: user.notificationPreferencesJson 
+        ? JSON.parse(user.notificationPreferencesJson) 
+        : { email: true, sms: true, events: true, reminders: true },
+      
+      // Authoritative Derived Identity Fields (Read-Only)
+      derivedIdentity: {
+        isValid: natIdResult.isValid,
+        dateOfBirth: natIdResult.dateOfBirth || null,
+        birthDateFormatted: natIdResult.birthDateString || null,
+        age: natIdResult.age !== undefined ? natIdResult.age : null,
+        gender: natIdResult.gender || null,
+        genderAr: natIdResult.genderAr || null,
+        genderEn: natIdResult.genderEn || null,
+        governorateNameAr: natIdResult.governorateNameAr || null,
+        maskedNationalId: natIdResult.maskedId || null
+      },
+
+      // Canonical Shared Family Membership Details (covers whole family)
+      familyMembership: canonicalFamily,
+      hasFamilyProfile: canonicalFamily.hasMembership,
+      familyProfileStatus: canonicalFamily.hasMembership ? canonicalFamily.status : null,
+      familyProfileNotes: canonicalFamily.notes,
+      familyProfileUpdatedAt: canonicalFamily.updatedAt,
+
+      // Live Backed Stats
+      stats: {
+        upcomingAppointmentsCount,
+        activeInvitationsCount,
+        unreadNotificationsCount: 0
+      },
+
       priestProfile: user.priestProfile
     };
 
@@ -681,11 +751,208 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
       user: userPayload
     });
   } catch (error) {
+    console.error('Error fetching /auth/me profile:', error);
     return res.status(500).json({ error: 'Server error.' });
   }
 });
 
-// 8. Update Language
+// 8. Update Profile (Editable fields only - locked fields strictly protected)
+router.patch('/profile', requireAuth, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.userId;
+  const {
+    fullName,
+    phone,
+    avatarUrl,
+    language,
+    notificationPreferences,
+    // Disallowed locked fields if client attempts to alter them:
+    nationalId,
+    role,
+    roles,
+    isVerified,
+    isBanned,
+    dateOfBirth,
+    gender,
+    age,
+    familyProfileStatus
+  } = req.body;
+
+  // Strict enforcement of locked identity fields
+  if (
+    nationalId !== undefined ||
+    role !== undefined ||
+    roles !== undefined ||
+    isVerified !== undefined ||
+    isBanned !== undefined ||
+    dateOfBirth !== undefined ||
+    gender !== undefined ||
+    age !== undefined ||
+    familyProfileStatus !== undefined
+  ) {
+    return res.status(400).json({
+      error: 'Identity, role, and membership fields are locked for security and cannot be directly modified.',
+      errorAr: 'بيانات الهوية (الرقم القومي، تاريخ الميلاد، العمر، النوع)، الرتبة، وحالة العضوية مقفلة ومحمية لأسباب أمنية. يرجى تقديم طلب تصحيح رسمي للإدارة إذا لزم الأمر.'
+    });
+  }
+
+  const updateData: any = {};
+
+  if (fullName !== undefined) {
+    const cleanName = String(fullName).trim();
+    if (cleanName.length < 3 || cleanName.length > 100) {
+      return res.status(400).json({
+        error: 'Full name must be between 3 and 100 characters.',
+        errorAr: 'يجب أن يتكون الاسم الكامل من 3 إلى 100 حرف.'
+      });
+    }
+    updateData.fullName = cleanName;
+  }
+
+  if (phone !== undefined) {
+    const cleanPhone = String(phone).trim();
+    if (cleanPhone && !/^[0-9+\s-]{8,20}$/.test(cleanPhone)) {
+      return res.status(400).json({
+        error: 'Invalid phone number format.',
+        errorAr: 'صيغة رقم الهاتف غير صالحة.'
+      });
+    }
+    updateData.phone = cleanPhone || null;
+  }
+
+  if (avatarUrl !== undefined) {
+    if (avatarUrl && typeof avatarUrl === 'string' && avatarUrl.length > 5 * 1024 * 1024) {
+      return res.status(400).json({
+        error: 'Avatar image size exceeds the allowed limit (5MB).',
+        errorAr: 'حجم الصورة الشخصية يتجاوز الحد المسموح به (5 ميجابايت).'
+      });
+    }
+    updateData.avatarUrl = avatarUrl || null;
+  }
+
+  if (language !== undefined) {
+    if (language !== 'ar' && language !== 'en') {
+      return res.status(400).json({ error: 'Language must be "ar" or "en".' });
+    }
+    updateData.language = language;
+  }
+
+  if (notificationPreferences !== undefined) {
+    updateData.notificationPreferencesJson = JSON.stringify(notificationPreferences);
+  }
+
+  try {
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: updateData
+    });
+
+    return res.status(200).json({
+      message: 'Profile updated successfully.',
+      messageAr: 'تم تحديث الملف الشخصي بنجاح.',
+      user: {
+        id: updatedUser.id,
+        fullName: updatedUser.fullName,
+        phone: updatedUser.phone,
+        avatarUrl: updatedUser.avatarUrl,
+        language: updatedUser.language
+      }
+    });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    return res.status(500).json({ error: 'Server error updating profile.' });
+  }
+});
+
+// 9. Request Locked Field Correction (Official Administrative Review Request)
+router.post('/request-identity-correction', requireAuth, async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.userId;
+  const { fieldName, requestedValue, reason } = req.body;
+
+  if (!fieldName || !requestedValue || !reason) {
+    return res.status(400).json({
+      error: 'Missing required correction fields: fieldName, requestedValue, reason.',
+      errorAr: 'يرجى استيفاء جميع البيانات المطلوبة لطلب التصحيح (الحقل المراد تعديله، القيمة الصحيحة، وسبب التصحيح).'
+    });
+  }
+
+  const cleanField = String(fieldName).trim();
+  const cleanRequestedValue = String(requestedValue).trim();
+  const cleanReason = String(reason).trim();
+
+  if (cleanReason.length < 10) {
+    return res.status(400).json({
+      error: 'Please provide a detailed explanation of the correction (minimum 10 characters).',
+      errorAr: 'يرجى تقديم شرح واضح ومفصل لسبب التصحيح (10 أحرف على الأقل).'
+    });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    const referenceCode = `CORR-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+
+    await prisma.aiSupportRequest.create({
+      data: {
+        referenceCode,
+        userId: user.id,
+        name: user.fullName,
+        phone: user.phone || 'N/A',
+        email: user.email,
+        category: 'IDENTITY_CORRECTION',
+        message: `طلب رسمي لتصحيح بيانات هوية مقفلة:
+- الحقل المطلوب تعديله: ${cleanField}
+- القيمة الصحيحة المطلوبة: ${cleanRequestedValue}
+- شرح ومبررات العضو: ${cleanReason}`,
+        status: 'PENDING',
+        notes: `User ID: ${user.id} | Current National ID: ${user.nationalId ? maskEgyptianNationalId(user.nationalId) : 'N/A'}`
+      }
+    });
+
+    // Send official notification email to the church's configured support address
+    const officialSupportEmail = process.env.SMTP_USER || 'churchsplatform@gmail.com';
+    const emailHtml = formatChurchEmailHtml({
+      titleAr: 'طلب جديد لتصحيح بيانات هوية عضو',
+      titleEn: 'Official Identity Correction Request',
+      badge: 'إدارة الهوية',
+      badgeColor: '#b45309',
+      contentHtml: `
+        <p>ورد طلب رسمي من أحد الأعضاء لتصحيح بيانات هوية مقفلة في المنظومة:</p>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0;">
+          <p><b>رقم المرجع:</b> ${referenceCode}</p>
+          <p><b>اسم العضو:</b> ${user.fullName}</p>
+          <p><b>البريد الإلكتروني:</b> ${user.email}</p>
+          <p><b>رقم الهاتف:</b> ${user.phone || 'غير مسجل'}</p>
+          <p><b>الحقل المطلوب تصحيحه:</b> ${cleanField}</p>
+          <p><b>القيمة الصحيحة المطلوبة:</b> ${cleanRequestedValue}</p>
+          <p><b>شرح ومبررات العضو:</b> ${cleanReason}</p>
+        </div>
+        <p style="font-size: 13px; color: #64748b;">يتطلب اعتماد هذا الطلب فحص ومطابقة المستندات والبطاقة الشخصية بمعرفة الأمانة أو الكاهن المسئول.</p>
+      `
+    });
+
+    sendEmail(
+      officialSupportEmail,
+      `طلب تصحيح بيانات هوية: ${user.fullName} (${referenceCode})`,
+      emailHtml
+    ).catch(err => console.error('Failed to notify support email of correction request:', err));
+
+    return res.status(200).json({
+      success: true,
+      referenceCode,
+      message: 'Correction request submitted successfully for administrative review.',
+      messageAr: `تم إرسال طلب تصحيح البيانات بنجاح للأمانة العامة للكنيسة برقم مرجعي (${referenceCode}). سيتم مراجعة الطلب والمستندات والتواصل معكم.`
+    });
+  } catch (error) {
+    console.error('Error submitting correction request:', error);
+    return res.status(500).json({ error: 'Server error submitting correction request.' });
+  }
+});
+
+// 10. Update Language
 router.patch('/language', requireAuth, async (req: AuthRequest, res: Response) => {
   const { language } = req.body;
   if (language !== 'ar' && language !== 'en') {

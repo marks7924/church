@@ -304,53 +304,97 @@ export default function RegisterMemberPage() {
         {t('membership_title')}
       </h1>
 
-      {currentProfile && (
+      {currentProfile?.isInheritedFamilyMember ? (
         <div style={{
-          backgroundColor: 'var(--bg-secondary)',
-          border: `1px solid ${currentProfile.status === 'APPROVED' ? 'var(--accent-green)' : currentProfile.status === 'REJECTED' ? 'var(--accent-red)' : 'var(--accent-gold)'}`,
-          padding: '1rem',
-          borderRadius: '6px',
+          background: 'linear-gradient(135deg, rgba(226, 183, 20, 0.08) 0%, rgba(20, 20, 28, 0.95) 100%)',
+          border: '1.5px solid rgba(226, 183, 20, 0.4)',
+          borderRadius: '12px',
+          padding: '2.5rem 1.5rem',
+          textAlign: 'center',
           marginBottom: '2rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px'
+          boxShadow: '0 8px 30px rgba(0,0,0,0.5)'
         }}>
-          {currentProfile.status === 'APPROVED' && <CheckCircle size={20} style={{ color: 'var(--accent-green)' }} />}
-          {currentProfile.status === 'PENDING' && <CheckCircle size={20} style={{ color: 'var(--accent-gold)' }} />}
+          <div style={{ fontSize: '3rem', marginBottom: '14px' }}>👨‍👩‍👧‍👦</div>
+          <h2 style={{ color: 'var(--accent-gold)', margin: '0 0 10px 0', fontSize: '1.4rem', fontWeight: 800 }}>
+            {language === 'ar' ? 'أنت مشمول بالفعل بعضوية عائلية كنسية معتمدة' : 'You are Covered Under an Approved Family Membership'}
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.94rem', lineHeight: '1.7', maxWidth: '600px', margin: '0 auto 1.5rem auto' }}>
+            {language === 'ar'
+              ? `تم ربط حسابك تلقائياً وبأمان بعضوية الأسرة الرسمية برئاسة (${currentProfile.primaryHeadName || 'رب الأسرة'})، وصفتك في السجل: (${currentProfile.relationshipToHead || 'فرد من الأسرة'}). بموجب القواعد الكنسية، تغطي العضوية العائلية الموحدة جميع أفراد الأسرة دون الحاجة لتقديم استمارة ثانية مستقلة.`
+              : `Your personal account is linked to the canonical family membership of (${currentProfile.primaryHeadName || 'Family Head'}). You are covered as (${currentProfile.relationshipToHead || 'Family Member'}). According to church policy, a single canonical membership covers all household members.`}
+          </p>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px', background: 'rgba(46, 204, 113, 0.15)', border: '1.5px solid #2ecc71', color: '#2ecc71', fontWeight: 800, fontSize: '0.95rem', marginBottom: '1.8rem' }}>
+            ✓ {language === 'ar' ? `حالة العضوية الحالية: ${currentProfile.status === 'APPROVED' ? 'معتمدة ومفعّلة' : currentProfile.status}` : `Current Membership Status: ${currentProfile.status}`}
+          </div>
           <div>
-            <b>{t('member_status')}</b>{' '}
-            <span style={{ 
-              fontWeight: 'bold', 
-              color: currentProfile.status === 'APPROVED' ? 'var(--accent-green)' : currentProfile.status === 'REJECTED' ? '#ff4d4d' : 'var(--accent-gold)'
-            }}>
-              {currentProfile.status === 'APPROVED' && t('status_approved')}
-              {currentProfile.status === 'PENDING' && t('status_pending')}
-              {currentProfile.status === 'REJECTED' && t('status_rejected')}
-            </span>
-            {currentProfile.notes && (
-              <div style={{ marginTop: '5px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                📋 {currentProfile.notes}
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard')}
+              style={{
+                background: 'var(--accent-gold)',
+                color: '#000000',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '12px 28px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                fontSize: '1rem',
+                boxShadow: '0 4px 15px rgba(226, 183, 20, 0.3)'
+              }}
+            >
+              {language === 'ar' ? 'الانتقال إلى لوحة الحساب والملف الشخصي' : 'Go to My Profile & Dashboard'}
+            </button>
           </div>
         </div>
-      )}
+      ) : (
+        <>
+          {currentProfile && (
+            <div style={{
+              backgroundColor: 'var(--bg-secondary)',
+              border: `1px solid ${currentProfile.status === 'APPROVED' ? 'var(--accent-green)' : currentProfile.status === 'REJECTED' ? 'var(--accent-red)' : 'var(--accent-gold)'}`,
+              padding: '1rem',
+              borderRadius: '6px',
+              marginBottom: '2rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              {currentProfile.status === 'APPROVED' && <CheckCircle size={20} style={{ color: 'var(--accent-green)' }} />}
+              {currentProfile.status === 'PENDING' && <CheckCircle size={20} style={{ color: 'var(--accent-gold)' }} />}
+              <div>
+                <b>{t('member_status')}</b>{' '}
+                <span style={{ 
+                  fontWeight: 'bold', 
+                  color: currentProfile.status === 'APPROVED' ? 'var(--accent-green)' : currentProfile.status === 'REJECTED' ? '#ff4d4d' : 'var(--accent-gold)'
+                }}>
+                  {currentProfile.status === 'APPROVED' && t('status_approved')}
+                  {currentProfile.status === 'PENDING' && t('status_pending')}
+                  {currentProfile.status === 'REJECTED' && t('status_rejected')}
+                </span>
+                {currentProfile.notes && (
+                  <div style={{ marginTop: '5px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                    📋 {currentProfile.notes}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
-      {statusMessage && (
-        <div style={{
-          backgroundColor: statusMessage.type === 'success' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(229, 9, 20, 0.1)',
-          border: `1px solid ${statusMessage.type === 'success' ? 'var(--accent-green)' : 'var(--accent-red)'}`,
-          color: statusMessage.type === 'success' ? '#2ecc71' : '#ff4d4d',
-          padding: '12px',
-          borderRadius: '4px',
-          marginBottom: '2rem',
-          fontSize: '0.9rem'
-        }}>
-          {statusMessage.text}
-        </div>
-      )}
+          {statusMessage && (
+            <div style={{
+              backgroundColor: statusMessage.type === 'success' ? 'rgba(46, 204, 113, 0.1)' : 'rgba(229, 9, 20, 0.1)',
+              border: `1px solid ${statusMessage.type === 'success' ? 'var(--accent-green)' : 'var(--accent-red)'}`,
+              color: statusMessage.type === 'success' ? '#2ecc71' : '#ff4d4d',
+              padding: '12px',
+              borderRadius: '4px',
+              marginBottom: '2rem',
+              fontSize: '0.9rem'
+            }}>
+              {statusMessage.text}
+            </div>
+          )}
 
-      <form onSubmit={handleSubmitProfile} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          <form onSubmit={handleSubmitProfile} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         
         {/* Section 1: Family Head */}
         <div style={{ backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: 'clamp(1rem, 3vw, 1.8rem)' }}>
@@ -673,6 +717,8 @@ export default function RegisterMemberPage() {
         </div>
 
       </form>
+        </>
+      )}
     </div>
   );
 }

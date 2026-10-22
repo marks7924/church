@@ -5,6 +5,7 @@ import { AuthRequest } from '../types';
 import { sendEmail, sendSMS, sendPushNotification } from '../services/notification.service';
 import { Role, AppointmentStatus, MembershipStatus } from '@prisma/client';
 import { logAction } from '../utils/logger';
+import { isUserVerifiedChurchMember } from '../services/familyMembership.service';
 
 import { extractPriestDetails } from './priest.controller';
 
@@ -263,12 +264,11 @@ router.post('/book', requireAuth, async (req: AuthRequest, res: Response) => {
 
     // 2. Bishop booking rule: Bishop is for members only!
     if (priest.user.role === Role.BISHOP) {
-      const familyHead = await prisma.familyHead.findUnique({
-        where: { userId }
-      });
-      if (!familyHead || familyHead.status !== MembershipStatus.APPROVED) {
+      const isMember = await isUserVerifiedChurchMember(userId);
+      if (!isMember) {
         return res.status(403).json({
-          error: 'Meetings with the Bishop are restricted to approved church members only. Please submit your family membership and wait for admin approval.'
+          error: 'Meetings with the Bishop are restricted to approved church members only. Please submit your family membership and wait for admin approval.',
+          errorAr: 'المقابلات مع نيافة الأسقف مقتصرة فقط على أعضاء الكنيسة الحاصلين على عضوية أسرية معتمدة.'
         });
       }
     }

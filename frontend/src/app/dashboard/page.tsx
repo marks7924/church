@@ -21,6 +21,7 @@ import EventsInvitationsManager from '../../components/EventsInvitationsManager'
 import FyQuestionModerator from '../../components/FyQuestionModerator';
 import VipInvitationCard from '../../components/VipInvitationCard';
 import BibleAdminManager from '../../components/BibleAdminManager';
+import MemberProfileHub from '../../components/MemberProfileHub';
 
 interface Booking {
   id: string;
@@ -2854,404 +2855,36 @@ const initialAddMemberFormState = {
 
       {/* TABS VIEW RENDER */}
 
-      {/* Tab: Member status info */}
-      {activeTab === 'my-profile' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          
-          {/* User Account Details Card */}
-          <div className="dashboard-panel">
-            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              👤 {language === 'ar' ? 'معلومات الحساب والملف الشخصي' : 'Account Profile Information'}
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px' }}>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block' }}>{language === 'ar' ? 'الاسم الكامل:' : 'Full Name:'}</span>
-                <strong style={{ fontSize: '1rem', color: '#ffffff' }}>{user?.fullName || '—'}</strong>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block' }}>{language === 'ar' ? 'البريد الإلكتروني:' : 'Email:'}</span>
-                <strong style={{ fontSize: '0.95rem', color: '#ffffff', wordBreak: 'break-all' }}>{user?.email || '—'}</strong>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block' }}>{language === 'ar' ? 'الرتبة والصفة:' : 'Role:'}</span>
-                <strong style={{ fontSize: '0.95rem', color: 'var(--accent-gold)' }}>{user?.role || 'MEMBER'}</strong>
-              </div>
-              {user?.phone && (
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block' }}>{language === 'ar' ? 'رقم الهاتف:' : 'Phone:'}</span>
-                  <strong style={{ fontSize: '0.95rem', color: '#ffffff' }}>{user.phone}</strong>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Membership Status Summary */}
-          <div className="dashboard-panel">
-            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1rem' }}>
-              🎖️ {language === 'ar' ? 'حالة ملف العضوية الكنسية للأسرة' : 'Family Membership status'}
-            </h3>
-            
-            {user?.familyProfileStatus === 'PENDING' ? (
-              <div style={{
-                background: 'rgba(226, 183, 20, 0.08)',
-                border: '1px solid rgba(226, 183, 20, 0.35)',
-                borderRadius: '12px',
-                padding: '1.25rem'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                  <Clock size={22} style={{ color: 'var(--accent-gold)' }} />
-                  <div>
-                    <strong style={{ color: 'var(--accent-gold)', fontSize: '1.05rem', display: 'block' }}>
-                      {language === 'ar' ? 'طلب العضوية قيد المراجعة والتدقيق الكنسي ⏳' : 'Membership Application Pending Review ⏳'}
-                    </strong>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      {language === 'ar' ? 'الحالة: قيد الفحص والاعتماد (Pending Review)' : 'Status: Under Administrative Verification'}
-                    </span>
-                  </div>
-                </div>
-                <p style={{ color: '#ffffff', fontSize: '0.88rem', lineHeight: '1.6', margin: '8px 0 0 0' }}>
-                  {language === 'ar'
-                    ? 'تم استلام استمارة العضوية الخاصة بأسرتكم بنجاح، ويجري حاليًا فحص ومطابقة البيانات من قِبل أمانة الكنيسة للاعتماد الرسمي. ستصلكم رسالة فور اعتماد الملف.'
-                    : 'Your family membership registry has been received and is being verified by the church administration. You will be notified once officially approved.'}
-                </p>
-              </div>
-            ) : user?.familyProfileStatus === 'APPROVED' ? (
-              <div style={{
-                background: 'rgba(46, 204, 113, 0.08)',
-                border: '1.5px solid #2ecc71',
-                borderRadius: '12px',
-                padding: '1.25rem'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                  <CheckCircle size={24} style={{ color: '#2ecc71' }} />
-                  <div>
-                    <strong style={{ color: '#2ecc71', fontSize: '1.05rem', display: 'block' }}>
-                      {language === 'ar' ? 'عضوية كنسية معتمدة ورسمية للأسرة 🎖️' : 'Officially Approved Family Church Member 🎖️'}
-                    </strong>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      {language === 'ar' ? 'الحالة: عضو معتمد وموثق بالسجلات الكنسية (Approved)' : 'Status: Officially Verified & Registered'}
-                    </span>
-                  </div>
-                </div>
-                <p style={{ color: '#ffffff', fontSize: '0.88rem', lineHeight: '1.6', margin: '8px 0 0 0' }}>
-                  {language === 'ar'
-                    ? 'أنت وعائلتك مسجلون رسميًا في سجلات كنيسة الشهيد العظيم أبي سيفين، وتتمتعون بكامل حقوق الحضور وحجز فعاليات أعضاء الكنيسة والتواصل الرعوي.'
-                    : 'Your family profile is officially registered in church pastoral records, granting full access to member events and services.'}
-                </p>
-              </div>
-            ) : user?.familyProfileStatus === 'REJECTED' ? (
-              (() => {
-                const updatedAt = user.familyProfileUpdatedAt ? new Date(user.familyProfileUpdatedAt).getTime() : 0;
-                const hoursSince = updatedAt ? (Date.now() - updatedAt) / (1000 * 60 * 60) : 24;
-                const canReapply = hoursSince >= 24;
-                const remainingHours = Math.ceil(24 - hoursSince);
-
-                return (
-                  <div style={{
-                    background: 'rgba(231, 76, 60, 0.08)',
-                    border: '1.5px solid #e74c3c',
-                    borderRadius: '12px',
-                    padding: '1.25rem'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                      <X size={24} style={{ color: '#e74c3c' }} />
-                      <div>
-                        <strong style={{ color: '#e74c3c', fontSize: '1.05rem', display: 'block' }}>
-                          {language === 'ar' ? 'حالة الطلب: لم يتم الاعتماد / يتطلب تصحيح البيانات ⚠️' : 'Membership Application Deferred / Needs Correction ⚠️'}
-                        </strong>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                          {language === 'ar' ? 'الحالة: مرفوض / مؤجل للتعديل (Rejected)' : 'Status: Rejected / Needs Correction'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div style={{
-                      background: 'rgba(0, 0, 0, 0.3)',
-                      padding: '10px 14px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(231, 76, 60, 0.3)',
-                      margin: '10px 0'
-                    }}>
-                      <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
-                        {language === 'ar' ? 'سبب عدم الاعتماد وملاحظات الأمانة:' : 'Rejection Reason / Feedback:'}
-                      </span>
-                      <strong style={{ color: 'var(--accent-gold)', fontSize: '0.92rem' }}>
-                        {user.familyProfileNotes || (language === 'ar' ? 'يرجى مراجعة وتدقيق بيانات الأسرة والأرقام القومية وإعادة إرسال الاستمارة.' : 'Please verify details and resubmit.')}
-                      </strong>
-                    </div>
-
-                    {!canReapply ? (
-                      <div style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 14px',
-                        borderRadius: '8px',
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px dashed rgba(255, 255, 255, 0.2)',
-                        color: 'var(--text-secondary)',
-                        fontSize: '0.82rem',
-                        marginTop: '4px'
-                      }}>
-                        <Clock size={16} style={{ color: 'var(--accent-gold)' }} />
-                        <span>
-                          {language === 'ar'
-                            ? `يمكنك إعادة التقديم وتعديل الاستمارة بعد ${remainingHours} ساعة (متاح بعد مرور 24 ساعة من المراجعة)`
-                            : `You can reapply after ${remainingHours} hour(s) (24h cooldown after review).`}
-                        </span>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => router.push('/register-member')}
-                        className={styles.bookBtn}
-                        style={{ maxWidth: '280px', marginTop: '8px' }}
-                      >
-                        {language === 'ar' ? 'إعادة ملء وتصحيح استمارة العضوية' : 'Resubmit Membership Form'}
-                      </button>
-                    )}
-                  </div>
-                );
-              })()
-            ) : (
-              <div>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.6' }}>
-                  {language === 'ar' 
-                    ? 'لم تقم بملء استمارة العضوية الكنسية بعد. يرجى كتابة البيانات لربط عائلتك بخدمات الكنيسة والتواصل والافتقاد.' 
-                    : 'You have not submitted a family membership registry form yet. Fill it to link with church pastoral registers.'}
-                </p>
-                <button onClick={() => router.push('/register-member')} className={styles.bookBtn} style={{ maxWidth: '250px' }}>
-                  {t('membership_title')}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Member's booked confession list */}
-          <div className="dashboard-panel">
-            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
-              📅 {language === 'ar' ? 'مواعيد سر الاعتراف المحجوزة' : 'My Confession Sessions'}
-            </h3>
-
-            {myBookings.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {myBookings.map(b => (
-                  <div key={b.id} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    backgroundColor: 'var(--bg-card)',
-                    border: '1px solid var(--border-color)',
-                    padding: '1.2rem',
-                    borderRadius: '6px',
-                    flexWrap: 'wrap',
-                    gap: '1rem'
-                  }}>
-                    <div>
-                      <div style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-primary)' }}>
-                        {language === 'ar' 
-                          ? `${b.priest?.titleAr} ${b.priest?.nameAr}` 
-                          : `${b.priest?.titleEn} ${b.priest?.nameEn}`}
-                      </div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                        📅 {new Date(b.date).toLocaleDateString()} • 🕒 {formatTimeSlot(b.timeSlot, language)}
-                      </div>
-                      {b.notes && (
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '6px', fontStyle: 'italic' }}>
-                          📝 {b.notes}
-                        </div>
-                      )}
-                    </div>
-                    <span style={{
-                      fontSize: '0.8rem',
-                      fontWeight: 'bold',
-                      padding: '4px 10px',
-                      borderRadius: '4px',
-                      backgroundColor: b.status === 'APPROVED' ? 'rgba(46, 204, 113, 0.1)' : b.status === 'REJECTED' ? 'rgba(229, 9, 20, 0.1)' : 'rgba(226, 183, 20, 0.1)',
-                      color: b.status === 'APPROVED' ? '#2ecc71' : b.status === 'REJECTED' ? '#ff4d4d' : 'var(--accent-gold)'
-                    }}>
-                      {b.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
-                {t('no_bookings')}
-              </p>
-            )}
-          </div>
-
-          {/* Member's Invitations & Passes (Categorized: VIP vs Standard) */}
-          <div className="dashboard-panel">
-            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
-              🎟️ {language === 'ar' ? 'الدعوات وبطاقات الدخول للفعاليات' : 'Event Invitations & Admission Passes'}
-            </h3>
-
-            {myInvitations.length > 0 ? (
-              <div>
-                {/* 👑 VIP Passes Category (only shown if user has at least 1 VIP pass) */}
-                {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).length > 0 && (
-                  <div style={{ marginBottom: '2rem' }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      padding: '10px 16px',
-                      borderRadius: '12px',
-                      background: 'linear-gradient(90deg, rgba(226, 183, 20, 0.15) 0%, rgba(226, 183, 20, 0.02) 100%)',
-                      border: '1px solid rgba(226, 183, 20, 0.35)',
-                      marginBottom: '1.2rem'
-                    }}>
-                      <span style={{ fontSize: '1.2rem' }}>👑</span>
-                      <div>
-                        <h4 style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '1.05rem', fontWeight: 800 }}>
-                          {language === 'ar' ? 'دعوات كبار الزوار الرسمية (VIP Passes)' : 'Official VIP Passes'}
-                        </h4>
-                        <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                          {language === 'ar' ? 'دعوات رسمية صادرة من إدارة الكنيسة بإطار ذهبي ومعاملة VIP' : 'Official passes issued by Church admin with gold frame distinction'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-                      {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).map(inv => (
-                        <VipInvitationCard key={inv.id} invitation={inv} language={language} onCancel={handleOpenCancelModal} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 🎟️ Standard Passes Category */}
-                <div>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '10px 16px',
-                    borderRadius: '12px',
-                    background: 'rgba(255, 255, 255, 0.04)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    marginBottom: '1.2rem'
-                  }}>
-                    <span style={{ fontSize: '1.2rem' }}>🎟️</span>
-                    <div>
-                      <h4 style={{ margin: 0, color: '#ffffff', fontSize: '1.05rem', fontWeight: 800 }}>
-                        {language === 'ar' ? 'بطاقات الحضور العامة (Standard Passes)' : 'Standard Event Passes'}
-                      </h4>
-                      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        {language === 'ar' ? 'بطاقات الحضور العامة الصادرة عبر التقديم على فعاليات الكنيسة' : 'Standard admission passes issued via event registration'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {myInvitations.filter(inv => inv.type !== 'VIP' && !inv.isVip).length > 0 ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-                      {myInvitations.filter(inv => inv.type !== 'VIP' && !inv.isVip).map(inv => (
-                        <VipInvitationCard key={inv.id} invitation={inv} language={language} onCancel={handleOpenCancelModal} />
-                      ))}
-                    </div>
-                  ) : (
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.5rem 0' }}>
-                      {language === 'ar' ? 'لا توجد بطاقات حضور عامة صادرة لحسابك حاليًا.' : 'No standard passes issued.'}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', textAlign: 'center', margin: '1rem 0' }}>
-                {language === 'ar' ? 'لا توجد دعوات أو بطاقات حضور حالية لحسابك.' : 'No active invitations found for your account.'}
-              </p>
-            )}
-          </div>
-
-        </div>
+      {/* Tab: Member status info & Redesigned Profile Hub */}
+      {activeTab === 'my-profile' && token && (
+        <MemberProfileHub
+          user={user}
+          token={token}
+          language={language as 'ar' | 'en'}
+          initialTab="overview"
+          onProfileUpdated={(fresh) => {
+            setUser(fresh);
+            localStorage.setItem('church-user', JSON.stringify(fresh));
+          }}
+          onNavigateTab={(tabId) => setActiveTab(tabId)}
+          onCancelPass={handleOpenCancelModal}
+        />
       )}
 
-      {/* Tab: Member Dedicated Invitations View */}
-      {activeTab === 'my-invitations' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          <div className="dashboard-panel">
-            <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
-              🎟️ {language === 'ar' ? 'الدعوات وبطاقات الدخول للفعاليات' : 'Event Invitations & Admission Passes'}
-            </h3>
-
-            {myInvitations.length > 0 ? (
-              <div>
-                {/* 👑 VIP Passes Category (only shown if user has at least 1 VIP pass) */}
-                {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).length > 0 && (
-                  <div style={{ marginBottom: '2.5rem' }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      padding: '10px 16px',
-                      borderRadius: '12px',
-                      background: 'linear-gradient(90deg, rgba(226, 183, 20, 0.15) 0%, rgba(226, 183, 20, 0.02) 100%)',
-                      border: '1px solid rgba(226, 183, 20, 0.35)',
-                      marginBottom: '1.2rem'
-                    }}>
-                      <span style={{ fontSize: '1.2rem' }}>👑</span>
-                      <div>
-                        <h4 style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '1.05rem', fontWeight: 800 }}>
-                          {language === 'ar' ? 'دعوات كبار الزوار الرسمية (VIP Passes)' : 'Official VIP Passes'}
-                        </h4>
-                        <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                          {language === 'ar' ? 'دعوات رسمية خاصة صادرة من إدارة الكنيسة بإطار ذهبي ومعاملة VIP' : 'Official passes issued by Church admin with gold frame distinction'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-                      {myInvitations.filter(inv => inv.type === 'VIP' || inv.isVip).map(inv => (
-                        <VipInvitationCard key={inv.id} invitation={inv} language={language} onCancel={handleOpenCancelModal} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 🎟️ Standard Passes Category */}
-                <div>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '10px 16px',
-                    borderRadius: '12px',
-                    background: 'rgba(255, 255, 255, 0.04)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    marginBottom: '1.2rem'
-                  }}>
-                    <span style={{ fontSize: '1.2rem' }}>🎟️</span>
-                    <div>
-                      <h4 style={{ margin: 0, color: '#ffffff', fontSize: '1.05rem', fontWeight: 800 }}>
-                        {language === 'ar' ? 'بطاقات الحضور العامة (Standard Passes)' : 'Standard Event Passes'}
-                      </h4>
-                      <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        {language === 'ar' ? 'بطاقات الدخول العامة الصادرة عبر التقديم على فعاليات الكنيسة' : 'Standard admission passes issued via event registration'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {myInvitations.filter(inv => inv.type !== 'VIP' && !inv.isVip).length > 0 ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-                      {myInvitations.filter(inv => inv.type !== 'VIP' && !inv.isVip).map(inv => (
-                        <VipInvitationCard key={inv.id} invitation={inv} language={language} onCancel={handleOpenCancelModal} />
-                      ))}
-                    </div>
-                  ) : (
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.5rem 0' }}>
-                      {language === 'ar' ? 'لا توجد بطاقات حضور عامة صادرة لحسابك حتى الآن.' : 'No standard passes issued.'}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', textAlign: 'center', margin: '2rem 0' }}>
-                {language === 'ar' ? 'لا توجد دعوات صادرة لحسابك حتى الآن.' : 'No active invitations found for your account.'}
-              </p>
-            )}
-          </div>
-        </div>
+      {/* Tab: Member Dedicated Invitations & QR Passes Hub */}
+      {activeTab === 'my-invitations' && token && (
+        <MemberProfileHub
+          user={user}
+          token={token}
+          language={language as 'ar' | 'en'}
+          initialTab="passes"
+          onProfileUpdated={(fresh) => {
+            setUser(fresh);
+            localStorage.setItem('church-user', JSON.stringify(fresh));
+          }}
+          onNavigateTab={(tabId) => setActiveTab(tabId)}
+          onCancelPass={handleOpenCancelModal}
+        />
       )}
 
       {/* User Pass Cancellation Modal */}

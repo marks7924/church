@@ -66,8 +66,13 @@ model User {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
+  avatarUrl                   String?
+  notificationPreferencesJson String?           @default("{\"email\":true,\"sms\":true,\"events\":true,\"reminders\":true}")
+  linkedFamilyHeadId          String?
+  linkedFamilyHead            FamilyHead?       @relation("FamilyHeadMembers", fields: [linkedFamilyHeadId], references: [id], onDelete: SetNull)
+
   // Relations
-  familyProfile        FamilyHead?
+  familyProfile        FamilyHead?               @relation("PrimaryFamilyHead")
   priestProfile        PriestProfile?
   appointments         Appointment[]             @relation("MemberAppointments")
   newsPosts            News[]                    @relation("UserNews")
@@ -81,6 +86,8 @@ model User {
   bibleJournals        BibleJournalEntry[]
   biblePlanProgress    BibleUserPlanProgress[]
   fySubmissions        FyMemberQuestionSubmission[]
+
+  @@index([linkedFamilyHeadId])
 }
 
 model PriestProfile {
@@ -126,7 +133,8 @@ model Appointment {
 model FamilyHead {
   id               String            @id @default(uuid())
   userId           String            @unique
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User              @relation("PrimaryFamilyHead", fields: [userId], references: [id], onDelete: Cascade)
+  members          User[]            @relation("FamilyHeadMembers")
   fullName         String            // 3 parts
   nationalId       String            @unique
   street           String

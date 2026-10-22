@@ -6,6 +6,8 @@ import { AuthRequest } from '../types';
 import { Role } from '@prisma/client';
 import { logAction } from '../utils/logger';
 import { sendEmail, formatChurchEmailHtml } from '../services/notification.service';
+import { isUserVerifiedChurchMember } from '../services/familyMembership.service';
+import { calculateEgyptianNationalIdAge, validateAndParseEgyptianNationalId } from '../utils/nationalId';
 
 // System 3: Events, VIP Invitations & Continuous QR Check-in
 const router = Router();
@@ -271,15 +273,7 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
         });
       }
 
-      const dbUser = await prisma.user.findUnique({
-        where: { id: optionalUser.userId || optionalUser.id },
-        include: { familyProfile: true }
-      });
-
-      const isChurchMember = dbUser && (
-        ['PRIEST', 'BISHOP', 'SUPER_ADMIN', 'CHURCH_ADMIN', 'SECRETARY'].includes(dbUser.role) ||
-        (dbUser.familyProfile && dbUser.familyProfile.status === 'APPROVED')
-      );
+      const isChurchMember = await isUserVerifiedChurchMember(optionalUser.userId || optionalUser.id);
 
       if (!isChurchMember) {
         return res.status(403).json({
@@ -322,7 +316,37 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
 
     const cleanCompanionId = companionNationalId ? String(companionNationalId).trim() : null;
     const cleanCompanionName = companionName ? String(companionName).trim() : null;
-    const applicantNatId = nationalId ? String(nationalId).trim() : (optionalUser?.nationalId || null);
+    let applicantNatId = nationalId ? String(nationalId).trim() : (optionalUser?.nationalId || null);
+
+    // If national ID not in request/token, fetch from DB user profile
+    if (!applicantNatId && optionalUser) {
+      const u = await prisma.user.findUnique({
+        where: { id: optionalUser.userId || optionalUser.id },
+        select: { nationalId: true }
+      });
+      if (u?.nationalId) applicantNatId = u.nationalId;
+    }
+
+    // Server-Side Eligibility Rules Enforcement: Primary Applicant Age Check
+    if (rules.minAge || rules.maxAge) {
+      if (applicantNatId) {
+        const applicantAge = calculateEgyptianNationalIdAge(applicantNatId, new Date(event.date));
+        if (applicantAge !== null) {
+          if (rules.minAge && applicantAge < Number(rules.minAge)) {
+            return res.status(400).json({
+              error: `Your age (${applicantAge}) does not meet the minimum required age of ${rules.minAge} for this event.`,
+              errorAr: `عذراً، عمرك المسجل بالملف الشخصي (${applicantAge} سنة) لا يستوفي الحد الأدنى المطلوب للفعالية (${rules.minAge} سنة).`
+            });
+          }
+          if (rules.maxAge && applicantAge > Number(rules.maxAge)) {
+            return res.status(400).json({
+              error: `Your age (${applicantAge}) exceeds the maximum allowed age of ${rules.maxAge} for this event.`,
+              errorAr: `عذراً، عمرك المسجل بالملف الشخصي (${applicantAge} سنة) يتجاوز الحد الأقصى المسموح به لهذه الفعالية (${rules.maxAge} سنة).`
+            });
+          }
+        }
+      }
+    }
 
     // If 2 tickets requested: Validate Companion National ID & Eligibility Rules
     if (requestedCount === 2) {
