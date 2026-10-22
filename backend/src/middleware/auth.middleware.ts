@@ -15,6 +15,12 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
 
   try {
     const payload = jwt.verify(token, getJwtSecret()) as UserPayload;
+    if (payload.isBanned) {
+      return res.status(403).json({
+        error: 'Account has been banned. Please contact church administration.',
+        errorAr: 'تم حظر هذا الحساب، يرجى مراجعة إدارة الكنيسة.'
+      });
+    }
     req.user = payload;
     next();
   } catch (error) {
@@ -28,11 +34,39 @@ export function requireRoles(roles: Role[]) {
       return res.status(401).json({ error: 'Authentication required.' });
     }
 
-    const userRole = req.user.role;
-    const isAllowed = roles.includes(userRole) || 
-                      (roles.includes(Role.SUPER_ADMIN) && userRole === Role.DEVELOPER);
+    if (req.user.isBanned) {
+      return res.status(403).json({
+        error: 'Account has been banned. Please contact church administration.',
+        errorAr: 'تم حظر هذا الحساب، يرجى مراجعة إدارة الكنيسة.'
+      });
+    }
 
-    if (!isAllowed) {
+    const userRoles: Role[] = (req.user.roles && Array.isArray(req.user.roles) && req.user.roles.length > 0)
+      ? req.user.roles
+      : [req.user.role];
+
+    const isDeveloper = userRoles.includes(Role.DEVELOPER);
+    const isSuperAdmin = userRoles.includes(Role.SUPER_ADMIN);
+    const isChurchAdmin = userRoles.includes(Role.CHURCH_ADMIN);
+
+    const hasDirectMatch = userRoles.some(r => roles.includes(r));
+    const isHierarchyMatch = 
+      isDeveloper || 
+      (isSuperAdmin && (
+        roles.includes(Role.CHURCH_ADMIN) || 
+        roles.includes(Role.SECRETARY) || 
+        roles.includes(Role.TRIP_MANAGER) || 
+        roles.includes(Role.QR_SCANNER) || 
+        roles.includes(Role.MEMBER)
+      )) ||
+      (isChurchAdmin && (
+        roles.includes(Role.SECRETARY) || 
+        roles.includes(Role.TRIP_MANAGER) || 
+        roles.includes(Role.QR_SCANNER) || 
+        roles.includes(Role.MEMBER)
+      ));
+
+    if (!hasDirectMatch && !isHierarchyMatch) {
       return res.status(403).json({ error: 'Access forbidden. Insufficient permissions.' });
     }
 

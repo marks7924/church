@@ -29,6 +29,9 @@ export default function EventsPublicPage() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [primaryNationalId, setPrimaryNationalId] = useState('');
+  const [companionNationalId, setCompanionNationalId] = useState('');
+  const [companionName, setCompanionName] = useState('');
   const [isApplying, setIsApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [partialNotice, setPartialNotice] = useState<string | null>(null);
@@ -189,6 +192,9 @@ export default function EventsPublicPage() {
     setApplyingEvent(event);
     setSelectedLocationId(chosenLocId);
     setTicketCount(1);
+    setCompanionNationalId('');
+    setCompanionName('');
+    setPrimaryNationalId((user as any)?.nationalId || '');
     setApplyError(null);
     setPartialNotice(null);
     setIssuedInvitation(null);
@@ -202,6 +208,18 @@ export default function EventsPublicPage() {
     if (!fullName.trim() || !phone.trim()) {
       setApplyError(isAr ? 'يرجى إدخال الاسم ورقم الهاتف.' : 'Please enter your name and phone number.');
       return;
+    }
+
+    if (ticketCount === 2) {
+      const cleanCompanionId = companionNationalId.trim();
+      if (!cleanCompanionId) {
+        setApplyError(isAr ? 'يرجى إدخال الرقم القومي للشخص المرافق (14 رقماً).' : 'Please enter the companion national ID (14 digits).');
+        return;
+      }
+      if (!/^[23]\d{13}$/.test(cleanCompanionId)) {
+        setApplyError(isAr ? 'الرقم القومي للشخص المرافق غير صحيح (يجب أن يتكون من 14 رقماً ويبدأ بـ 2 أو 3).' : 'Invalid companion national ID format (14 digits).');
+        return;
+      }
     }
 
     setIsApplying(true);
@@ -219,8 +237,11 @@ export default function EventsPublicPage() {
           locationId: selectedLocationId,
           fullName: fullName.trim(),
           phone: phone.trim(),
+          nationalId: primaryNationalId.trim() || undefined,
           externalEmail: email.trim() || undefined,
-          ticketCount
+          ticketCount,
+          companionNationalId: ticketCount === 2 ? companionNationalId.trim() : undefined,
+          companionName: ticketCount === 2 ? companionName.trim() : undefined
         })
       });
 
@@ -832,6 +853,77 @@ export default function EventsPublicPage() {
                       })}
                     </div>
                   </div>
+
+                  {ticketCount === 2 && (
+                    <div style={{
+                      padding: '14px',
+                      borderRadius: '10px',
+                      background: 'rgba(226, 183, 20, 0.08)',
+                      border: '1.5px solid rgba(226, 183, 20, 0.35)',
+                      marginBottom: '1.2rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '1.1rem' }}>👥</span>
+                        <div>
+                          <b style={{ color: 'var(--accent-gold)', fontSize: '0.88rem', display: 'block' }}>
+                            {isAr ? 'بيانات الشخص المرافق (التذكرة الثانية) *' : 'Companion Details (Second Pass) *'}
+                          </b>
+                          <span style={{ fontSize: '0.74rem', color: 'rgba(255,255,255,0.7)' }}>
+                            {isAr ? 'يجب استيفاء شروط الفعالية كالعمر والعضوية للشخص المرافق' : 'Companion must satisfy all event eligibility rules'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                          {isAr ? 'الرقم القومي للشخص المرافق (14 رقماً) *' : 'Companion National ID (14 digits) *'}
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={14}
+                          required
+                          value={companionNationalId}
+                          onChange={(e) => setCompanionNationalId(e.target.value.replace(/\D/g, ''))}
+                          placeholder={isAr ? '14 رقماً تبدأ بـ 2 أو 3' : '14-digit Egyptian National ID'}
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            background: 'rgba(0,0,0,0.3)',
+                            border: '1px solid rgba(226, 183, 20, 0.4)',
+                            color: '#ffffff',
+                            fontSize: '0.95rem',
+                            letterSpacing: '1px',
+                            fontWeight: 600
+                          }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                          {isAr ? 'اسم الشخص المرافق بالكامل (يُطبع على بطاقته)' : 'Companion Full Name (Printed on pass)'}
+                        </label>
+                        <input
+                          type="text"
+                          value={companionName}
+                          onChange={(e) => setCompanionName(e.target.value)}
+                          placeholder={isAr ? 'مثال: يوسف مينا سمير' : 'e.g. John Smith'}
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            background: 'rgba(0,0,0,0.3)',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            color: '#ffffff',
+                            fontSize: '0.9rem'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div style={{ marginBottom: '1rem' }}>
                     <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>

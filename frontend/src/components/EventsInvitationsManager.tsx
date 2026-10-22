@@ -13,14 +13,17 @@ import VipInvitationCard from './VipInvitationCard';
 
 interface EventsInvitationsManagerProps {
   token: string | null;
+  scannerOnly?: boolean;
 }
 
-export default function EventsInvitationsManager({ token }: EventsInvitationsManagerProps) {
+export default function EventsInvitationsManager({ token, scannerOnly = false }: EventsInvitationsManagerProps) {
   const { language } = useTheme();
   const isAr = language === 'ar';
   const ArrowIcon = isAr ? ArrowLeft : ArrowRight;
 
-  const [activeTab, setActiveTab] = useState<'ALL_EVENTS' | 'SCANNER' | 'EVENTS' | 'INVITATIONS' | 'CHECKINS'>('ALL_EVENTS');
+  const [activeTab, setActiveTab] = useState<'ALL_EVENTS' | 'SCANNER' | 'EVENTS' | 'INVITATIONS' | 'CHECKINS'>(
+    scannerOnly ? 'SCANNER' : 'ALL_EVENTS'
+  );
   const [events, setEvents] = useState<any[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
@@ -1308,54 +1311,56 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Master Navbar Visibility Button: Independent of individual events */}
-          <button
-            onClick={handleToggleGlobalEventsPublicStatus}
-            title={isAr ? 'التحكم في ظهور أو إخفاء صفحة الفعاليات وتبويبها في شريط الموقع' : 'Toggle public visibility of events in navbar'}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '9px 16px',
-              borderRadius: '8px',
-              border: `1px solid ${isGlobalEventsPublic ? 'rgba(46, 204, 113, 0.5)' : 'rgba(230, 126, 34, 0.5)'}`,
-              background: isGlobalEventsPublic ? 'rgba(46, 204, 113, 0.15)' : 'rgba(230, 126, 34, 0.15)',
-              color: isGlobalEventsPublic ? '#2ecc71' : '#f39c12',
-              fontWeight: 700,
-              cursor: 'pointer',
-              fontSize: '0.85rem'
-            }}
-          >
-            {isGlobalEventsPublic ? <Eye size={16} /> : <Lock size={16} />}
-            <span>
-              {isGlobalEventsPublic
-                ? (isAr ? 'صفحة الفعاليات: عامة للجميع ✓ (انقر للتحويل لقناة خاصة)' : 'Events: Public to All ✓ (Click to make Private)')
-                : (isAr ? 'صفحة الفعاليات: قناة خاصة للمشرفين فقط 🔒 (انقر لإتاحتها للعامة)' : 'Events: Private Channel (Admins Only) 🔒 (Click to make Public)')
-              }
-            </span>
-          </button>
+        {!scannerOnly && (
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Master Navbar Visibility Button: Independent of individual events */}
+            <button
+              onClick={handleToggleGlobalEventsPublicStatus}
+              title={isAr ? 'التحكم في ظهور أو إخفاء صفحة الفعاليات وتبويبها في شريط الموقع' : 'Toggle public visibility of events in navbar'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 16px',
+                borderRadius: '8px',
+                border: `1px solid ${isGlobalEventsPublic ? 'rgba(46, 204, 113, 0.5)' : 'rgba(230, 126, 34, 0.5)'}`,
+                background: isGlobalEventsPublic ? 'rgba(46, 204, 113, 0.15)' : 'rgba(230, 126, 34, 0.15)',
+                color: isGlobalEventsPublic ? '#2ecc71' : '#f39c12',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              {isGlobalEventsPublic ? <Eye size={16} /> : <Lock size={16} />}
+              <span>
+                {isGlobalEventsPublic
+                  ? (isAr ? 'صفحة الفعاليات: عامة للجميع ✓ (انقر للتحويل لقناة خاصة)' : 'Events: Public to All ✓ (Click to make Private)')
+                  : (isAr ? 'صفحة الفعاليات: قناة خاصة للمشرفين فقط 🔒 (انقر لإتاحتها للعامة)' : 'Events: Private Channel (Admins Only) 🔒 (Click to make Public)')
+                }
+              </span>
+            </button>
 
-          <button
-            onClick={() => setShowIssueModal(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '9px 16px',
-              borderRadius: '8px',
-              background: 'var(--accent-gold)',
-              border: 'none',
-              color: '#000000',
-              fontWeight: 700,
-              cursor: 'pointer',
-              fontSize: '0.88rem'
-            }}
-          >
-            <PlusCircle size={16} />
-            <span>{isAr ? 'إصدار دعوة جديدة (VIP / عادي)' : 'Issue Invitation'}</span>
-          </button>
-        </div>
+            <button
+              onClick={() => setShowIssueModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 16px',
+                borderRadius: '8px',
+                background: 'var(--accent-gold)',
+                border: 'none',
+                color: '#000000',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontSize: '0.88rem'
+              }}
+            >
+              <PlusCircle size={16} />
+              <span>{isAr ? 'إصدار دعوة جديدة (VIP / عادي)' : 'Issue Invitation'}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {actionMsg && (
@@ -1475,70 +1480,72 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
           }
         }
       `}} />
-      <div className="events-manager-main-tabs">
-        <button
-          onClick={() => { setActiveTab('ALL_EVENTS'); stopScanner(); }}
-          className="events-main-tab-btn"
-          style={{
-            background: activeTab === 'ALL_EVENTS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'ALL_EVENTS' ? '#000000' : 'var(--text-secondary)'
-          }}
-        >
-          <Calendar size={16} />
-          <span>{isAr ? 'متابعة وإدارة الفعاليات (All Events)' : 'Events Overview'}</span>
-        </button>
+      {!scannerOnly && (
+        <div className="events-manager-main-tabs">
+          <button
+            onClick={() => { setActiveTab('ALL_EVENTS'); stopScanner(); }}
+            className="events-main-tab-btn"
+            style={{
+              background: activeTab === 'ALL_EVENTS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
+              color: activeTab === 'ALL_EVENTS' ? '#000000' : 'var(--text-secondary)'
+            }}
+          >
+            <Calendar size={16} />
+            <span>{isAr ? 'متابعة وإدارة الفعاليات (All Events)' : 'Events Overview'}</span>
+          </button>
 
-        <button
-          onClick={() => { setActiveTab('SCANNER'); stopScanner(); }}
-          className="events-main-tab-btn"
-          style={{
-            background: activeTab === 'SCANNER' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'SCANNER' ? '#000000' : 'var(--text-secondary)'
-          }}
-        >
-          <Camera size={16} />
-          <span>{isAr ? 'المسح المستمر (Continuous QR Scanner)' : 'Continuous Scanner'}</span>
-        </button>
+          <button
+            onClick={() => { setActiveTab('SCANNER'); stopScanner(); }}
+            className="events-main-tab-btn"
+            style={{
+              background: activeTab === 'SCANNER' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
+              color: activeTab === 'SCANNER' ? '#000000' : 'var(--text-secondary)'
+            }}
+          >
+            <Camera size={16} />
+            <span>{isAr ? 'المسح المستمر (Continuous QR Scanner)' : 'Continuous Scanner'}</span>
+          </button>
 
-        <button
-          onClick={() => { setActiveTab('EVENTS'); stopScanner(); }}
-          className="events-main-tab-btn"
-          style={{
-            background: activeTab === 'EVENTS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'EVENTS' ? '#000000' : 'var(--text-secondary)'
-          }}
-        >
-          <MapPin size={16} />
-          <span>{isAr ? 'الأماكن والسعات المستقلة' : 'Locations & Capacity'}</span>
-        </button>
+          <button
+            onClick={() => { setActiveTab('EVENTS'); stopScanner(); }}
+            className="events-main-tab-btn"
+            style={{
+              background: activeTab === 'EVENTS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
+              color: activeTab === 'EVENTS' ? '#000000' : 'var(--text-secondary)'
+            }}
+          >
+            <MapPin size={16} />
+            <span>{isAr ? 'الأماكن والسعات المستقلة' : 'Locations & Capacity'}</span>
+          </button>
 
-        <button
-          onClick={() => { setActiveTab('INVITATIONS'); stopScanner(); }}
-          className="events-main-tab-btn"
-          style={{
-            background: activeTab === 'INVITATIONS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'INVITATIONS' ? '#000000' : 'var(--text-secondary)'
-          }}
-        >
-          <Users size={16} />
-          <span>{isAr ? 'الدعوات الصادرة' : 'Issued Invitations'}</span>
-        </button>
+          <button
+            onClick={() => { setActiveTab('INVITATIONS'); stopScanner(); }}
+            className="events-main-tab-btn"
+            style={{
+              background: activeTab === 'INVITATIONS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
+              color: activeTab === 'INVITATIONS' ? '#000000' : 'var(--text-secondary)'
+            }}
+          >
+            <Users size={16} />
+            <span>{isAr ? 'الدعوات الصادرة' : 'Issued Invitations'}</span>
+          </button>
 
-        <button
-          onClick={() => { setActiveTab('CHECKINS'); stopScanner(); }}
-          className="events-main-tab-btn"
-          style={{
-            background: activeTab === 'CHECKINS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
-            color: activeTab === 'CHECKINS' ? '#000000' : 'var(--text-secondary)'
-          }}
-        >
-          <CheckCircle2 size={16} />
-          <span>{isAr ? 'سجل الحضور والتحقق' : 'Check-in Logs'}</span>
-        </button>
-      </div>
+          <button
+            onClick={() => { setActiveTab('CHECKINS'); stopScanner(); }}
+            className="events-main-tab-btn"
+            style={{
+              background: activeTab === 'CHECKINS' ? 'var(--accent-gold)' : 'rgba(255,255,255,0.05)',
+              color: activeTab === 'CHECKINS' ? '#000000' : 'var(--text-secondary)'
+            }}
+          >
+            <CheckCircle2 size={16} />
+            <span>{isAr ? 'سجل الحضور والتحقق' : 'Check-in Logs'}</span>
+          </button>
+        </div>
+      )}
 
       {/* TAB 0: ALL EVENTS (Draft / Live Posted / Expired / Canceled) */}
-      {activeTab === 'ALL_EVENTS' && (() => {
+      {!scannerOnly && activeTab === 'ALL_EVENTS' && (() => {
         const cancelledEvents = events.filter(e => e.status === 'CANCELLED');
         const nonCancelledEvents = events.filter(e => e.status !== 'CANCELLED');
         const draftEvents = nonCancelledEvents.filter(e => !e.isPublicVisible);
@@ -2081,7 +2088,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
       })()}
 
       {/* TAB 1: CONTINUOUS QR SCANNER */}
-      {activeTab === 'SCANNER' && (
+      {(scannerOnly || activeTab === 'SCANNER') && (
         <div style={{ maxWidth: '650px', margin: '0 auto' }}>
           <div style={{
             background: 'var(--card-bg, rgba(255, 255, 255, 0.04))',
@@ -2349,7 +2356,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
       )}
 
       {/* TAB 2: EVENTS & CAPACITY MANAGEMENT */}
-      {activeTab === 'EVENTS' && (
+      {!scannerOnly && activeTab === 'EVENTS' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '12px' }}>
             <div>
@@ -2952,7 +2959,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
       )}
 
       {/* TAB 3: ISSUED INVITATIONS */}
-      {activeTab === 'INVITATIONS' && (
+      {!scannerOnly && activeTab === 'INVITATIONS' && (
         <div>
           {/* Header & Smart Search Bar */}
           <div style={{
@@ -3217,7 +3224,7 @@ export default function EventsInvitationsManager({ token }: EventsInvitationsMan
       )}
 
       {/* TAB 4: CHECK-IN LOGS & REVERSAL */}
-      {activeTab === 'CHECKINS' && (
+      {!scannerOnly && activeTab === 'CHECKINS' && (
         <div>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '1rem', color: '#ffffff' }}>
             {isAr ? 'سجل الحضور والتحقق عبر البوابات' : 'Gate Check-in Logs & Reversals'}

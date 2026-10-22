@@ -29,17 +29,20 @@ function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-function generateTokens(user: { id: string; email: string; role: string; fullName: string; isVerified: boolean }) {
+function generateTokens(user: { id: string; email: string; role: any; roles?: any[]; fullName: string; isVerified: boolean; isBanned?: boolean }) {
+  const userRoles = (user.roles && Array.isArray(user.roles) && user.roles.length > 0) ? user.roles : [user.role];
   const payload = {
     userId: user.id,
     email: user.email,
     role: user.role,
+    roles: userRoles,
     fullName: user.fullName,
-    isVerified: user.isVerified
+    isVerified: user.isVerified,
+    isBanned: !!user.isBanned
   };
   const accessToken = jwt.sign(payload, getJwtSecret(), { expiresIn: '7d' });
   const refreshToken = jwt.sign({ userId: user.id }, getJwtRefreshSecret(), { expiresIn: '7d' });
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken, roles: userRoles };
 }
 
 // 1. Register User
@@ -313,6 +316,15 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
+    // Check account ban status
+    if (user.isBanned) {
+      return res.status(403).json({
+        error: 'ACCOUNT_BANNED',
+        errorAr: `تم حظر هذا الحساب من قِبل إدارة الكنيسة${user.banReason ? ` (السبب: ${user.banReason})` : ''}. يرجى مراجعة إدارة الكنيسة.`,
+        errorEn: 'Your account has been suspended by church administration. Please contact the church administration.'
+      });
+    }
+
     // Check if email verification is mandatory
     const requireVerification = await isEmailVerificationRequired();
     const isExemptRole = ['SUPER_ADMIN', 'DEVELOPER', 'PRIEST', 'BISHOP'].includes(user.role);
@@ -370,7 +382,9 @@ router.post('/login', async (req: Request, res: Response) => {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        roles: tokens.roles,
         isVerified: user.isVerified,
+        isBanned: user.isBanned,
         hasFamilyProfile: !!user.familyProfile,
         familyProfileStatus: user.familyProfile?.status || null
       },

@@ -18,6 +18,7 @@ enum Role {
   CHURCH_ADMIN
   SUPER_ADMIN
   DEVELOPER
+  QR_SCANNER
 }
 
 enum AppointmentStatus {
@@ -50,6 +51,10 @@ model User {
   email            String            @unique
   passwordHash     String
   role             Role              @default(MEMBER)
+  roles            Role[]            @default([MEMBER])
+  isBanned         Boolean           @default(false)
+  banReason        String?
+  bannedAt         DateTime?
   fullName         String
   phone            String?
   nationalId       String?           @unique
@@ -486,20 +491,23 @@ model EventLocationCapacityLog {
 }
 
 model EventApplication {
-  id            String         @id @default(uuid())
-  eventId       String
-  event         Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  locationId    String
-  location      EventLocation  @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  userId        String?
-  user          User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
-  externalEmail String?
-  fullName      String
-  phone         String
-  status        String         @default("PENDING") // PENDING, APPROVED, REJECTED, CONFIRMED
-  notes         String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id                  String         @id @default(uuid())
+  eventId             String
+  event               Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  locationId          String
+  location            EventLocation  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  userId              String?
+  user                User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  externalEmail       String?
+  fullName            String
+  phone               String
+  nationalId          String?
+  companionNationalId String?
+  companionName       String?
+  status              String         @default("PENDING") // PENDING, APPROVED, REJECTED, CONFIRMED
+  notes               String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
 
   @@index([eventId])
   @@index([locationId])
@@ -516,6 +524,9 @@ model EventInvitation {
   user                User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
   recipientEmail      String
   recipientName       String
+  nationalId          String?
+  companionNationalId String?
+  companionName       String?
   type                String             @default("STANDARD") // STANDARD, VIP
   qrToken             String             @unique
   status              String             @default("ACTIVE")   // ACTIVE, REDEEMED, CANCELLED, REVOKED, EXPIRED

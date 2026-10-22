@@ -527,4 +527,333 @@ router.delete('/:id', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADM
   }
 });
 
+// 10. Admin: Export Membership Data (CSV or JSON)
+router.get('/admin/export', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN, Role.DEVELOPER]), async (req: AuthRequest, res: Response) => {
+  try {
+    const format = String(req.query.format || 'json').toLowerCase();
+
+    const members = await prisma.familyHead.findMany({
+      include: {
+        user: {
+          select: { email: true, fullName: true, phone: true, isVerified: true, role: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (format === 'csv') {
+      const escapeCsv = (val: any) => {
+        if (val === null || val === undefined) return '""';
+        const str = String(val).replace(/"/g, '""');
+        return `"${str}"`;
+      };
+
+      const headers = [
+        'الاسم بالكامل',
+        'الرقم القومي',
+        'الهاتف',
+        'البريد الإلكتروني',
+        'الوظيفة',
+        'الشارع',
+        'رقم العمارة',
+        'الدور',
+        'الشقة',
+        'الحالة الاجتماعية',
+        'اسم الزوجة',
+        'الرقم القومي للزوجة',
+        'وظيفة الزوجة',
+        'هاتف الزوجة',
+        'أب اعتراف الزوجة',
+        'الأبناء',
+        'الخدام',
+        'ملاحظات',
+        'حالة العضوية',
+        'تاريخ التسجيل'
+      ];
+
+      const rows = members.map(m => {
+        let childrenStr = '';
+        try {
+          const ch = JSON.parse(m.childrenJson || '[]');
+          childrenStr = ch.map((c: any) => `${c.name || ''} (${c.nationalId || ''})`).join(' | ');
+        } catch {}
+
+        let servantsStr = '';
+        try {
+          const sv = JSON.parse(m.servantsJson || '[]');
+          servantsStr = sv.join(', ');
+        } catch {}
+
+        return [
+          escapeCsv(m.fullName),
+          escapeCsv(m.nationalId),
+          escapeCsv(m.phoneNumbers),
+          escapeCsv(m.email || m.user?.email || ''),
+          escapeCsv(m.job),
+          escapeCsv(m.street),
+          escapeCsv(m.buildingNumber),
+          escapeCsv(m.floor),
+          escapeCsv(m.apartment),
+          escapeCsv(m.socialStatus),
+          escapeCsv(m.wifeName || ''),
+          escapeCsv(m.wifeNationalId || ''),
+          escapeCsv(m.wifeJob || ''),
+          escapeCsv(m.wifePhone || ''),
+          escapeCsv(m.wifeConfessionFather || ''),
+          escapeCsv(childrenStr),
+          escapeCsv(servantsStr),
+          escapeCsv(m.notes || ''),
+          escapeCsv(m.status),
+          escapeCsv(new Date(m.createdAt).toLocaleDateString('ar-EG'))
+        ].join(',');
+      });
+
+      // UTF-8 BOM for Microsoft Excel compatibility with Arabic
+      const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="church_memberships_${Date.now()}.csv"`);
+      return res.status(200).send(csvContent);
+    }
+
+    // Default JSON export
+    const jsonFormatted = members.map(m => {
+      let children = [];
+      let relatives = [];
+      let servants = [];
+      try { children = JSON.parse(m.childrenJson || '[]'); } catch {}
+      try { relatives = JSON.parse(m.relativesJson || '[]'); } catch {}
+      try { servants = JSON.parse(m.servantsJson || '[]'); } catch {}
+
+      return {
+        id: m.id,
+        fullName: m.fullName,
+        nationalId: m.nationalId,
+        phoneNumbers: m.phoneNumbers,
+        email: m.email || m.user?.email || null,
+        job: m.job,
+        street: m.street,
+        buildingNumber: m.buildingNumber,
+        floor: m.floor,
+        apartment: m.apartment,
+        socialStatus: m.socialStatus,
+        wife: m.wifeName ? {
+          name: m.wifeName,
+          nationalId: m.wifeNationalId,
+          job: m.wifeJob,
+          phone: m.wifePhone,
+          email: m.wifeEmail,
+          confessionFather: m.wifeConfessionFather
+        } : null,
+        children,
+        relatives,
+        servants,
+        notes: m.notes,
+        status: m.status,
+        createdAt: m.createdAt
+      };
+    });
+
+    return res.status(200).json(jsonFormatted);
+  } catch (error: any) {
+    console.error('Error exporting membership data:', error);
+    return res.status(500).json({ error: 'Failed to export membership data.' });
+  }
+});
+
+// 11. Admin: Bulk Import Membership Data (Excel/CSV parse, JSON import, or Table paste)
+router.post('/admin/bulk-import', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN, Role.DEVELOPER]), async (req: AuthRequest, res: Response) => {
+  try {
+    const { families, defaultStatus = 'APPROVED' } = req.body;
+
+    if (!Array.isArray(families) || families.length === 0) {
+      return res.status(400).json({
+        error: 'families array is required and must not be empty.',
+        errorAr: 'يرجى تقديم قائمة العائلات المراد استيرادها.'
+      });
+    }
+
+    const bcrypt = require('bcrypt');
+    const defaultPasswordHash = await bcrypt.hash('Church@2026', 10);
+
+    let importedCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const errors: string[] = [];
+
+    for (let i = 0; i < families.length; i++) {
+      const raw = families[i];
+      if (!raw || typeof raw !== 'object') continue;
+
+      // Normalize multi-lingual keys (supports CSV headers, English, or Arabic)
+      const fullName = String(raw.fullName || raw['الاسم بالكامل'] || raw['الاسم'] || raw['name'] || '').trim();
+      const nationalId = String(raw.nationalId || raw['الرقم القومي'] || raw['الرقم_القومي'] || '').trim();
+      const phoneNumbers = String(raw.phoneNumbers || raw['الهاتف'] || raw['الموبايل'] || raw['phone'] || '01000000000').trim();
+      const email = String(raw.email || raw['البريد'] || raw['البريد الإلكتروني'] || '').trim();
+      const job = String(raw.job || raw['الوظيفة'] || raw['المهنة'] || 'غير محدد').trim();
+      const street = String(raw.street || raw['الشارع'] || 'حدائق القبة').trim();
+      const buildingNumber = String(raw.buildingNumber || raw['العمارة'] || raw['رقم العمارة'] || '1').trim();
+      const floor = String(raw.floor || raw['الدور'] || '1').trim();
+      const apartment = String(raw.apartment || raw['الشقة'] || '1').trim();
+
+      const rawSocial = String(raw.socialStatus || raw['الحالة الاجتماعية'] || 'MARRIED').toUpperCase();
+      let socialStatus: any = 'MARRIED';
+      if (rawSocial.includes('أعزب') || rawSocial.includes('SINGLE')) socialStatus = 'SINGLE';
+      else if (rawSocial.includes('أرمل') || rawSocial.includes('WIDOW')) socialStatus = 'WIDOWED';
+      else if (rawSocial.includes('مطلق') || rawSocial.includes('DIVORCE')) socialStatus = 'DIVORCED';
+
+      const wifeName = raw.wifeName || raw['اسم الزوجة'] ? String(raw.wifeName || raw['اسم الزوجة']).trim() : null;
+      const wifeNationalId = raw.wifeNationalId || raw['الرقم القومي للزوجة'] ? String(raw.wifeNationalId || raw['الرقم القومي للزوجة']).trim() : null;
+      const wifeJob = raw.wifeJob || raw['وظيفة الزوجة'] ? String(raw.wifeJob || raw['وظيفة الزوجة']).trim() : null;
+      const wifePhone = raw.wifePhone || raw['هاتف الزوجة'] ? String(raw.wifePhone || raw['هاتف الزوجة']).trim() : null;
+      const wifeConfessionFather = raw.wifeConfessionFather || raw['أب اعتراف الزوجة'] ? String(raw.wifeConfessionFather || raw['أب اعتراف الزوجة']).trim() : null;
+      const notes = raw.notes || raw['ملاحظات'] ? String(raw.notes || raw['ملاحظات']).trim() : null;
+
+      // Children list parsing
+      let children: any[] = [];
+      if (Array.isArray(raw.children)) {
+        children = raw.children;
+      } else if (typeof raw.children === 'string' && raw.children.trim()) {
+        try {
+          children = JSON.parse(raw.children);
+        } catch {
+          children = raw.children.split('|').map((c: string) => ({ name: c.trim(), nationalId: '', educationOrJob: '' }));
+        }
+      } else if (raw['الأبناء'] && typeof raw['الأبناء'] === 'string') {
+        children = raw['الأبناء'].split('|').map((c: string) => ({ name: c.trim(), nationalId: '', educationOrJob: '' }));
+      }
+
+      // Servants list parsing
+      let servants: string[] = [];
+      if (Array.isArray(raw.servants)) {
+        servants = raw.servants.map((s: any) => String(s).trim());
+      } else if (typeof raw.servants === 'string' && raw.servants.trim()) {
+        servants = raw.servants.split(',').map((s: string) => s.trim()).filter(Boolean);
+      } else if (raw['الخدام'] && typeof raw['الخدام'] === 'string') {
+        servants = raw['الخدام'].split(',').map((s: string) => s.trim()).filter(Boolean);
+      }
+
+      if (!fullName || !nationalId) {
+        errors.push(`صف ${i + 1}: تم تجاهله لعدم توفر الاسم بالكامل أو الرقم القومي.`);
+        skippedCount++;
+        continue;
+      }
+
+      try {
+        const cleanUserEmail = (email || `${nationalId}@church-member.local`).toLowerCase();
+
+        // Find or create User shell
+        let user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { nationalId },
+              { email: cleanUserEmail }
+            ]
+          }
+        });
+
+        if (!user) {
+          user = await prisma.user.create({
+            data: {
+              email: cleanUserEmail,
+              passwordHash: defaultPasswordHash,
+              fullName,
+              nationalId,
+              phone: phoneNumbers.split(',')[0].trim(),
+              role: Role.MEMBER,
+              isVerified: defaultStatus === 'APPROVED'
+            }
+          });
+        } else if (defaultStatus === 'APPROVED' && !user.isVerified) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { isVerified: true }
+          });
+        }
+
+        // Upsert FamilyHead
+        const existingFamily = await prisma.familyHead.findFirst({
+          where: {
+            OR: [
+              { nationalId },
+              { userId: user.id }
+            ]
+          }
+        });
+
+        if (existingFamily) {
+          await prisma.familyHead.update({
+            where: { id: existingFamily.id },
+            data: {
+              fullName,
+              street,
+              buildingNumber,
+              floor,
+              apartment,
+              job,
+              phoneNumbers,
+              email: email || existingFamily.email,
+              socialStatus,
+              wifeName: wifeName || existingFamily.wifeName,
+              wifeNationalId: wifeNationalId || existingFamily.wifeNationalId,
+              wifeJob: wifeJob || existingFamily.wifeJob,
+              wifePhone: wifePhone || existingFamily.wifePhone,
+              wifeConfessionFather: wifeConfessionFather || existingFamily.wifeConfessionFather,
+              childrenJson: children.length > 0 ? JSON.stringify(children) : existingFamily.childrenJson,
+              servantsJson: servants.length > 0 ? JSON.stringify(servants) : existingFamily.servantsJson,
+              notes: notes || existingFamily.notes,
+              status: (defaultStatus as any) || existingFamily.status
+            }
+          });
+          updatedCount++;
+        } else {
+          await prisma.familyHead.create({
+            data: {
+              userId: user.id,
+              fullName,
+              nationalId,
+              street,
+              buildingNumber,
+              floor,
+              apartment,
+              job,
+              phoneNumbers,
+              email: email || null,
+              socialStatus,
+              wifeName,
+              wifeNationalId,
+              wifeJob,
+              wifePhone,
+              wifeConfessionFather,
+              childrenJson: JSON.stringify(children),
+              servantsJson: JSON.stringify(servants),
+              relativesJson: '[]',
+              notes,
+              status: defaultStatus as any
+            }
+          });
+          importedCount++;
+        }
+      } catch (rowErr: any) {
+        console.error(`Error importing row ${i + 1} (${fullName}):`, rowErr);
+        errors.push(`صف ${i + 1} (${fullName}): ${rowErr.message || 'خطأ في معالجة البيانات'}`);
+        skippedCount++;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      messageAr: `تمت معالجة الاستيراد بنجاح: تم إضافة ${importedCount} عائلة جديدة، وتحديث ${updatedCount} عائلة، وتخطي ${skippedCount}.`,
+      importedCount,
+      updatedCount,
+      skippedCount,
+      errors
+    });
+  } catch (error: any) {
+    console.error('Error in bulk import:', error);
+    return res.status(500).json({ error: 'Server error during bulk import.', errorAr: 'حدث خطأ أثناء معالجة الاستيراد الجماعي.' });
+  }
+});
+
 export default router;
+

@@ -2120,46 +2120,90 @@ export default function ChurchAiAssistant() {
                   <div
                     style={{
                       alignSelf: 'flex-start',
-                      padding: '10px 16px',
+                      padding: '10px 18px',
                       borderRadius: '18px 18px 18px 4px',
                       backgroundColor: 'rgba(28, 33, 40, 0.95)',
-                      border: '1px solid rgba(226, 183, 20, 0.22)',
+                      border: '1.5px solid rgba(226, 183, 20, 0.35)',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '6px'
+                      gap: '8px',
+                      animation: 'churchAiGlowBubble 2s infinite ease-in-out',
+                      boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3)'
                     }}
                   >
-                    <span
-                      style={{
-                        width: '6px',
-                        height: '6px',
-                        borderRadius: '50%',
-                        backgroundColor: 'var(--accent-gold, #e2b714)',
-                        display: 'inline-block',
-                        animation: 'pulse 1s infinite'
-                      }}
-                    />
-                    <span
-                      style={{
-                        width: '6px',
-                        height: '6px',
-                        borderRadius: '50%',
-                        backgroundColor: 'var(--accent-gold, #e2b714)',
-                        display: 'inline-block',
-                        animation: 'pulse 1s infinite 0.2s'
-                      }}
-                    />
-                    <span
-                      style={{
-                        width: '6px',
-                        height: '6px',
-                        borderRadius: '50%',
-                        backgroundColor: 'var(--accent-gold, #e2b714)',
-                        display: 'inline-block',
-                        animation: 'pulse 1s infinite 0.4s'
-                      }}
-                    />
-                    <span style={{ fontSize: '0.78rem', color: 'rgba(255, 255, 255, 0.7)', marginInlineStart: '6px' }}>
+                    <style dangerouslySetInnerHTML={{ __html: `
+                      @keyframes churchAiDotBounce {
+                        0%, 80%, 100% {
+                          transform: translateY(0) scale(0.8);
+                          opacity: 0.45;
+                          box-shadow: 0 0 0 rgba(226, 183, 20, 0);
+                        }
+                        40% {
+                          transform: translateY(-6px) scale(1.3);
+                          opacity: 1;
+                          box-shadow: 0 0 10px rgba(226, 183, 20, 0.9);
+                        }
+                      }
+                      @keyframes churchAiGlowBubble {
+                        0%, 100% {
+                          border-color: rgba(226, 183, 20, 0.25);
+                          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 0 rgba(226, 183, 20, 0);
+                        }
+                        50% {
+                          border-color: rgba(226, 183, 20, 0.7);
+                          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 16px rgba(226, 183, 20, 0.3);
+                        }
+                      }
+                      @keyframes churchAiShimmerText {
+                        0%, 100% {
+                          opacity: 0.75;
+                          color: rgba(255, 255, 255, 0.75);
+                        }
+                        50% {
+                          opacity: 1;
+                          color: var(--accent-gold, #e2b714);
+                          text-shadow: 0 0 10px rgba(226, 183, 20, 0.5);
+                        }
+                      }
+                    `}} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <span
+                        style={{
+                          width: '7px',
+                          height: '7px',
+                          borderRadius: '50%',
+                          backgroundColor: 'var(--accent-gold, #e2b714)',
+                          display: 'inline-block',
+                          animation: 'churchAiDotBounce 1.2s infinite ease-in-out'
+                        }}
+                      />
+                      <span
+                        style={{
+                          width: '7px',
+                          height: '7px',
+                          borderRadius: '50%',
+                          backgroundColor: 'var(--accent-gold, #e2b714)',
+                          display: 'inline-block',
+                          animation: 'churchAiDotBounce 1.2s infinite ease-in-out 0.2s'
+                        }}
+                      />
+                      <span
+                        style={{
+                          width: '7px',
+                          height: '7px',
+                          borderRadius: '50%',
+                          backgroundColor: 'var(--accent-gold, #e2b714)',
+                          display: 'inline-block',
+                          animation: 'churchAiDotBounce 1.2s infinite ease-in-out 0.4s'
+                        }}
+                      />
+                    </div>
+                    <span style={{
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      marginInlineStart: '6px',
+                      animation: 'churchAiShimmerText 2s infinite ease-in-out'
+                    }}>
                       {isAr ? 'جاري تحضير الرد الكنسي...' : 'Consulting church records...'}
                     </span>
                   </div>

@@ -9,7 +9,8 @@ import { formatTimeSlot, formatDateTime } from '../../utils/format';
 import { 
   User, Check, X, ShieldAlert, Radio, Bell, Users, 
   Calendar, CheckCircle, HelpCircle, ArrowRight, ArrowLeft, Send, Plus, Video, FileText, ChevronDown, Scissors, Clock, Sparkles, MessageSquare,
-  Facebook, Mail, QrCode, Search, UserPlus, Edit3, Trash2, ChevronUp, AlertTriangle, BookOpen, LayoutDashboard
+  Facebook, Mail, QrCode, Search, UserPlus, Edit3, Trash2, ChevronUp, AlertTriangle, BookOpen, LayoutDashboard,
+  Download, Upload, Ban, ShieldCheck, FileSpreadsheet
 } from 'lucide-react';
 import PriestScheduleManager from '../../components/PriestScheduleManager';
 import ImageCropModal from '../../components/ImageCropModal';
@@ -360,6 +361,22 @@ const initialAddMemberFormState = {
   const [adminUserPhone, setAdminUserPhone] = useState('');
   const [adminUserNationalId, setAdminUserNationalId] = useState('');
   const [adminUserMsg, setAdminUserMsg] = useState<string | null>(null);
+  const [adminUserSelectedRoles, setAdminUserSelectedRoles] = useState<string[]>(['PRIEST']);
+  const [editingRolesUser, setEditingRolesUser] = useState<any | null>(null);
+  const [editingUserRolesList, setEditingUserRolesList] = useState<string[]>([]);
+  const [banningUser, setBanningUser] = useState<any | null>(null);
+  const [banReasonInput, setBanReasonInput] = useState<string>('');
+  const [userSearchTerm, setUserSearchTerm] = useState<string>('');
+  const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState<boolean>(false);
+
+  // Membership Import & Export States
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+  const [importMethod, setImportMethod] = useState<'FILE_CSV' | 'FILE_JSON' | 'PASTE_TABLE'>('PASTE_TABLE');
+  const [importPasteText, setImportPasteText] = useState<string>('');
+  const [importParsedPreview, setImportParsedPreview] = useState<any[]>([]);
+  const [isImporting, setIsImporting] = useState<boolean>(false);
+  const [importFeedback, setImportFeedback] = useState<{ message: string; type: 'success' | 'error'; details?: string[] } | null>(null);
 
   // Trips & Conferences management states
   const [tripsList, setTripsList] = useState<any[]>([]);
@@ -383,6 +400,30 @@ const initialAddMemberFormState = {
   const getAvailableTabs = () => {
     if (!user) return [];
     const role = user.role;
+    const userRoles: string[] = (user.roles && Array.isArray(user.roles) && user.roles.length > 0)
+      ? user.roles
+      : [user.role];
+
+    const isScannerOnly = userRoles.includes('QR_SCANNER') && !userRoles.some(r => ['SUPER_ADMIN', 'CHURCH_ADMIN', 'DEVELOPER', 'SECRETARY', 'PRIEST', 'BISHOP'].includes(r));
+    if (isScannerOnly) {
+      return [
+        {
+          id: 'events-qr',
+          labelAr: language === 'ar' ? 'ماسح بطاقات الحضور (QR Scanner)' : 'QR Code Pass Scanner',
+          labelEn: language === 'ar' ? 'ماسح بطاقات الحضور (QR Scanner)' : 'QR Code Pass Scanner',
+          icon: <QrCode size={16} />,
+          category: 'pastoral_events'
+        },
+        {
+          id: 'my-profile',
+          labelAr: language === 'ar' ? 'ملفي الشخصي وحسابي' : 'My Profile & Account',
+          labelEn: language === 'ar' ? 'ملفي الشخصي وحسابي' : 'My Profile & Account',
+          icon: <User size={16} />,
+          category: 'personal'
+        }
+      ];
+    }
+
     const tabs: Array<{ id: string; labelAr: string; labelEn: string; icon: React.ReactNode; category: 'personal' | 'pastoral_events' | 'media' | 'admin' }> = [];
 
     // Universal Tabs: My Profile & My Invitations (Available to every member/admin)
@@ -413,7 +454,7 @@ const initialAddMemberFormState = {
     }
 
     // Priest / Bishop Booking requests and Schedule Tab
-    if (['PRIEST', 'BISHOP'].includes(role)) {
+    if (['PRIEST', 'BISHOP'].includes(role) || userRoles.includes('PRIEST') || userRoles.includes('BISHOP')) {
       tabs.push({
         id: 'my-schedule',
         labelAr: language === 'ar' ? 'مواعيد اعترافاتي وحالتي' : 'My Confession Schedule',
@@ -431,7 +472,7 @@ const initialAddMemberFormState = {
     }
 
     // Admin / Secretary / SuperAdmin / Developer tabs
-    if (['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(role)) {
+    if (['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(role) || userRoles.some(r => ['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN', 'SECRETARY'].includes(r))) {
       tabs.push({
         id: 'members',
         labelAr: t('manage_members'),
@@ -454,7 +495,7 @@ const initialAddMemberFormState = {
         category: 'media'
       });
 
-      if (['SUPER_ADMIN', 'DEVELOPER'].includes(role)) {
+      if (['SUPER_ADMIN', 'DEVELOPER'].includes(role) || userRoles.includes('SUPER_ADMIN') || userRoles.includes('DEVELOPER')) {
         tabs.push({
           id: 'manage-priests',
           labelAr: language === 'ar' ? 'إدارة الكهنة' : 'Manage Priests',
@@ -463,17 +504,20 @@ const initialAddMemberFormState = {
           category: 'admin'
         });
         tabs.push({
-          id: 'manage-roles',
-          labelAr: language === 'ar' ? 'إدارة الرتب والمستخدمين' : 'Manage Role Accounts',
-          labelEn: language === 'ar' ? 'إدارة الرتب والمستخدمين' : 'Manage Role Accounts',
-          icon: <User size={16} />,
-          category: 'admin'
-        });
-        tabs.push({
           id: 'action-logs',
           labelAr: language === 'ar' ? 'سجل العمليات' : 'Action Logs',
           labelEn: language === 'ar' ? 'سجل العمليات' : 'Action Logs',
           icon: <FileText size={16} />,
+          category: 'admin'
+        });
+      }
+
+      if (['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN'].includes(role) || userRoles.some(r => ['SUPER_ADMIN', 'DEVELOPER', 'CHURCH_ADMIN'].includes(r))) {
+        tabs.push({
+          id: 'manage-roles',
+          labelAr: language === 'ar' ? 'إدارة الرتب والمستخدمين' : 'Manage Role Accounts',
+          labelEn: language === 'ar' ? 'إدارة الرتب والمستخدمين' : 'Manage Role Accounts',
+          icon: <User size={16} />,
           category: 'admin'
         });
       }
@@ -516,6 +560,16 @@ const initialAddMemberFormState = {
         labelAr: language === 'ar' ? 'إشراف أسئلة الإيمان (FY)' : 'FY Questions Moderation',
         labelEn: language === 'ar' ? 'إشراف أسئلة الإيمان (FY)' : 'FY Questions Moderation',
         icon: <HelpCircle size={16} />,
+        category: 'pastoral_events'
+      });
+    }
+
+    if (userRoles.includes('QR_SCANNER') && !tabs.some(t => t.id === 'events-qr')) {
+      tabs.push({
+        id: 'events-qr',
+        labelAr: language === 'ar' ? 'ماسح بطاقات الحضور (QR Scanner)' : 'QR Code Pass Scanner',
+        labelEn: language === 'ar' ? 'ماسح بطاقات الحضور (QR Scanner)' : 'QR Code Pass Scanner',
+        icon: <QrCode size={16} />,
         category: 'pastoral_events'
       });
     }
@@ -1622,8 +1676,10 @@ const initialAddMemberFormState = {
     e.preventDefault();
     setAdminUserMsg(null);
 
-    if (!adminUserEmail || !adminUserPassword || !adminUserFullName || !adminUserRole) {
-      setAdminUserMsg(language === 'ar' ? 'يرجى ملء جميع الحقول المطلوبة.' : 'Please fill in all required fields.');
+    const rolesToAssign = adminUserSelectedRoles.length > 0 ? adminUserSelectedRoles : [adminUserRole];
+
+    if (!adminUserEmail || !adminUserPassword || !adminUserFullName || rolesToAssign.length === 0) {
+      setAdminUserMsg(language === 'ar' ? 'يرجى ملء جميع الحقول المطلوبة واختيار رتبة واحدة على الأقل.' : 'Please fill in all required fields and select at least one role.');
       return;
     }
 
@@ -1638,7 +1694,8 @@ const initialAddMemberFormState = {
           email: adminUserEmail,
           password: adminUserPassword,
           fullName: adminUserFullName,
-          role: adminUserRole,
+          role: rolesToAssign[0],
+          roles: rolesToAssign,
           phone: adminUserPhone || undefined,
           nationalId: adminUserNationalId || undefined,
           nameAr: priestNameAr || undefined,
@@ -1651,7 +1708,7 @@ const initialAddMemberFormState = {
 
       const data = await res.json();
       if (res.ok) {
-        setAdminUserMsg(language === 'ar' ? 'تم إنشاء الحساب بنجاح!' : 'Account created successfully!');
+        setAdminUserMsg(language === 'ar' ? 'تم إنشاء الحساب وتعيين الرتب بنجاح!' : 'Account created and roles assigned successfully!');
         setAdminUserEmail('');
         setAdminUserPassword('');
         setAdminUserFullName('');
@@ -1660,6 +1717,7 @@ const initialAddMemberFormState = {
         setPriestNameAr('');
         setPriestNameEn('');
         setPriestAvatarUrl('');
+        setAdminUserSelectedRoles(['PRIEST']);
         // Refresh list
         fetch(`${API_URL}/admin-users/list`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -1674,6 +1732,270 @@ const initialAddMemberFormState = {
     } catch (err) {
       setAdminUserMsg('Error connecting to server.');
     }
+  };
+
+  const handleSearchUsers = async (query: string) => {
+    setUserSearchTerm(query);
+    if (!query.trim()) {
+      setUserSearchResults([]);
+      return;
+    }
+    setIsSearchingUsers(true);
+    try {
+      const res = await fetch(`${API_URL}/admin-users/search?q=${encodeURIComponent(query)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setUserSearchResults(data);
+      }
+    } catch (err) {
+      console.error('Failed to search users:', err);
+    } finally {
+      setIsSearchingUsers(false);
+    }
+  };
+
+  const handleUpdateUserRoles = async (userId: string, newRoles: string[]) => {
+    if (!newRoles || newRoles.length === 0) {
+      alert(language === 'ar' ? 'يجب اختيار رتبة واحدة على الأقل للمستخدم.' : 'At least one role must be assigned.');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/admin-users/update-roles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId, roles: newRoles })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(language === 'ar' ? 'تم تحديث رتب المستخدم بنجاح!' : 'User roles updated successfully!');
+        setEditingRolesUser(null);
+        setEditingUserRolesList([]);
+        // Refresh admin users list
+        const listRes = await fetch(`${API_URL}/admin-users/list`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const listData = await listRes.json();
+        if (Array.isArray(listData)) setAdminUsers(listData);
+        if (userSearchTerm) handleSearchUsers(userSearchTerm);
+      } else {
+        alert(data.error || 'Failed to update roles.');
+      }
+    } catch (err) {
+      alert('Network error while updating roles.');
+    }
+  };
+
+  const handleBanUser = async (userId: string, reason: string) => {
+    if (!reason.trim()) {
+      alert(language === 'ar' ? 'يرجى كتابة سبب الحظر.' : 'Please enter ban reason.');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/admin-users/ban`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId, reason })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(language === 'ar' ? 'تم حظر المستخدم بنجاح.' : 'User banned successfully.');
+        setBanningUser(null);
+        setBanReasonInput('');
+        const listRes = await fetch(`${API_URL}/admin-users/list`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const listData = await listRes.json();
+        if (Array.isArray(listData)) setAdminUsers(listData);
+        if (userSearchTerm) handleSearchUsers(userSearchTerm);
+      } else {
+        alert(data.error || 'Failed to ban user.');
+      }
+    } catch (err) {
+      alert('Network error while banning user.');
+    }
+  };
+
+  const handleUnbanUser = async (userId: string) => {
+    if (!confirm(language === 'ar' ? 'هل أنت متأكد من إلغاء حظر هذا المستخدم؟' : 'Are you sure you want to unban this user?')) return;
+    try {
+      const res = await fetch(`${API_URL}/admin-users/unban`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(language === 'ar' ? 'تم إلغاء حظر المستخدم بنجاح.' : 'User unbanned successfully.');
+        const listRes = await fetch(`${API_URL}/admin-users/list`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const listData = await listRes.json();
+        if (Array.isArray(listData)) setAdminUsers(listData);
+        if (userSearchTerm) handleSearchUsers(userSearchTerm);
+      } else {
+        alert(data.error || 'Failed to unban user.');
+      }
+    } catch (err) {
+      alert('Network error while unbanning user.');
+    }
+  };
+
+  // Membership Import & Export Handlers
+  const handleExportMembers = async (format: 'csv' | 'json') => {
+    try {
+      const res = await fetch(`${API_URL}/members/admin/export?format=${format}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Failed to export.');
+        return;
+      }
+
+      if (format === 'csv') {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `church_members_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        const jsonData = await res.json();
+        const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json;charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `church_members_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (err) {
+      alert('Export network error.');
+    }
+  };
+
+  const parseDelimitedText = (text: string): any[] => {
+    const lines = text.trim().split(/\r?\n/).filter(line => line.trim().length > 0);
+    if (lines.length === 0) return [];
+
+    const firstLine = lines[0];
+    let delimiter = '\t';
+    if (firstLine.includes('\t')) delimiter = '\t';
+    else if (firstLine.includes(',')) delimiter = ',';
+    else if (firstLine.includes(';')) delimiter = ';';
+
+    const rawHeaders = firstLine.split(delimiter).map(h => h.trim().replace(/^["']|["']$/g, ''));
+    const hasKnownHeader = rawHeaders.some(h => 
+      ['الاسم', 'رقم قومي', 'الرقم القومي', 'nationalid', 'fullname', 'phone', 'هاتف', 'المهنة'].some(k => h.toLowerCase().includes(k))
+    );
+
+    const startIndex = hasKnownHeader ? 1 : 0;
+    const headers = hasKnownHeader ? rawHeaders : ['fullName', 'nationalId', 'phoneNumbers', 'street', 'job', 'socialStatus', 'wifeName', 'wifeNationalId', 'wifePhone'];
+
+    const results: any[] = [];
+    for (let i = startIndex; i < lines.length; i++) {
+      const cols = lines[i].split(delimiter).map(c => c.trim().replace(/^["']|["']$/g, ''));
+      if (cols.length === 0 || !cols.some(c => c.length > 0)) continue;
+
+      const row: any = {};
+      headers.forEach((h, idx) => {
+        if (cols[idx] !== undefined) {
+          row[h] = cols[idx];
+        }
+      });
+      results.push(row);
+    }
+    return results;
+  };
+
+  const handleBulkImportMembers = async (records: any[]) => {
+    if (!records || records.length === 0) {
+      alert(language === 'ar' ? 'لا توجد بيانات صالحة للاستيراد.' : 'No valid records to import.');
+      return;
+    }
+    setIsImporting(true);
+    setImportFeedback(null);
+    try {
+      const res = await fetch(`${API_URL}/members/admin/bulk-import`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ records })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setImportFeedback({
+          message: data.message,
+          type: 'success',
+          details: data.errors
+        });
+        // Refresh member lists
+        fetch(`${API_URL}/members/all`, { headers: { 'Authorization': `Bearer ${token}` } })
+          .then(r => r.json())
+          .then(d => { if (Array.isArray(d)) setAllMembers(d); });
+        fetch(`${API_URL}/members/pending`, { headers: { 'Authorization': `Bearer ${token}` } })
+          .then(r => r.json())
+          .then(d => { if (Array.isArray(d)) setPendingMembers(d); });
+      } else {
+        setImportFeedback({
+          message: data.error || 'فشل استيراد البيانات.',
+          type: 'error'
+        });
+      }
+    } catch (err) {
+      setImportFeedback({
+        message: 'خطأ في الاتصال بالخادم أثناء الاستيراد.',
+        type: 'error'
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleFileUploadImport = (e: React.ChangeEvent<HTMLInputElement>, type: 'csv' | 'json') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        if (type === 'json') {
+          const parsed = JSON.parse(content);
+          if (Array.isArray(parsed)) {
+            setImportParsedPreview(parsed);
+          } else if (parsed.records && Array.isArray(parsed.records)) {
+            setImportParsedPreview(parsed.records);
+          } else {
+            alert(language === 'ar' ? 'ملف JSON يجب أن يحتوي على قائمة (Array) من السجلات.' : 'JSON file must contain an array of records.');
+          }
+        } else {
+          const parsed = parseDelimitedText(content);
+          setImportParsedPreview(parsed);
+        }
+      } catch (err) {
+        alert(language === 'ar' ? 'تعذر قراءة محتوى الملف.' : 'Failed to parse file content.');
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleSaveTrip = async (e: React.FormEvent) => {
@@ -3509,30 +3831,107 @@ const initialAddMemberFormState = {
                 </span>
               </h3>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setAddMemberFeedback(null);
-                  setIsAddMemberModalOpen(true);
-                }}
-                style={{
-                  background: 'linear-gradient(135deg, var(--accent-gold) 0%, #b8860b 100%)',
-                  color: '#000000',
-                  border: 'none',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  fontWeight: 800,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  boxShadow: '0 4px 15px rgba(226, 183, 20, 0.3)'
-                }}
-              >
-                <UserPlus size={16} />
-                <span>{language === 'ar' ? '+ تسجيل عضوية عائلية جديدة' : '+ Add New Family Membership'}</span>
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* Export Dropdown / Buttons */}
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleExportMembers('csv')}
+                    title={language === 'ar' ? 'تصدير كملف Excel (CSV)' : 'Export as Excel (CSV)'}
+                    style={{
+                      background: 'rgba(46, 204, 113, 0.15)',
+                      color: '#2ecc71',
+                      border: '1px solid rgba(46, 204, 113, 0.4)',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    <span>📊</span>
+                    <span>{language === 'ar' ? 'تصدير Excel' : 'Export Excel'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleExportMembers('json')}
+                    title={language === 'ar' ? 'تصدير ملف JSON' : 'Export as JSON'}
+                    style={{
+                      background: 'rgba(52, 152, 219, 0.15)',
+                      color: '#3498db',
+                      border: '1px solid rgba(52, 152, 219, 0.4)',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    <span>📁</span>
+                    <span>{language === 'ar' ? 'تصدير JSON' : 'Export JSON'}</span>
+                  </button>
+                </div>
+
+                {/* Import Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportFeedback(null);
+                    setImportParsedPreview([]);
+                    setImportPasteText('');
+                    setIsImportModalOpen(true);
+                  }}
+                  style={{
+                    background: 'rgba(230, 126, 34, 0.15)',
+                    color: '#e67e22',
+                    border: '1px solid rgba(230, 126, 34, 0.4)',
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px'
+                  }}
+                >
+                  <Download size={15} />
+                  <span>{language === 'ar' ? '📥 استيراد بيانات (Import)' : '📥 Bulk Import'}</span>
+                </button>
+
+                {/* Add New Family Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddMemberFeedback(null);
+                    setIsAddMemberModalOpen(true);
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, var(--accent-gold) 0%, #b8860b 100%)',
+                    color: '#000000',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    fontWeight: 800,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 15px rgba(226, 183, 20, 0.3)'
+                  }}
+                >
+                  <UserPlus size={16} />
+                  <span>{language === 'ar' ? '+ تسجيل عضوية عائلية جديدة' : '+ Add New Family Membership'}</span>
+                </button>
+              </div>
             </div>
 
             {/* Smart Search Bar & Filter Controls */}
@@ -5406,6 +5805,277 @@ const initialAddMemberFormState = {
             </div>
           )}
 
+          {/* ======================================================== */}
+          {/* BULK IMPORT MEMBERSHIP DATA MODAL                         */}
+          {/* ======================================================== */}
+          {isImportModalOpen && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
+              <div style={{ background: 'var(--bg-primary, #0f1015)', border: '1px solid var(--border-color)', borderRadius: '14px', padding: 'clamp(1.2rem, 3.5vw, 2.5rem)', maxWidth: '900px', width: '100%', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.8)', direction: language === 'ar' ? 'rtl' : 'ltr' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', marginBottom: '1.5rem' }}>
+                  <h3 style={{ margin: 0, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.25rem' }}>
+                    <Download size={22} />
+                    <span>{language === 'ar' ? 'استيراد بيانات العضوية الكنسية (Bulk Import)' : 'Bulk Import Church Memberships'}</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setIsImportModalOpen(false)}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.4rem' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Import Method Tabs */}
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setImportMethod('PASTE_TABLE'); setImportParsedPreview([]); }}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      background: importMethod === 'PASTE_TABLE' ? 'rgba(226, 183, 20, 0.2)' : 'rgba(255,255,255,0.04)',
+                      border: importMethod === 'PASTE_TABLE' ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                      color: importMethod === 'PASTE_TABLE' ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>📋</span>
+                    <span>{language === 'ar' ? 'نسخ ولصق جدول (Excel / Sheets)' : 'Paste Table Data'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setImportMethod('FILE_CSV'); setImportParsedPreview([]); }}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      background: importMethod === 'FILE_CSV' ? 'rgba(46, 204, 113, 0.2)' : 'rgba(255,255,255,0.04)',
+                      border: importMethod === 'FILE_CSV' ? '1px solid #2ecc71' : '1px solid var(--border-color)',
+                      color: importMethod === 'FILE_CSV' ? '#2ecc71' : 'var(--text-secondary)',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>📊</span>
+                    <span>{language === 'ar' ? 'رفع ملف CSV / Excel' : 'Upload CSV File'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setImportMethod('FILE_JSON'); setImportParsedPreview([]); }}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      background: importMethod === 'FILE_JSON' ? 'rgba(52, 152, 219, 0.2)' : 'rgba(255,255,255,0.04)',
+                      border: importMethod === 'FILE_JSON' ? '1px solid #3498db' : '1px solid var(--border-color)',
+                      color: importMethod === 'FILE_JSON' ? '#3498db' : 'var(--text-secondary)',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>📁</span>
+                    <span>{language === 'ar' ? 'رفع ملف JSON' : 'Upload JSON File'}</span>
+                  </button>
+                </div>
+
+                {/* Feedback message */}
+                {importFeedback && (
+                  <div style={{
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    marginBottom: '1.2rem',
+                    background: importFeedback.type === 'success' ? 'rgba(46, 204, 113, 0.15)' : 'rgba(231, 76, 60, 0.15)',
+                    border: `1px solid ${importFeedback.type === 'success' ? '#2ecc71' : '#e74c3c'}`,
+                    color: importFeedback.type === 'success' ? '#2ecc71' : '#e74c3c',
+                    fontSize: '0.9rem'
+                  }}>
+                    <div style={{ fontWeight: 'bold' }}>{importFeedback.message}</div>
+                    {importFeedback.details && importFeedback.details.length > 0 && (
+                      <ul style={{ margin: '8px 0 0 0', paddingInlineStart: '20px', fontSize: '0.8rem' }}>
+                        {importFeedback.details.slice(0, 10).map((d, i) => (
+                          <li key={i}>{d}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* Tab 1: Paste Table */}
+                {importMethod === 'PASTE_TABLE' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
+                      💡 {language === 'ar' 
+                        ? 'حدد صفوف وأعمدة العائلات من برنامج Excel أو Google Sheets وقم بنسخها، ثم الصقها في المربع أدناه مباشرة. سيتعرف النظام تلقائياً على الأعمدة (الاسم، الرقم القومي، الهاتف، العنوان، المهنة، اسم الزوجة، إلخ).' 
+                        : 'Copy rows directly from Excel or Google Sheets and paste them below.'}
+                    </p>
+                    <textarea
+                      rows={6}
+                      value={importPasteText}
+                      onChange={(e) => {
+                        setImportPasteText(e.target.value);
+                        const parsed = parseDelimitedText(e.target.value);
+                        setImportParsedPreview(parsed);
+                      }}
+                      placeholder={language === 'ar' 
+                        ? "الاسم بالكامل\tالرقم القومي\tالهاتف\tالعنوان\tالمهنة\tاسم الزوجة\nمينا سمير\t29501011234567\t01234567890\tش شبرا\tمهندس\tمريم عادل"
+                        : "fullName\tnationalId\tphoneNumbers\tstreet\tjob\twifeName"}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-color)',
+                        color: '#fff',
+                        fontFamily: 'monospace',
+                        fontSize: '0.85rem',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Tab 2: File CSV */}
+                {importMethod === 'FILE_CSV' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '1.5rem', border: '2px dashed var(--border-color)', borderRadius: '10px', textAlign: 'center' }}>
+                    <FileSpreadsheet size={40} style={{ margin: '0 auto', color: '#2ecc71' }} />
+                    <p style={{ fontSize: '0.9rem', color: 'var(--text-primary)', margin: 0, fontWeight: 'bold' }}>
+                      {language === 'ar' ? 'اختر ملف CSV من جهازك' : 'Choose CSV file from your device'}
+                    </p>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
+                      {language === 'ar' ? 'يدعم الملفات المصدرة من Excel بترميز UTF-8' : 'Supports UTF-8 encoded CSV files'}
+                    </p>
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={(e) => handleFileUploadImport(e, 'csv')}
+                      style={{ margin: '10px auto', color: 'var(--text-secondary)', fontSize: '0.85rem' }}
+                    />
+                  </div>
+                )}
+
+                {/* Tab 3: File JSON */}
+                {importMethod === 'FILE_JSON' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '1.5rem', border: '2px dashed var(--border-color)', borderRadius: '10px', textAlign: 'center' }}>
+                    <Upload size={40} style={{ margin: '0 auto', color: '#3498db' }} />
+                    <p style={{ fontSize: '0.9rem', color: 'var(--text-primary)', margin: 0, fontWeight: 'bold' }}>
+                      {language === 'ar' ? 'اختر ملف JSON من جهازك' : 'Choose JSON file from your device'}
+                    </p>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
+                      {language === 'ar' ? 'يجب أن يحتوي الملف على مصفوفة بيانات العائلات' : 'File must contain an array of family membership objects'}
+                    </p>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      onChange={(e) => handleFileUploadImport(e, 'json')}
+                      style={{ margin: '10px auto', color: 'var(--text-secondary)', fontSize: '0.85rem' }}
+                    />
+                  </div>
+                )}
+
+                {/* Parsed Preview Table */}
+                {importParsedPreview.length > 0 && (
+                  <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.2rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                      <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: 'var(--accent-gold)' }}>
+                        👁️ {language === 'ar' ? `معاينة البيانات قبل الحفظ (تم التعرف على ${importParsedPreview.length} سجل)` : `Data Preview (${importParsedPreview.length} records ready)`}
+                      </span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        {language === 'ar' ? 'سيتم ربط الحسابات وتحديث السجلات تلقائياً' : 'Auto-links user accounts & upserts records'}
+                      </span>
+                    </div>
+
+                    <div style={{ maxHeight: '240px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: language === 'ar' ? 'right' : 'left' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--accent-gold)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '8px 10px' }}>#</th>
+                            <th style={{ padding: '8px 10px' }}>{language === 'ar' ? 'الاسم' : 'Name'}</th>
+                            <th style={{ padding: '8px 10px' }}>{language === 'ar' ? 'الرقم القومي' : 'National ID'}</th>
+                            <th style={{ padding: '8px 10px' }}>{language === 'ar' ? 'الهاتف' : 'Phone'}</th>
+                            <th style={{ padding: '8px 10px' }}>{language === 'ar' ? 'المهنة' : 'Job'}</th>
+                            <th style={{ padding: '8px 10px' }}>{language === 'ar' ? 'الزوجة' : 'Wife'}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importParsedPreview.slice(0, 15).map((row, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                              <td style={{ padding: '6px 10px', color: 'var(--text-secondary)' }}>{idx + 1}</td>
+                              <td style={{ padding: '6px 10px', fontWeight: 'bold' }}>{row.fullName || row['الاسم'] || row['الاسم بالكامل'] || '—'}</td>
+                              <td style={{ padding: '6px 10px' }}>{row.nationalId || row['الرقم القومي'] || '—'}</td>
+                              <td style={{ padding: '6px 10px' }}>{row.phoneNumbers || row['الهاتف'] || row['الموبايل'] || '—'}</td>
+                              <td style={{ padding: '6px 10px' }}>{row.job || row['المهنة'] || '—'}</td>
+                              <td style={{ padding: '6px 10px' }}>{row.wifeName || row['اسم الزوجة'] || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {importParsedPreview.length > 15 && (
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '6px' }}>
+                        ... {language === 'ar' ? `يوجد ${importParsedPreview.length - 15} سجل إضافي سيتم استيرادها بالكامل` : `and ${importParsedPreview.length - 15} more records will be imported`}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Actions Footer */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '1.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsImportModalOpen(false)}
+                    style={{
+                      padding: '10px 18px',
+                      borderRadius: '8px',
+                      background: 'rgba(255,255,255,0.08)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleBulkImportMembers(importParsedPreview)}
+                    disabled={isImporting || importParsedPreview.length === 0}
+                    style={{
+                      padding: '10px 24px',
+                      borderRadius: '8px',
+                      background: importParsedPreview.length > 0 ? 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)' : 'rgba(255,255,255,0.1)',
+                      border: 'none',
+                      color: '#fff',
+                      fontWeight: 800,
+                      cursor: importParsedPreview.length > 0 && !isImporting ? 'pointer' : 'not-allowed',
+                      fontSize: '0.9rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <span>🚀</span>
+                    <span>
+                      {isImporting 
+                        ? (language === 'ar' ? 'جاري الاستيراد والتخزين...' : 'Importing...') 
+                        : (language === 'ar' ? `تأكيد استيراد (${importParsedPreview.length}) سجل` : `Confirm Import (${importParsedPreview.length} records)`)}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 
@@ -6476,222 +7146,621 @@ const initialAddMemberFormState = {
       )}
 
       {/* Tab: Manage Role Accounts */}
-      {activeTab === 'manage-roles' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-          {/* Create User Form */}
-          <div className="dashboard-panel">
-            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-              👤 {language === 'ar' ? 'إنشاء حساب جديد وتعيين رتبة' : 'Create Role Account'}
-            </h3>
+      {/* Tab: Manage Role Accounts */}
+      {activeTab === 'manage-roles' && (() => {
+        const currentUserRolesList: string[] = (user?.roles && Array.isArray(user.roles) && user.roles.length > 0)
+          ? user.roles
+          : [user?.role || 'MEMBER'];
+        const isSuperAdminOrDev = currentUserRolesList.some(r => r === 'SUPER_ADMIN' || r === 'DEVELOPER') || user?.email === 'marksamer010@gmail.com';
 
-            {adminUserMsg && (
-              <div style={{ padding: '10px', backgroundColor: 'rgba(226, 183, 20, 0.05)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '4px', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
-                {adminUserMsg}
+        // Role hierarchy:
+        // Super Admin / Developer can assign Super Admin, Church Admin, and lower roles.
+        // Church Admin can assign Church Admin and lower roles, but CANNOT assign Super Admin or Developer.
+        // DEVELOPER can NEVER be assigned by or to anyone (reserved exclusively for marksamer010@gmail.com).
+        const assignableRoleOptions = [
+          ...(isSuperAdminOrDev ? [{ id: 'SUPER_ADMIN', labelAr: 'أدمن عام (Super Admin) ⭐', labelEn: 'Super Admin ⭐', color: '#e74c3c' }] : []),
+          { id: 'CHURCH_ADMIN', labelAr: 'أدمن كنيسة (Church Admin) 🛡️', labelEn: 'Church Admin 🛡️', color: '#3498db' },
+          { id: 'BISHOP', labelAr: 'أسقف (سيدنا) 👑', labelEn: 'Bishop 👑', color: '#9b59b6' },
+          { id: 'PRIEST', labelAr: 'كاهن (أبونا) ⛪', labelEn: 'Priest ⛪', color: 'var(--accent-gold)' },
+          { id: 'SECRETARY', labelAr: 'سكرتارية كنسية 📋', labelEn: 'Secretary 📋', color: '#e67e22' },
+          { id: 'TRIP_MANAGER', labelAr: 'مسؤول رحلات 🚌', labelEn: 'Trip Manager 🚌', color: '#2ecc71' },
+          { id: 'QR_SCANNER', labelAr: 'فاحص تذاكر (QR Scanner فقط) 📷', labelEn: 'QR Scanner Only 📷', color: '#00b4d8' },
+          { id: 'MEMBER', labelAr: 'عضو كنيسة 👤', labelEn: 'Member 👤', color: '#95a5a6' }
+        ];
+
+        const getRoleBadgeStyle = (role: string) => {
+          switch (role) {
+            case 'BISHOP':
+              return { bg: 'rgba(155, 89, 182, 0.15)', color: '#9b59b6', border: 'rgba(155, 89, 182, 0.3)' };
+            case 'PRIEST':
+              return { bg: 'rgba(226, 183, 20, 0.15)', color: 'var(--accent-gold)', border: 'rgba(226, 183, 20, 0.3)' };
+            case 'SUPER_ADMIN':
+              return { bg: 'rgba(231, 76, 60, 0.15)', color: '#e74c3c', border: 'rgba(231, 76, 60, 0.3)' };
+            case 'DEVELOPER':
+              return { bg: 'rgba(255, 71, 87, 0.2)', color: '#ff4757', border: '#ff4757' };
+            case 'CHURCH_ADMIN':
+              return { bg: 'rgba(52, 152, 219, 0.15)', color: '#3498db', border: 'rgba(52, 152, 219, 0.3)' };
+            case 'QR_SCANNER':
+              return { bg: 'rgba(0, 180, 216, 0.15)', color: '#00b4d8', border: 'rgba(0, 180, 216, 0.3)' };
+            case 'TRIP_MANAGER':
+              return { bg: 'rgba(46, 204, 113, 0.15)', color: '#2ecc71', border: 'rgba(46, 204, 113, 0.3)' };
+            case 'SECRETARY':
+              return { bg: 'rgba(230, 126, 34, 0.15)', color: '#e67e22', border: 'rgba(230, 126, 34, 0.3)' };
+            default:
+              return { bg: 'rgba(149, 165, 166, 0.15)', color: '#95a5a6', border: 'rgba(149, 165, 166, 0.3)' };
+          }
+        };
+
+        const renderUserCard = (u: any) => {
+          const userRolesArray: string[] = (u.roles && Array.isArray(u.roles) && u.roles.length > 0)
+            ? u.roles
+            : [u.role || 'MEMBER'];
+
+          const isTargetDev = u.email === 'marksamer010@gmail.com' || u.role === 'DEVELOPER' || userRolesArray.includes('DEVELOPER');
+          const isTargetSuperAdmin = u.role === 'SUPER_ADMIN' || userRolesArray.includes('SUPER_ADMIN');
+          const isSelf = u.id === user?.id;
+          const canManage = !isSelf && !isTargetDev && (isSuperAdminOrDev || !isTargetSuperAdmin);
+
+          return (
+            <div
+              key={u.id}
+              style={{
+                backgroundColor: 'var(--bg-card)',
+                border: u.isBanned ? '1px solid #e74c3c' : '1px solid var(--border-color)',
+                borderRadius: '10px',
+                padding: '1.1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: '10px',
+                boxShadow: 'var(--shadow-sm)',
+                boxSizing: 'border-box',
+                position: 'relative'
+              }}
+            >
+              <div>
+                {/* Header: Name and Badges */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                  <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                    👤 {u.fullName}
+                  </span>
+
+                  {u.isBanned && (
+                    <span style={{
+                      backgroundColor: 'rgba(231, 76, 60, 0.2)',
+                      color: '#e74c3c',
+                      border: '1px solid #e74c3c',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 800
+                    }}>
+                      ⛔ {language === 'ar' ? 'محظور' : 'Banned'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Role Badges List (Multi-roles) */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                  {userRolesArray.map((r, idx) => {
+                    const st = getRoleBadgeStyle(r);
+                    return (
+                      <span
+                        key={idx}
+                        style={{
+                          fontWeight: 'bold',
+                          fontSize: '0.75rem',
+                          padding: '3px 8px',
+                          borderRadius: '4px',
+                          backgroundColor: st.bg,
+                          color: st.color,
+                          border: `1px solid ${st.border}`
+                        }}
+                      >
+                        {r}
+                      </span>
+                    );
+                  })}
+                </div>
+
+                {/* Ban Reason if banned */}
+                {u.isBanned && u.banReason && (
+                  <div style={{
+                    fontSize: '0.78rem',
+                    color: '#e74c3c',
+                    backgroundColor: 'rgba(231, 76, 60, 0.08)',
+                    padding: '6px 8px',
+                    borderRadius: '4px',
+                    marginBottom: '8px'
+                  }}>
+                    ⚠️ <b>{language === 'ar' ? 'سبب الحظر:' : 'Ban Reason:'}</b> {u.banReason}
+                  </div>
+                )}
+
+                {/* Contact info */}
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ wordBreak: 'break-all' }}>
+                    ✉️ <a href={`mailto:${u.email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{u.email}</a>
+                  </div>
+                  {u.phone && (
+                    <div>
+                      📞 <a href={`tel:${u.phone}`} style={{ color: 'var(--accent-gold)', textDecoration: 'none', fontWeight: 'bold' }}>{u.phone}</a>
+                    </div>
+                  )}
+                  {u.nationalId && <div>🪪 {u.nationalId}</div>}
+                </div>
               </div>
-            )}
 
-            <form onSubmit={handleCreateAdminUser} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-              <div className="grid-2-col">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم بالكامل *' : 'Full Name *'}</label>
-                  <input type="text" required value={adminUserFullName} onChange={e => setAdminUserFullName(e.target.value)} className={styles.formInput} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'البريد الإلكتروني (الرتبة) *' : 'Email Address *'}</label>
-                  <input type="text" required value={adminUserEmail} onChange={e => setAdminUserEmail(e.target.value)} className={styles.formInput} placeholder="name@church.org" />
-                </div>
+              {/* Actions Footer */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+                {isTargetDev ? (
+                  <span style={{ fontSize: '0.75rem', color: '#ff4757', fontWeight: 'bold', textAlign: 'center' }}>
+                    💎 {language === 'ar' ? 'مطور النظام (محمي بالكامل)' : 'System Developer (Protected)'}
+                  </span>
+                ) : isSelf ? (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', textAlign: 'center' }}>
+                    👤 {language === 'ar' ? '(حسابك الحالي)' : '(Your Account)'}
+                  </span>
+                ) : !canManage ? (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                    🔒 {language === 'ar' ? 'يتطلب صلاحيات سوبر أدمن لإدارته' : 'Requires Super Admin privileges'}
+                  </span>
+                ) : (
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {/* Edit Roles Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingRolesUser(u);
+                        setEditingUserRolesList([...userRolesArray]);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '7px 10px',
+                        borderRadius: '6px',
+                        background: 'rgba(52, 152, 219, 0.15)',
+                        border: '1px solid rgba(52, 152, 219, 0.4)',
+                        color: '#3498db',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Edit3 size={13} />
+                      <span>{language === 'ar' ? 'تعديل الرتب' : 'Edit Roles'}</span>
+                    </button>
+
+                    {/* Ban / Unban Button */}
+                    {u.isBanned ? (
+                      <button
+                        type="button"
+                        onClick={() => handleUnbanUser(u.id)}
+                        style={{
+                          flex: 1,
+                          padding: '7px 10px',
+                          borderRadius: '6px',
+                          background: 'rgba(46, 204, 113, 0.15)',
+                          border: '1px solid rgba(46, 204, 113, 0.4)',
+                          color: '#2ecc71',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <ShieldCheck size={13} />
+                        <span>{language === 'ar' ? 'إلغاء الحظر' : 'Unban'}</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBanningUser(u);
+                          setBanReasonInput('');
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '7px 10px',
+                          borderRadius: '6px',
+                          background: 'rgba(231, 76, 60, 0.15)',
+                          border: '1px solid rgba(231, 76, 60, 0.4)',
+                          color: '#e74c3c',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <Ban size={13} />
+                        <span>{language === 'ar' ? 'حظر الحساب' : 'Ban User'}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Impersonate button if authorized */}
+                {isSuperAdminOrDev && !isSelf && (
+                  <button
+                    type="button"
+                    onClick={() => handleImpersonate(u.id, u.fullName)}
+                    style={{
+                      backgroundColor: 'rgba(226, 183, 20, 0.1)',
+                      color: 'var(--accent-gold)',
+                      border: '1px solid var(--accent-gold)',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      width: '100%'
+                    }}
+                  >
+                    <span>🔑</span>
+                    <span>{language === 'ar' ? `دخول بحساب ${u.fullName}` : `Login as ${u.fullName}`}</span>
+                  </button>
+                )}
               </div>
+            </div>
+          );
+        };
 
-              <div className="grid-2-col">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'كلمة المرور *' : 'Password *'}</label>
-                  <input type="password" required value={adminUserPassword} onChange={e => setAdminUserPassword(e.target.value)} className={styles.formInput} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرتبة / الدور *' : 'Role *'}</label>
-                  <select value={adminUserRole} onChange={e => setAdminUserRole(e.target.value)} className={styles.formInput}>
-                    <option value="PRIEST">{language === 'ar' ? 'كاهن' : 'Priest'}</option>
-                    <option value="BISHOP">{language === 'ar' ? 'أسقف (سيدنا)' : 'Bishop'}</option>
-                    <option value="CHURCH_ADMIN">{language === 'ar' ? 'أدمن' : 'Admin'}</option>
-                    <option value="TRIP_MANAGER">{language === 'ar' ? 'مسؤول رحلات' : 'Trip Manager'}</option>
-                    <option value="SECRETARY">{language === 'ar' ? 'سكرتير' : 'Secretary'}</option>
-                    <option value="SUPER_ADMIN">{language === 'ar' ? 'أدمن عام' : 'Super Admin'}</option>
-                    <option value="DEVELOPER">{language === 'ar' ? 'مطور النظام (Developer)' : 'Developer'}</option>
-                  </select>
-                </div>
-              </div>
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+            {/* Create User Form with Multi-Roles Selection */}
+            <div className="dashboard-panel">
+              <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+                👤 {language === 'ar' ? 'إنشاء حساب جديد وتعيين رتب متعددة' : 'Create Account & Assign Multiple Roles'}
+              </h3>
 
-              <div className="grid-2-col">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رقم الهاتف' : 'Phone'}</label>
-                  <input type="text" value={adminUserPhone} onChange={e => setAdminUserPhone(e.target.value)} className={styles.formInput} />
+              {adminUserMsg && (
+                <div style={{ padding: '10px', backgroundColor: 'rgba(226, 183, 20, 0.05)', border: '1px solid var(--accent-gold)', color: 'var(--accent-gold)', borderRadius: '4px', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
+                  {adminUserMsg}
                 </div>
+              )}
+
+              <form onSubmit={handleCreateAdminUser} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                <div className="grid-2-col">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم بالكامل *' : 'Full Name *'}</label>
+                    <input type="text" required value={adminUserFullName} onChange={e => setAdminUserFullName(e.target.value)} className={styles.formInput} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'البريد الإلكتروني *' : 'Email Address *'}</label>
+                    <input type="email" required value={adminUserEmail} onChange={e => setAdminUserEmail(e.target.value)} className={styles.formInput} placeholder="name@church.org" />
+                  </div>
+                </div>
+
+                <div className="grid-2-col">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'كلمة المرور *' : 'Password *'}</label>
+                    <input type="password" required value={adminUserPassword} onChange={e => setAdminUserPassword(e.target.value)} className={styles.formInput} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رقم الهاتف' : 'Phone'}</label>
+                    <input type="text" value={adminUserPhone} onChange={e => setAdminUserPhone(e.target.value)} className={styles.formInput} />
+                  </div>
+                </div>
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرقم القومي (اختياري)' : 'National ID (Optional)'}</label>
                   <input type="text" maxLength={14} value={adminUserNationalId} onChange={e => setAdminUserNationalId(e.target.value)} className={styles.formInput} />
                 </div>
-              </div>
 
-              {/* If Priest or Bishop, render profile details */}
-              {['PRIEST', 'BISHOP'].includes(adminUserRole) && (
-                <div style={{ border: '1px solid var(--border-color)', padding: '1.2rem', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem', backgroundColor: 'var(--bg-card)' }}>
-                  <h4 style={{ color: 'var(--accent-gold)', fontSize: '0.9rem' }}>ℹ️ {language === 'ar' ? 'تفاصيل ملف الكاهن / الأسقف المساعد' : 'Priest / Bishop Profile Details'}</h4>
-                  <div className="grid-2-col">
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم بالطقوس (عربي) *' : 'Ecclesiastical Name (Arabic) *'}</label>
-                      <input type="text" value={priestNameAr} onChange={e => setPriestNameAr(e.target.value)} className={styles.formInput} placeholder="مثال: القمص يوحنا كمال" />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم بالطقوس (إنجليزي) *' : 'Ecclesiastical Name (English) *'}</label>
-                      <input type="text" value={priestNameEn} onChange={e => setPriestNameEn(e.target.value)} className={styles.formInput} placeholder="Fr. John Kamal" />
-                    </div>
-                  </div>
-                  <div className="grid-2-col">
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'اللقب (عربي)' : 'Title (Arabic)'}</label>
-                      <input type="text" value={priestTitleAr} onChange={e => setPriestTitleAr(e.target.value)} className={styles.formInput} />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'اللقب (إنجليزي)' : 'Title (English)'}</label>
-                      <input type="text" value={priestTitleEn} onChange={e => setPriestTitleEn(e.target.value)} className={styles.formInput} />
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رابط الصورة الرمزية (اختياري)' : 'Avatar URL (Optional)'}</label>
-                    <input type="text" value={priestAvatarUrl} onChange={e => setPriestAvatarUrl(e.target.value)} className={styles.formInput} />
-                  </div>
-                </div>
-              )}
-
-              <button type="submit" className={styles.bookBtn} style={{ marginTop: '0.8rem', width: 'min(100%, 220px)' }}>
-                {language === 'ar' ? 'إنشاء الحساب' : 'Create Account'}
-              </button>
-            </form>
-          </div>
-
-          {/* List of current admin roles */}
-          <div className="dashboard-panel">
-            <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.2rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-              👥 {language === 'ar' ? 'سجل أصحاب الرتب والمسؤولين' : 'Administrative Roles Directory'}
-            </h3>
-
-            {adminUsers.length > 0 ? (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
-                gap: '12px',
-                width: '100%',
-                boxSizing: 'border-box'
-              }}>
-                {adminUsers.map(u => {
-                  const getRoleBadgeStyle = (role: string) => {
-                    switch (role) {
-                      case 'BISHOP':
-                        return { bg: 'rgba(155, 89, 182, 0.15)', color: '#9b59b6', border: 'rgba(155, 89, 182, 0.3)' };
-                      case 'PRIEST':
-                        return { bg: 'rgba(226, 183, 20, 0.15)', color: 'var(--accent-gold)', border: 'rgba(226, 183, 20, 0.3)' };
-                      case 'SUPER_ADMIN':
-                      case 'DEVELOPER':
-                        return { bg: 'rgba(231, 76, 60, 0.15)', color: '#e74c3c', border: 'rgba(231, 76, 60, 0.3)' };
-                      case 'TRIP_MANAGER':
-                        return { bg: 'rgba(46, 204, 113, 0.15)', color: '#2ecc71', border: 'rgba(46, 204, 113, 0.3)' };
-                      case 'SECRETARY':
-                        return { bg: 'rgba(230, 126, 34, 0.15)', color: '#e67e22', border: 'rgba(230, 126, 34, 0.3)' };
-                      default:
-                        return { bg: 'rgba(52, 152, 219, 0.15)', color: '#3498db', border: 'rgba(52, 152, 219, 0.3)' };
-                    }
-                  };
-                  const roleStyle = getRoleBadgeStyle(u.role);
-
-                  return (
-                    <div
-                      key={u.id}
-                      style={{
-                        backgroundColor: 'var(--bg-card)',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '10px',
-                        padding: '1.1rem',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        gap: '10px',
-                        boxShadow: 'var(--shadow-sm)',
-                        boxSizing: 'border-box',
-                        width: '100%'
-                      }}
-                    >
-                      <div>
-                        {/* Top Row: User Name + Role Badge */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                          <span style={{ fontWeight: 'bold', fontSize: '1.05rem', color: 'var(--text-primary)' }}>
-                            👤 {u.fullName}
-                          </span>
-                          <span style={{
-                            fontWeight: 'bold',
-                            fontSize: '0.78rem',
-                            padding: '3px 8px',
-                            borderRadius: '4px',
-                            backgroundColor: roleStyle.bg,
-                            color: roleStyle.color,
-                            border: `1px solid ${roleStyle.border}`
-                          }}>
-                            {u.role}
-                          </span>
-                        </div>
-
-                        {/* Contact details */}
-                        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                          <div style={{ wordBreak: 'break-all' }}>
-                            ✉️ <a href={`mailto:${u.email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{u.email}</a>
-                          </div>
-                          {u.phone && (
-                            <div>
-                              📞 <a href={`tel:${u.phone}`} style={{ color: 'var(--accent-gold)', textDecoration: 'none', fontWeight: 'bold' }}>{u.phone}</a>
-                            </div>
-                          )}
-                          {u.nationalId && <div>🪪 {u.nationalId}</div>}
-                        </div>
-                      </div>
-
-                      {/* Impersonate button if authorized */}
-                      {['SUPER_ADMIN', 'DEVELOPER'].includes(user?.role) && u.id !== user?.id && (
+                {/* Multi-role selection chips */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px dashed var(--border-color)', paddingTop: '1rem' }}>
+                  <label style={{ fontSize: '0.85rem', color: 'var(--accent-gold)', fontWeight: 'bold' }}>
+                    🏷️ {language === 'ar' ? 'تعيين الرتب والأدوار (يمكنك اختيار أكثر من رتبة مثل: كاهن + أدمن كنيسة): *' : 'Assign Roles (Select multiple, e.g. Priest + Church Admin): *'}
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {assignableRoleOptions.map(opt => {
+                      const isSelected = adminUserSelectedRoles.includes(opt.id);
+                      return (
                         <button
+                          key={opt.id}
                           type="button"
-                          onClick={() => handleImpersonate(u.id, u.fullName)}
+                          onClick={() => {
+                            if (isSelected) {
+                              if (adminUserSelectedRoles.length > 1) {
+                                setAdminUserSelectedRoles(prev => prev.filter(r => r !== opt.id));
+                              }
+                            } else {
+                              setAdminUserSelectedRoles(prev => [...prev, opt.id]);
+                            }
+                          }}
                           style={{
-                            backgroundColor: 'rgba(226, 183, 20, 0.1)',
-                            color: 'var(--accent-gold)',
-                            border: '1px solid var(--accent-gold)',
-                            padding: '9px 12px',
-                            borderRadius: '6px',
+                            padding: '7px 16px',
+                            borderRadius: '20px',
+                            border: isSelected ? `2px solid ${opt.color}` : '1px solid var(--border-color)',
+                            background: isSelected ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.02)',
+                            color: isSelected ? opt.color : 'var(--text-secondary)',
+                            fontWeight: isSelected ? 800 : 500,
+                            fontSize: '0.82rem',
                             cursor: 'pointer',
-                            fontSize: '0.85rem',
-                            fontWeight: 'bold',
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'center',
                             gap: '6px',
-                            width: '100%',
-                            marginTop: '8px',
-                            minHeight: '40px'
+                            boxShadow: isSelected ? `0 0 10px ${opt.color}33` : 'none',
+                            transition: 'all 0.2s ease'
                           }}
                         >
-                          <span>🔑</span>
-                          <span>{language === 'ar' ? `دخول بحساب ${u.fullName}` : `Login as ${u.fullName}`}</span>
+                          <span>{isSelected ? '✓' : '+'}</span>
+                          <span>{language === 'ar' ? opt.labelAr : opt.labelEn}</span>
                         </button>
-                      )}
+                      );
+                    })}
+                  </div>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                    {language === 'ar' ? `الرتب المختارة حالياً: [${adminUserSelectedRoles.join(', ')}]` : `Selected roles: [${adminUserSelectedRoles.join(', ')}]`}
+                  </span>
+                </div>
+
+                {/* If Priest or Bishop, render profile details */}
+                {adminUserSelectedRoles.some(r => r === 'PRIEST' || r === 'BISHOP') && (
+                  <div style={{ border: '1px solid var(--border-color)', padding: '1.2rem', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem', backgroundColor: 'var(--bg-card)' }}>
+                    <h4 style={{ color: 'var(--accent-gold)', fontSize: '0.9rem' }}>ℹ️ {language === 'ar' ? 'تفاصيل ملف الكاهن / الأسقف المساعد' : 'Priest / Bishop Profile Details'}</h4>
+                    <div className="grid-2-col">
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم بالطقوس (عربي) *' : 'Ecclesiastical Name (Arabic) *'}</label>
+                        <input type="text" value={priestNameAr} onChange={e => setPriestNameAr(e.target.value)} className={styles.formInput} placeholder="مثال: القمص يوحنا كمال" />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم بالطقوس (إنجليزي) *' : 'Ecclesiastical Name (English) *'}</label>
+                        <input type="text" value={priestNameEn} onChange={e => setPriestNameEn(e.target.value)} className={styles.formInput} placeholder="Fr. John Kamal" />
+                      </div>
                     </div>
-                  );
-                })}
+                    <div className="grid-2-col">
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'اللقب (عربي)' : 'Title (Arabic)'}</label>
+                        <input type="text" value={priestTitleAr} onChange={e => setPriestTitleAr(e.target.value)} className={styles.formInput} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'اللقب (إنجليزي)' : 'Title (English)'}</label>
+                        <input type="text" value={priestTitleEn} onChange={e => setPriestTitleEn(e.target.value)} className={styles.formInput} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رابط الصورة الرمزية (اختياري)' : 'Avatar URL (Optional)'}</label>
+                      <input type="text" value={priestAvatarUrl} onChange={e => setPriestAvatarUrl(e.target.value)} className={styles.formInput} />
+                    </div>
+                  </div>
+                )}
+
+                <button type="submit" className={styles.bookBtn} style={{ marginTop: '0.8rem', width: 'min(100%, 240px)' }}>
+                  {language === 'ar' ? 'إنشاء الحساب وتعيين الرتب' : 'Create Account & Assign Roles'}
+                </button>
+              </form>
+            </div>
+
+            {/* Smart Search Users in the entire system */}
+            <div className="dashboard-panel">
+              <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Search size={18} />
+                <span>{language === 'ar' ? 'بحث عن أي مستخدم في النظام لإدارته، تعيين رتب له، أو حظره' : 'Search System Users to Assign Roles or Ban'}</span>
+              </h3>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  value={userSearchTerm}
+                  onChange={(e) => handleSearchUsers(e.target.value)}
+                  placeholder={language === 'ar' ? 'ابحث بالاسم، البريد الإلكتروني، رقم الهاتف، أو الرقم القومي...' : 'Search by name, email, phone, or national ID...'}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    color: '#fff',
+                    fontSize: '0.9rem',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {isSearchingUsers && (
+                  <span style={{ position: 'absolute', left: language === 'ar' ? '12px' : 'auto', right: language === 'ar' ? 'auto' : '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.8rem', color: 'var(--accent-gold)' }}>
+                    ⏳ {language === 'ar' ? 'جاري البحث...' : 'Searching...'}
+                  </span>
+                )}
               </div>
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
-                {language === 'ar' ? 'لا يوجد أصحاب رتب مسجلين.' : 'No admin roles registered.'}
-              </p>
+
+              {/* Search Results Grid */}
+              {userSearchTerm && (
+                <div style={{ marginTop: '1.2rem' }}>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--accent-gold)', marginBottom: '8px', fontWeight: 'bold' }}>
+                    🔍 {language === 'ar' ? `نتائج البحث عن (${userSearchTerm}): ${userSearchResults.length} مستخدم` : `Search Results (${userSearchResults.length}):`}
+                  </div>
+                  {userSearchResults.length > 0 ? (
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
+                      gap: '12px',
+                      width: '100%',
+                      boxSizing: 'border-box'
+                    }}>
+                      {userSearchResults.map(u => renderUserCard(u))}
+                    </div>
+                  ) : (
+                    !isSearchingUsers && (
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', margin: '8px 0' }}>
+                        {language === 'ar' ? 'لم يتم العثور على مستخدمين يطابقون عبارة البحث.' : 'No users match search term.'}
+                      </p>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* List of current admin roles */}
+            <div className="dashboard-panel">
+              <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.2rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+                👥 {language === 'ar' ? 'سجل أصحاب الرتب والمسؤولين' : 'Administrative Roles Directory'}
+              </h3>
+
+              {adminUsers.length > 0 ? (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
+                  gap: '12px',
+                  width: '100%',
+                  boxSizing: 'border-box'
+                }}>
+                  {adminUsers.map(u => renderUserCard(u))}
+                </div>
+              ) : (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
+                  {language === 'ar' ? 'لا يوجد أصحاب رتب مسجلين.' : 'No admin roles registered.'}
+                </p>
+              )}
+            </div>
+
+            {/* ======================================================== */}
+            {/* EDIT ROLES MODAL                                         */}
+            {/* ======================================================== */}
+            {editingRolesUser && (
+              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
+                <div style={{ background: 'var(--bg-primary, #0f1015)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '1.5rem', maxWidth: '500px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.8)', direction: language === 'ar' ? 'rtl' : 'ltr' }}>
+                  <h3 style={{ margin: '0 0 10px 0', color: 'var(--accent-gold)', fontSize: '1.15rem' }}>
+                    ✏️ {language === 'ar' ? `تعديل رتب المستخدم: ${editingRolesUser.fullName}` : `Edit Roles: ${editingRolesUser.fullName}`}
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 1.2rem 0' }}>
+                    {editingRolesUser.email}
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1.5rem' }}>
+                    <label style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                      {language === 'ar' ? 'حدد الرتب الممنوحة لهذا الحساب (يمكن اختيار أكثر من رتبة):' : 'Select granted roles:'}
+                    </label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {assignableRoleOptions.map(opt => {
+                        const isChecked = editingUserRolesList.includes(opt.id);
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              if (isChecked) {
+                                if (editingUserRolesList.length > 1) {
+                                  setEditingUserRolesList(prev => prev.filter(r => r !== opt.id));
+                                } else {
+                                  alert(language === 'ar' ? 'يجب اختيار رتبة واحدة على الأقل.' : 'At least one role required.');
+                                }
+                              } else {
+                                setEditingUserRolesList(prev => [...prev, opt.id]);
+                              }
+                            }}
+                            style={{
+                              padding: '7px 14px',
+                              borderRadius: '20px',
+                              border: isChecked ? `2px solid ${opt.color}` : '1px solid var(--border-color)',
+                              background: isChecked ? 'rgba(255,255,255,0.08)' : 'transparent',
+                              color: isChecked ? opt.color : 'var(--text-secondary)',
+                              fontWeight: isChecked ? 800 : 500,
+                              fontSize: '0.82rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}
+                          >
+                            <span>{isChecked ? '✓' : '+'}</span>
+                            <span>{language === 'ar' ? opt.labelAr : opt.labelEn}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setEditingRolesUser(null)}
+                      style={{ padding: '8px 16px', borderRadius: '6px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}
+                    >
+                      {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateUserRoles(editingRolesUser.id, editingUserRolesList)}
+                      style={{ padding: '8px 20px', borderRadius: '6px', background: 'linear-gradient(135deg, var(--accent-gold) 0%, #b8860b 100%)', border: 'none', color: '#000', fontWeight: 800, cursor: 'pointer', fontSize: '0.85rem' }}
+                    >
+                      {language === 'ar' ? 'حفظ الرتب' : 'Save Roles'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* BAN USER MODAL                                           */}
+            {/* ======================================================== */}
+            {banningUser && (
+              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
+                <div style={{ background: 'var(--bg-primary, #0f1015)', border: '1px solid #e74c3c', borderRadius: '12px', padding: '1.5rem', maxWidth: '460px', width: '100%', boxShadow: '0 20px 60px rgba(231,76,60,0.3)', direction: language === 'ar' ? 'rtl' : 'ltr' }}>
+                  <h3 style={{ margin: '0 0 8px 0', color: '#e74c3c', fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Ban size={20} />
+                    <span>{language === 'ar' ? `حظر حساب المستخدم: ${banningUser.fullName}` : `Ban User: ${banningUser.fullName}`}</span>
+                  </h3>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0 0 1.2rem 0' }}>
+                    {language === 'ar' ? 'سيتم حظر الحساب فوراً ولن يتمكن المستخدم من تسجيل الدخول أو استخدام أي خدمة بالنظام حتى يتم فك الحظر عنه.' : 'User will be immediately blocked from signing in.'}
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '1.5rem' }}>
+                    <label style={{ fontSize: '0.82rem', color: '#fff', fontWeight: 'bold' }}>
+                      {language === 'ar' ? 'سبب الحظر (سيظهر للمستخدم عند محاولة تسجيل الدخول): *' : 'Ban Reason (Shown to user upon login): *'}
+                    </label>
+                    <textarea
+                      rows={3}
+                      required
+                      value={banReasonInput}
+                      onChange={(e) => setBanReasonInput(e.target.value)}
+                      placeholder={language === 'ar' ? 'مثال: مخالفة شروط استخدام المنظومة / مراجعة الإدارة...' : 'Reason for ban...'}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        borderRadius: '6px',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-color)',
+                        color: '#fff',
+                        fontSize: '0.85rem',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setBanningUser(null); setBanReasonInput(''); }}
+                      style={{ padding: '8px 16px', borderRadius: '6px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}
+                    >
+                      {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBanUser(banningUser.id, banReasonInput)}
+                      style={{ padding: '8px 20px', borderRadius: '6px', background: '#e74c3c', border: 'none', color: '#fff', fontWeight: 800, cursor: 'pointer', fontSize: '0.85rem' }}
+                    >
+                      {language === 'ar' ? 'تأكيد الحظر ⛔' : 'Confirm Ban'}
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Tab: Action Logs */}
       {activeTab === 'action-logs' && (
@@ -7642,7 +8711,10 @@ const initialAddMemberFormState = {
       {/* Tab: Events, VIP Invitations & Continuous QR Check-in */}
       {activeTab === 'events-qr' && (
         <div className="dashboard-panel">
-          <EventsInvitationsManager token={token} />
+          <EventsInvitationsManager
+            token={token}
+            scannerOnly={user?.role === 'QR_SCANNER' || (Boolean(user?.roles?.includes('QR_SCANNER')) && !['SUPER_ADMIN', 'CHURCH_ADMIN', 'DEVELOPER', 'SECRETARY'].some(r => Boolean(user?.roles?.includes(r))))}
+          />
         </div>
       )}
 

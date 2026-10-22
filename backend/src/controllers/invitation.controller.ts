@@ -208,7 +208,7 @@ router.get('/events/:id', async (req: Request, res: Response) => {
 router.post('/events/:id/apply', async (req: Request, res: Response) => {
   try {
     const { id: eventId } = req.params;
-    const { locationId, fullName, phone, externalEmail, notes } = req.body;
+    const { locationId, fullName, phone, externalEmail, notes, nationalId, companionNationalId, companionName } = req.body;
     const optionalUser = getOptionalUser(req);
 
     if (!fullName || !phone || !locationId) {
@@ -320,6 +320,115 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
     const maxCanGrant = 2 - alreadyBooked;
     const desiredTickets = Math.min(requestedCount, maxCanGrant);
 
+    const cleanCompanionId = companionNationalId ? String(companionNationalId).trim() : null;
+    const cleanCompanionName = companionName ? String(companionName).trim() : null;
+    const applicantNatId = nationalId ? String(nationalId).trim() : (optionalUser?.nationalId || null);
+
+    // If 2 tickets requested: Validate Companion National ID & Eligibility Rules
+    if (requestedCount === 2) {
+      if (!cleanCompanionId) {
+        return res.status(400).json({
+          error: 'Companion national ID is required for the second ticket.',
+          errorAr: 'عند اختيار تذكرتين، يجب إدخال الرقم القومي للشخص المرافق (الشخص الثاني).'
+        });
+      }
+
+      // Egyptian national ID format: 14 digits starting with 2 or 3
+      if (!/^[23]\d{13}$/.test(cleanCompanionId)) {
+        return res.status(400).json({
+          error: 'Invalid companion national ID format. Must be 14 digits.',
+          errorAr: 'الرقم القومي للشخص المرافق غير صالح (يجب أن يتكون من 14 رقماً ويبدأ بـ 2 أو 3).'
+        });
+      }
+
+      // Cannot be the same person
+      if (applicantNatId && applicantNatId === cleanCompanionId) {
+        return res.status(400).json({
+          error: 'Companion national ID cannot be the same as your national ID.',
+          errorAr: 'الرقم القومي للشخص المرافق لا يمكن أن يتطابق مع الرقم القومي لصاحب الحجز.'
+        });
+      }
+
+      // Calculate Companion Age from Egyptian National ID
+      const century = cleanCompanionId[0] === '2' ? 1900 : 2000;
+      const bYear = century + parseInt(cleanCompanionId.substring(1, 3), 10);
+      const bMonth = parseInt(cleanCompanionId.substring(3, 5), 10) - 1;
+      const bDay = parseInt(cleanCompanionId.substring(5, 7), 10);
+      const eventDate = new Date(event.date);
+
+      let companionAge = eventDate.getFullYear() - bYear;
+      const mDiff = eventDate.getMonth() - bMonth;
+      if (mDiff < 0 || (mDiff === 0 && eventDate.getDate() < bDay)) {
+        companionAge--;
+      }
+
+      // Validate Age Rules for Companion
+      if (rules.minAge && companionAge < Number(rules.minAge)) {
+        return res.status(400).json({
+          error: `Companion age (${companionAge}) does not meet the minimum required age of ${rules.minAge}.`,
+          errorAr: `عذراً، عمر الشخص المرافق (${companionAge} سنة) لا يستوفي الحد الأدنى المطلوب للفعالية (${rules.minAge} سنة).`
+        });
+      }
+
+      if (rules.maxAge && companionAge > Number(rules.maxAge)) {
+        return res.status(400).json({
+          error: `Companion age (${companionAge}) exceeds the maximum allowed age of ${rules.maxAge}.`,
+          errorAr: `عذراً، عمر الشخص المرافق (${companionAge} سنة) يتجاوز الحد الأقصى المسموح به لهذه الفعالية (${rules.maxAge} سنة).`
+        });
+      }
+
+      // Validate Verified Church Membership for Companion if required
+      if (rules.requireVerifiedMember) {
+        const companionUser = await prisma.user.findFirst({
+          where: {
+            nationalId: cleanCompanionId,
+            OR: [
+              { isVerified: true },
+              { role: { not: Role.MEMBER } },
+              { familyProfile: { status: 'APPROVED' } }
+            ]
+          }
+        });
+
+        const companionFamily = !companionUser ? await prisma.familyHead.findFirst({
+          where: {
+            status: 'APPROVED',
+            OR: [
+              { nationalId: cleanCompanionId },
+              { wifeNationalId: cleanCompanionId },
+              { childrenJson: { contains: cleanCompanionId } }
+            ]
+          }
+        }) : null;
+
+        if (!companionUser && !companionFamily) {
+          return res.status(403).json({
+            error: 'Companion must have an approved church membership.',
+            errorAr: `عذراً، الشخص المرافق (الرقم القومي: ${cleanCompanionId}) ليس مسجلاً كعضو كنسي معتمد، والفعالية تتطلب عضوية كنسية معتمدة لكل الحضور.`
+          });
+        }
+      }
+
+      // Check if Companion already has a ticket for this event
+      const existingCompanionTicket = await prisma.eventInvitation.findFirst({
+        where: {
+          eventId,
+          OR: [
+            { nationalId: cleanCompanionId },
+            { companionNationalId: cleanCompanionId }
+          ],
+          status: { notIn: ['CANCELLED', 'REVOKED'] }
+        }
+      });
+
+      if (existingCompanionTicket) {
+        return res.status(409).json({
+          error: 'Companion already has a reserved ticket for this event.',
+          errorAr: `عذراً، الشخص المرافق (الرقم القومي: ${cleanCompanionId}) مسجل بالفعل بتذكرة أخرى في هذه الفعالية ولا يمكن تكرار الحجز.`
+        });
+      }
+    }
+
     // Atomic Capacity Check and Allocation Transaction using PostgreSQL Row-Level Lock FOR UPDATE
     const result = await prisma.$transaction(async tx => {
       // Row-Level Lock: eliminates race conditions and simultaneous double bookings across devices
@@ -349,7 +458,15 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
       const issuedPasses = [];
       for (let i = 0; i < seatsGranted; i++) {
         const qrToken = `evt-${Date.now()}-${i}-${crypto.randomBytes(24).toString('hex')}`;
-        const passSuffix = seatsGranted > 1 ? ` (تذكرة ${i + 1}/${seatsGranted})` : (alreadyBooked > 0 ? ' (المقعد الثاني)' : '');
+        const isCompanionPass = (i === 1);
+
+        const passHolderName = isCompanionPass
+          ? (cleanCompanionName ? `${cleanCompanionName} (مرافق)` : `مرافق: ${fullName.trim()}`)
+          : (seatsGranted > 1 ? `${fullName.trim()} (التذكرة الرئيسية)` : fullName.trim());
+
+        const passNationalId = isCompanionPass ? cleanCompanionId : applicantNatId;
+        const passCompanionNatId = isCompanionPass ? applicantNatId : cleanCompanionId;
+        const passCompanionName = isCompanionPass ? fullName.trim() : cleanCompanionName;
 
         await tx.eventApplication.create({
           data: {
@@ -357,8 +474,11 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
             locationId,
             userId: optionalUser ? optionalUser.userId || optionalUser.id : null,
             externalEmail: cleanEmail,
-            fullName: `${fullName.trim()}${passSuffix}`,
+            fullName: passHolderName,
             phone: phone.trim(),
+            nationalId: passNationalId,
+            companionNationalId: passCompanionNatId,
+            companionName: passCompanionName,
             status: 'CONFIRMED',
             notes: notes ? String(notes).trim() : null
           }
@@ -370,7 +490,10 @@ router.post('/events/:id/apply', async (req: Request, res: Response) => {
             locationId,
             userId: optionalUser ? optionalUser.userId || optionalUser.id : null,
             recipientEmail: cleanEmail || 'attendee@church.org',
-            recipientName: `${fullName.trim()}${passSuffix}`,
+            recipientName: passHolderName,
+            nationalId: passNationalId,
+            companionNationalId: passCompanionNatId,
+            companionName: passCompanionName,
             type: 'STANDARD',
             qrToken,
             status: 'ACTIVE',
@@ -994,7 +1117,7 @@ router.post(
 router.post(
   '/admin/verify-qr',
   requireAuth,
-  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY, Role.PRIEST]),
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY, Role.PRIEST, Role.QR_SCANNER]),
   async (req: AuthRequest, res: Response) => {
     try {
       const { qrToken, eventId, locationId } = req.body;
@@ -1143,7 +1266,7 @@ router.post(
 router.post(
   ['/admin/reversal', '/admin/checkins/:id/revert'],
   requireAuth,
-  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER]),
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER, Role.SECRETARY, Role.QR_SCANNER]),
   async (req: AuthRequest, res: Response) => {
     try {
       let invitationId = req.body.invitationId;
