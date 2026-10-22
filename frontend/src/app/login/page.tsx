@@ -164,6 +164,7 @@ export default function LoginPage() {
 
   const demoAccounts = [
     { nameAr: 'عضو', nameEn: 'Member', email: 'member@church.org' },
+    { nameAr: 'فاحص تذاكر (QR Scanner)', nameEn: 'QR Scanner', email: 'scanner@church.org' },
     { nameAr: 'سكرتير', nameEn: 'Secretary', email: 'secretary@church.org' },
     { nameAr: 'مسؤول الرحلات', nameEn: 'Trip Manager', email: 'tripmanager@church.org' },
     { nameAr: 'كاهن الكنيسة (أبونا مينا)', nameEn: 'Priest (Fr. Mina)', email: 'fr.mina@church.org' },

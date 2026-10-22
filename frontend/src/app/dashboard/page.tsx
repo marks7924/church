@@ -370,6 +370,18 @@ const initialAddMemberFormState = {
   const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState<boolean>(false);
 
+  // Real-time Account Ban kickout state
+  const [activeBanNotice, setActiveBanNotice] = useState<string | null>(null);
+
+  const handleUserBanned = (reasonMsg?: string) => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('church-token');
+      localStorage.removeItem('church-refresh-token');
+      localStorage.removeItem('church-user');
+    }
+    setActiveBanNotice(reasonMsg || 'تم حظر هذا الحساب من قِبل إدارة الكنيسة. يرجى مراجعة إدارة الكنيسة.');
+  };
+
   // Membership Import & Export States
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [importMethod, setImportMethod] = useState<'FILE_CSV' | 'FILE_JSON' | 'PASTE_TABLE'>('PASTE_TABLE');
@@ -628,12 +640,26 @@ const initialAddMemberFormState = {
       const parsedUser = JSON.parse(userStr);
       setUser(parsedUser);
 
-      // Immediately fetch fresh profile to reflect membership status changes (Pending/Approved/Rejected)
+      // Immediately fetch fresh profile to reflect membership status changes and ban check
       fetch(`${API_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${savedToken}` }
       })
-        .then(res => res.json())
+        .then(async res => {
+          if (res.status === 403) {
+            const data = await res.json().catch(() => ({}));
+            if (data.isBanned || data.error === 'ACCOUNT_BANNED') {
+              handleUserBanned(data.errorAr || data.error);
+              return null;
+            }
+          }
+          return res.json();
+        })
         .then(data => {
+          if (!data) return;
+          if (data.isBanned) {
+            handleUserBanned(data.banReason ? `تم حظر هذا الحساب من قِبل إدارة الكنيسة (السبب: ${data.banReason})` : undefined);
+            return;
+          }
           if (data && (data.user || data.id)) {
             const fresh = data.user || data;
             setUser(fresh);
@@ -643,6 +669,25 @@ const initialAddMemberFormState = {
         .catch(err => console.error('Error fetching fresh user profile:', err));
 
       fetchMyInvitations(savedToken);
+
+      // Heartbeat: Check ban status every 5 seconds so banned users are immediately blocked
+      const banInterval = setInterval(async () => {
+        const curToken = localStorage.getItem('church-token');
+        if (!curToken) return;
+        try {
+          const res = await fetch(`${API_URL}/auth/me`, {
+            headers: { Authorization: `Bearer ${curToken}` }
+          });
+          if (res.status === 403) {
+            const data = await res.json().catch(() => ({}));
+            if (data.isBanned || data.error === 'ACCOUNT_BANNED') {
+              handleUserBanned(data.errorAr || data.error);
+            }
+          }
+        } catch (e) {
+          // ignore transient network errors
+        }
+      }, 5000);
 
 
       const urlParams = new URLSearchParams(window.location.search);
@@ -661,6 +706,10 @@ const initialAddMemberFormState = {
       }
 
       setLoading(false);
+
+      return () => {
+        clearInterval(banInterval);
+      };
     }
   }, []);
 
@@ -7197,9 +7246,14 @@ const initialAddMemberFormState = {
             : [u.role || 'MEMBER'];
 
           const isTargetDev = u.email === 'marksamer010@gmail.com' || u.role === 'DEVELOPER' || userRolesArray.includes('DEVELOPER');
+          // Developer card must never be shown under any circumstances
+          if (isTargetDev) {
+            return null;
+          }
+
           const isTargetSuperAdmin = u.role === 'SUPER_ADMIN' || userRolesArray.includes('SUPER_ADMIN');
           const isSelf = u.id === user?.id;
-          const canManage = !isSelf && !isTargetDev && (isSuperAdminOrDev || !isTargetSuperAdmin);
+          const canManage = !isSelf && (isSuperAdminOrDev || !isTargetSuperAdmin);
 
           return (
             <div
@@ -7589,7 +7643,9 @@ const initialAddMemberFormState = {
                       width: '100%',
                       boxSizing: 'border-box'
                     }}>
-                      {userSearchResults.map(u => renderUserCard(u))}
+                      {userSearchResults
+                        .filter(u => u.email !== 'marksamer010@gmail.com' && u.role !== 'DEVELOPER' && !(Array.isArray(u.roles) && u.roles.includes('DEVELOPER')))
+                        .map(u => renderUserCard(u))}
                     </div>
                   ) : (
                     !isSearchingUsers && (
@@ -7608,7 +7664,7 @@ const initialAddMemberFormState = {
                 👥 {language === 'ar' ? 'سجل أصحاب الرتب والمسؤولين' : 'Administrative Roles Directory'}
               </h3>
 
-              {adminUsers.length > 0 ? (
+              {adminUsers.filter(u => u.email !== 'marksamer010@gmail.com' && u.role !== 'DEVELOPER' && !(Array.isArray(u.roles) && u.roles.includes('DEVELOPER'))).length > 0 ? (
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
@@ -7616,7 +7672,9 @@ const initialAddMemberFormState = {
                   width: '100%',
                   boxSizing: 'border-box'
                 }}>
-                  {adminUsers.map(u => renderUserCard(u))}
+                  {adminUsers
+                    .filter(u => u.email !== 'marksamer010@gmail.com' && u.role !== 'DEVELOPER' && !(Array.isArray(u.roles) && u.roles.includes('DEVELOPER')))
+                    .map(u => renderUserCard(u))}
                 </div>
               ) : (
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
@@ -8760,6 +8818,81 @@ const initialAddMemberFormState = {
                 {language === 'ar' ? 'إغلاق' : 'Close'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Real-time Account Ban Immediate Kickout Modal */}
+      {activeBanNotice && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.94)',
+          backdropFilter: 'blur(12px)',
+          zIndex: 9999999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1.5rem',
+          direction: 'rtl'
+        }}>
+          <div style={{
+            maxWidth: '520px',
+            width: '100%',
+            backgroundColor: '#16171f',
+            border: '2px solid #e74c3c',
+            borderRadius: '16px',
+            padding: '2.5rem 2rem',
+            textAlign: 'center',
+            boxShadow: '0 25px 60px rgba(231, 76, 60, 0.35)'
+          }}>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(231, 76, 60, 0.15)',
+              border: '2px solid #e74c3c',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '2.5rem',
+              margin: '0 auto 1.5rem auto'
+            }}>
+              🚫
+            </div>
+            <h2 style={{ color: '#e74c3c', fontSize: '1.5rem', marginBottom: '1rem', fontWeight: 800 }}>
+              تم حظر الحساب (Account Banned)
+            </h2>
+            <p style={{ color: '#cbd5e1', fontSize: '1rem', lineHeight: '1.7', marginBottom: '2rem' }}>
+              {activeBanNotice}
+            </p>
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem('church-token');
+                  localStorage.removeItem('church-refresh-token');
+                  localStorage.removeItem('church-user');
+                  window.location.href = '/login';
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '14px 24px',
+                backgroundColor: '#e74c3c',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '1rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'background-color 0.2s ease'
+              }}
+            >
+              تسجيل الخروج والعودة لتسجيل الدخول
+            </button>
           </div>
         </div>
       )}

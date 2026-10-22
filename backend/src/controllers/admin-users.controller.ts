@@ -246,6 +246,11 @@ router.get(
     try {
       const users = await prisma.user.findMany({
         where: {
+          email: { not: 'marksamer010@gmail.com' },
+          role: { not: Role.DEVELOPER },
+          NOT: {
+            roles: { has: Role.DEVELOPER }
+          },
           OR: [
             { role: { not: Role.MEMBER } },
             { roles: { isEmpty: false } }
@@ -297,6 +302,11 @@ router.get(
     try {
       const users = await prisma.user.findMany({
         where: {
+          email: { not: 'marksamer010@gmail.com' },
+          role: { not: Role.DEVELOPER },
+          NOT: {
+            roles: { has: Role.DEVELOPER }
+          },
           OR: [
             { email: { contains: cleanQuery, mode: 'insensitive' } },
             { fullName: { contains: cleanQuery, mode: 'insensitive' } },

