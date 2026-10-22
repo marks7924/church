@@ -371,6 +371,44 @@ const initialAddMemberFormState = {
   const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState<boolean>(false);
 
+  // Identity Correction Requests Management states
+  const [identityCorrections, setIdentityCorrections] = useState<any[]>([]);
+  const [identityCorrectionFilter, setIdentityCorrectionFilter] = useState<'ALL' | 'PENDING' | 'RESOLVED' | 'CANCELLED'>('PENDING');
+  const [isLoadingCorrections, setIsLoadingCorrections] = useState<boolean>(false);
+  const [rejectCorrectionModalItem, setRejectCorrectionModalItem] = useState<any | null>(null);
+  const [rejectCorrectionReason, setRejectCorrectionReason] = useState<string>('');
+  const [isProcessingCorrection, setIsProcessingCorrection] = useState<boolean>(false);
+  const [correctionFeedbackMsg, setCorrectionFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // All System Users & Unrestricted User Edit states
+  const [allSystemUsers, setAllSystemUsers] = useState<any[]>([]);
+  const [isLoadingAllUsers, setIsLoadingAllUsers] = useState<boolean>(false);
+  const [usersDirectoryViewMode, setUsersDirectoryViewMode] = useState<'ALL' | 'ADMINS'>('ALL');
+  const [userDirectorySearch, setUserDirectorySearch] = useState<string>('');
+  const [userDirectoryRoleFilter, setUserDirectoryRoleFilter] = useState<string>('ALL');
+  const [viewingFullUserData, setViewingFullUserData] = useState<any | null>(null);
+  const [editingFullDataUser, setEditingFullDataUser] = useState<any | null>(null);
+  const [editFullDataForm, setEditFullDataForm] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    phone: '',
+    nationalId: '',
+    roles: [] as string[],
+    isVerified: true,
+    isBanned: false,
+    banReason: '',
+    job: '',
+    socialStatus: 'SINGLE',
+    street: '',
+    buildingNumber: '',
+    floor: '',
+    apartment: '',
+    notes: ''
+  });
+  const [isSavingFullUserData, setIsSavingFullUserData] = useState<boolean>(false);
+  const [fullUserSaveFeedback, setFullUserSaveFeedback] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
   // Real-time Account Ban kickout state
   const [activeBanNotice, setActiveBanNotice] = useState<string | null>(null);
 
@@ -491,6 +529,13 @@ const initialAddMemberFormState = {
         labelAr: t('manage_members'),
         labelEn: t('manage_members'),
         icon: <Users size={16} />,
+        category: 'pastoral_events'
+      });
+      tabs.push({
+        id: 'identity-corrections',
+        labelAr: language === 'ar' ? 'طلبات تصحيح الهوية' : 'Identity Corrections',
+        labelEn: language === 'ar' ? 'طلبات تصحيح الهوية' : 'Identity Corrections',
+        icon: <ShieldAlert size={16} />,
         category: 'pastoral_events'
       });
       tabs.push({
@@ -850,6 +895,12 @@ const initialAddMemberFormState = {
           if (Array.isArray(data)) setAllMembers(data);
         })
         .catch(err => console.log(err));
+
+      fetchIdentityCorrections();
+    }
+
+    if (activeTab === 'identity-corrections') {
+      fetchIdentityCorrections();
     }
 
     if (activeTab === 'live') {
@@ -889,6 +940,8 @@ const initialAddMemberFormState = {
           if (Array.isArray(data)) setAdminUsers(data);
         })
         .catch(err => console.log(err));
+
+      fetchAllSystemUsers();
     }
 
     if (activeTab === 'action-logs') {
@@ -1893,6 +1946,220 @@ const initialAddMemberFormState = {
       }
     } catch (err) {
       alert('Network error while unbanning user.');
+    }
+  };
+
+  // Identity Corrections Handlers
+  const fetchIdentityCorrections = async () => {
+    if (!token) return;
+    setIsLoadingCorrections(true);
+    try {
+      const res = await fetch(`${API_URL}/members/admin/identity-corrections`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) setIdentityCorrections(data);
+      }
+    } catch (err) {
+      console.error('Error fetching identity corrections:', err);
+    } finally {
+      setIsLoadingCorrections(false);
+    }
+  };
+
+  const handleApproveCorrection = async (reqId: string) => {
+    if (!window.confirm(language === 'ar' ? 'هل أنت متأكد من قبول واعتماد وتطبيق هذا التعديل مباشرة على قاعدة البيانات؟' : 'Approve and apply this identity change directly to the database?')) {
+      return;
+    }
+    if (!token) return;
+    setIsProcessingCorrection(true);
+    setCorrectionFeedbackMsg(null);
+    try {
+      const res = await fetch(`${API_URL}/members/admin/identity-corrections/${reqId}/action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ action: 'APPROVE' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCorrectionFeedbackMsg({
+          text: data.messageAr || (language === 'ar' ? '✓ تم قبول وتطبيق التعديل بنجاح وإشعار العضو بالبريد.' : '✓ Correction approved and applied successfully!'),
+          type: 'success'
+        });
+        fetchIdentityCorrections();
+        fetchAllSystemUsers();
+        fetch(`${API_URL}/members/all`, { headers: { 'Authorization': `Bearer ${token}` } })
+          .then(r => r.json()).then(d => { if (Array.isArray(d)) setAllMembers(d); }).catch(() => {});
+      } else {
+        setCorrectionFeedbackMsg({
+          text: data.errorAr || data.error || (language === 'ar' ? 'فشل تطبيق التعديل.' : 'Failed to apply correction.'),
+          type: 'error'
+        });
+      }
+    } catch (err) {
+      setCorrectionFeedbackMsg({
+        text: language === 'ar' ? 'حدث خطأ في الاتصال بالخادم.' : 'Server connection error.',
+        type: 'error'
+      });
+    } finally {
+      setIsProcessingCorrection(false);
+    }
+  };
+
+  const handleRejectCorrectionConfirm = async () => {
+    if (!rejectCorrectionModalItem || !token) return;
+    setIsProcessingCorrection(true);
+    setCorrectionFeedbackMsg(null);
+    try {
+      const res = await fetch(`${API_URL}/members/admin/identity-corrections/${rejectCorrectionModalItem.id}/action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'REJECT',
+          reason: rejectCorrectionReason
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCorrectionFeedbackMsg({
+          text: language === 'ar' ? '✓ تم رفض الطلب بنجاح وإرسال التوضيح للعضو بالبريد الإلكتروني.' : '✓ Request rejected and member notified.',
+          type: 'success'
+        });
+        setRejectCorrectionModalItem(null);
+        setRejectCorrectionReason('');
+        fetchIdentityCorrections();
+      } else {
+        alert(data.errorAr || data.error || 'Failed to reject request');
+      }
+    } catch (err) {
+      alert('Network error.');
+    } finally {
+      setIsProcessingCorrection(false);
+    }
+  };
+
+  // All System Users & Unrestricted User Edit Handlers
+  const fetchAllSystemUsers = async () => {
+    if (!token) return;
+    setIsLoadingAllUsers(true);
+    try {
+      const res = await fetch(`${API_URL}/admin-users/all-users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setAllSystemUsers(data);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching all users:', err);
+    } finally {
+      setIsLoadingAllUsers(false);
+    }
+  };
+
+  const openEditFullDataModal = (targetUser: any) => {
+    setFullUserSaveFeedback(null);
+    const rolesArr = (targetUser.roles && Array.isArray(targetUser.roles) && targetUser.roles.length > 0)
+      ? targetUser.roles
+      : [targetUser.role || 'MEMBER'];
+
+    const fam = targetUser.familyProfile || {};
+
+    setEditFullDataForm({
+      fullName: targetUser.fullName || '',
+      email: targetUser.email || '',
+      password: '',
+      phone: targetUser.phone || fam.phoneNumbers || '',
+      nationalId: targetUser.nationalId || fam.nationalId || '',
+      roles: [...rolesArr],
+      isVerified: targetUser.isVerified !== false,
+      isBanned: targetUser.isBanned === true,
+      banReason: targetUser.banReason || '',
+      job: fam.job || '',
+      socialStatus: fam.socialStatus || 'SINGLE',
+      street: fam.street || '',
+      buildingNumber: fam.buildingNumber || '',
+      floor: fam.floor || '',
+      apartment: fam.apartment || '',
+      notes: fam.notes || ''
+    });
+    setEditingFullDataUser(targetUser);
+  };
+
+  const handleSaveFullUserData = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFullDataUser || !token) return;
+    setIsSavingFullUserData(true);
+    setFullUserSaveFeedback(null);
+
+    try {
+      const payload: any = {
+        userId: editingFullDataUser.id,
+        fullName: editFullDataForm.fullName,
+        email: editFullDataForm.email,
+        phone: editFullDataForm.phone,
+        nationalId: editFullDataForm.nationalId,
+        roles: editFullDataForm.roles,
+        isVerified: editFullDataForm.isVerified,
+        isBanned: editFullDataForm.isBanned,
+        banReason: editFullDataForm.banReason,
+        job: editFullDataForm.job,
+        socialStatus: editFullDataForm.socialStatus,
+        street: editFullDataForm.street,
+        buildingNumber: editFullDataForm.buildingNumber,
+        floor: editFullDataForm.floor,
+        apartment: editFullDataForm.apartment,
+        notes: editFullDataForm.notes
+      };
+
+      if (editFullDataForm.password && editFullDataForm.password.trim().length >= 6) {
+        payload.password = editFullDataForm.password.trim();
+      }
+
+      const res = await fetch(`${API_URL}/admin-users/update-full-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setFullUserSaveFeedback({
+          text: data.messageAr || (language === 'ar' ? '✓ تم حفظ وتحديث كافة بيانات المستخدم بنجاح بدون أي قيود!' : '✓ User data updated successfully with no restrictions!'),
+          type: 'success'
+        });
+        fetchAllSystemUsers();
+        fetch(`${API_URL}/admin-users/list`, { headers: { 'Authorization': `Bearer ${token}` } })
+          .then(r => r.json()).then(d => { if (Array.isArray(d)) setAdminUsers(d); }).catch(() => {});
+        setTimeout(() => {
+          setEditingFullDataUser(null);
+          setFullUserSaveFeedback(null);
+        }, 1200);
+      } else {
+        setFullUserSaveFeedback({
+          text: data.errorAr || data.error || (language === 'ar' ? 'حدث خطأ أثناء حفظ البيانات.' : 'Failed to update user.'),
+          type: 'error'
+        });
+      }
+    } catch (err) {
+      setFullUserSaveFeedback({
+        text: language === 'ar' ? 'حدث خطأ في الاتصال بالسيرفر.' : 'Network error.',
+        type: 'error'
+      });
+    } finally {
+      setIsSavingFullUserData(false);
     }
   };
 
@@ -3373,8 +3640,58 @@ const initialAddMemberFormState = {
 
       {/* Tab: Admin Membership Approvals */}
       {activeTab === 'members' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           
+          {/* Identity Correction Requests Alert Banner */}
+          {identityCorrections.filter(c => c.status === 'PENDING').length > 0 && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.18) 0%, rgba(202, 138, 4, 0.08) 100%)',
+              border: '1.5px solid #eab308',
+              borderRadius: '12px',
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '14px',
+              boxShadow: '0 4px 20px rgba(234, 179, 8, 0.18)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <ShieldAlert size={28} style={{ color: '#facc15', flexShrink: 0 }} />
+                <div>
+                  <b style={{ color: '#fef08a', fontSize: '1rem', display: 'block' }}>
+                    {language === 'ar' ? '⚠️ تنبيه: توجد طلبات تصحيح هوية معلقة تتطلب المراجعة والاعتماد' : 'Notice: Pending Identity Correction Requests'}
+                  </b>
+                  <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.84rem' }}>
+                    {language === 'ar'
+                      ? `يوجد (${identityCorrections.filter(c => c.status === 'PENDING').length}) طلب تصحيح بيانات (رقم قومي / اسم) مرسل من شعب الكنيسة بانتظار قرار الإدارة.`
+                      : `There are (${identityCorrections.filter(c => c.status === 'PENDING').length}) pending correction requests waiting for admin decision.`}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('identity-corrections')}
+                style={{
+                  background: 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)',
+                  color: '#000',
+                  fontWeight: 800,
+                  border: 'none',
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.85rem'
+                }}
+              >
+                <span>{language === 'ar' ? 'الانتقال لطلبات تصحيح الهوية' : 'View Requests'}</span>
+                <ArrowLeft size={16} />
+              </button>
+            </div>
+          )}
+
           {/* Pending Applications Box */}
           <div className="dashboard-panel">
             <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', marginBottom: '1.5rem', color: 'var(--accent-gold)' }}>
@@ -5756,6 +6073,371 @@ const initialAddMemberFormState = {
         </div>
       )}
 
+      {/* Tab: Identity Correction Requests Management */}
+      {activeTab === 'identity-corrections' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.8rem' }}>
+          
+          <div className="dashboard-panel">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '10px' }}>
+              <h3 style={{ margin: 0, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShieldAlert size={22} />
+                <span>{language === 'ar' ? 'طلبات تصحيح الهوية والرقم القومي' : 'Identity & National ID Correction Requests'}</span>
+                <span style={{ fontSize: '0.8rem', background: 'rgba(226, 183, 20, 0.15)', color: 'var(--accent-gold)', padding: '2px 8px', borderRadius: '12px' }}>
+                  {identityCorrections.length}
+                </span>
+              </h3>
+
+              <button
+                type="button"
+                onClick={fetchIdentityCorrections}
+                disabled={isLoadingCorrections}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-secondary)',
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.82rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <span>🔄</span>
+                <span>{isLoadingCorrections ? (language === 'ar' ? 'جاري التحديث...' : 'Refreshing...') : (language === 'ar' ? 'تحديث القائمة' : 'Refresh')}</span>
+              </button>
+            </div>
+
+            {/* Feedback Message */}
+            {correctionFeedbackMsg && (
+              <div style={{
+                padding: '12px 16px',
+                borderRadius: '8px',
+                marginBottom: '1.2rem',
+                backgroundColor: correctionFeedbackMsg.type === 'success' ? 'rgba(46, 204, 113, 0.15)' : 'rgba(231, 76, 60, 0.15)',
+                border: correctionFeedbackMsg.type === 'success' ? '1px solid #2ecc71' : '1px solid #e74c3c',
+                color: correctionFeedbackMsg.type === 'success' ? '#2ecc71' : '#ff6b6b',
+                fontSize: '0.88rem',
+                fontWeight: 600
+              }}>
+                {correctionFeedbackMsg.text}
+              </div>
+            )}
+
+            {/* Filter Tabs */}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+              {[
+                { id: 'PENDING', labelAr: 'قيد المراجعة', labelEn: 'Pending', count: identityCorrections.filter(c => c.status === 'PENDING').length, color: '#eab308' },
+                { id: 'RESOLVED', labelAr: 'تم قبولها وتطبيقها', labelEn: 'Approved', count: identityCorrections.filter(c => c.status === 'RESOLVED').length, color: '#2ecc71' },
+                { id: 'CANCELLED', labelAr: 'مرفوضة', labelEn: 'Rejected', count: identityCorrections.filter(c => c.status === 'CANCELLED').length, color: '#e74c3c' },
+                { id: 'ALL', labelAr: 'الكل', labelEn: 'All', count: identityCorrections.length, color: 'var(--text-primary)' }
+              ].map(f => {
+                const isActive = identityCorrectionFilter === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setIdentityCorrectionFilter(f.id as any)}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: '8px',
+                      border: isActive ? `1px solid ${f.color}` : '1px solid var(--border-color)',
+                      background: isActive ? `${f.color}22` : 'rgba(255, 255, 255, 0.03)',
+                      color: isActive ? f.color : 'var(--text-secondary)',
+                      fontSize: '0.82rem',
+                      fontWeight: isActive ? 700 : 500,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>{language === 'ar' ? f.labelAr : f.labelEn}</span>
+                    <span style={{
+                      fontSize: '0.74rem',
+                      padding: '1px 6px',
+                      borderRadius: '10px',
+                      background: isActive ? f.color : 'rgba(255, 255, 255, 0.08)',
+                      color: isActive ? '#000' : 'var(--text-secondary)',
+                      fontWeight: 800
+                    }}>
+                      {f.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Requests Cards List */}
+            {(() => {
+              const filteredList = identityCorrections.filter(c => {
+                if (identityCorrectionFilter !== 'ALL' && c.status !== identityCorrectionFilter) {
+                  return false;
+                }
+                return true;
+              });
+
+              if (filteredList.length === 0) {
+                return (
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', textAlign: 'center', padding: '2rem 0' }}>
+                    {language === 'ar' ? 'لا توجد طلبات تصحيح هوية مطابقة للتصفية المختارة.' : 'No identity correction requests match the selected filter.'}
+                  </p>
+                );
+              }
+
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 420px), 1fr))', gap: '16px' }}>
+                  {filteredList.map(req => {
+                    let meta: any = {};
+                    try {
+                      meta = req.notes ? JSON.parse(req.notes) : {};
+                    } catch {}
+
+                    const fieldName = meta.fieldName || 'nationalId';
+                    const requestedValue = meta.requestedValue || '—';
+                    const currentNationalId = meta.currentNationalId || 'غير مسجل';
+
+                    const isPending = req.status === 'PENDING';
+                    const isApproved = req.status === 'RESOLVED';
+                    const isRejected = req.status === 'CANCELLED';
+
+                    return (
+                      <div
+                        key={req.id}
+                        style={{
+                          backgroundColor: 'var(--bg-card)',
+                          border: isPending ? '1.5px solid rgba(234, 179, 8, 0.4)' : '1px solid var(--border-color)',
+                          borderRadius: '12px',
+                          padding: '1.25rem',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          gap: '12px',
+                          boxShadow: 'var(--shadow-sm)'
+                        }}
+                      >
+                        <div>
+                          {/* Card Header */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                            <div>
+                              <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
+                                👤 {req.name}
+                              </div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                ✉️ {req.email || '—'} • 📞 {req.phone || '—'}
+                              </div>
+                            </div>
+
+                            {/* Status Badge */}
+                            <span style={{
+                              padding: '3px 9px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 800,
+                              backgroundColor: isPending ? 'rgba(234, 179, 8, 0.15)' : (isApproved ? 'rgba(46, 204, 113, 0.15)' : 'rgba(231, 76, 60, 0.15)'),
+                              color: isPending ? '#eab308' : (isApproved ? '#2ecc71' : '#e74c3c'),
+                              border: isPending ? '1px solid #eab308' : (isApproved ? '1px solid #2ecc71' : '1px solid #e74c3c')
+                            }}>
+                              {isPending ? (language === 'ar' ? '⏳ قيد المراجعة' : 'Pending Review') : (isApproved ? (language === 'ar' ? '✓ تم القبول والتطبيق' : 'Approved') : (language === 'ar' ? '✕ تم الرفض' : 'Rejected'))}
+                            </span>
+                          </div>
+
+                          {/* Reference Code & Date */}
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', marginBottom: '12px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '6px' }}>
+                            <span>كود المرجع: <b style={{ color: 'var(--accent-gold)', fontFamily: 'monospace' }}>{req.referenceCode}</b></span>
+                            <span>{new Date(req.createdAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+
+                          {/* Requested Change Box */}
+                          <div style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '8px',
+                            padding: '10px 12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                            marginBottom: '10px'
+                          }}>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
+                              <span>الحقل المطلوب تصحيحه:</span>
+                              <b style={{ color: 'var(--text-primary)' }}>
+                                {fieldName === 'nationalId' ? '🪪 الرقم القومي المصري' : 'الاسم الرباعي'}
+                              </b>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+                              <div style={{ background: 'rgba(231, 76, 60, 0.08)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(231, 76, 60, 0.2)' }}>
+                                <span style={{ fontSize: '0.7rem', color: '#ff6b6b', display: 'block' }}>القيمة الحالية بالسيستم:</span>
+                                <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', fontWeight: 700, color: '#fca5a5' }}>{currentNationalId}</span>
+                              </div>
+                              <div style={{ background: 'rgba(46, 204, 113, 0.08)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(46, 204, 113, 0.2)' }}>
+                                <span style={{ fontSize: '0.7rem', color: '#2ecc71', display: 'block' }}>القيمة الجديدة المطلوبة:</span>
+                                <span style={{ fontFamily: 'monospace', fontSize: '0.85rem', fontWeight: 800, color: '#86efac' }}>{requestedValue}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Reason */}
+                          {req.message && (
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', backgroundColor: 'rgba(255, 255, 255, 0.02)', padding: '8px 10px', borderRadius: '6px' }}>
+                              <span style={{ color: 'var(--accent-gold)', fontWeight: 600 }}>📝 سبب التصحيح المذكور: </span>
+                              <span>{req.message}</span>
+                            </div>
+                          )}
+
+                          {/* Rejection Admin Notes if any */}
+                          {meta.adminNotes && isRejected && (
+                            <div style={{ marginTop: '8px', fontSize: '0.78rem', color: '#fca5a5', backgroundColor: 'rgba(231, 76, 60, 0.1)', padding: '6px 10px', borderRadius: '6px' }}>
+                              <b>سبب الرفض المرسل للعضو: </b> {meta.adminNotes}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Buttons for Pending Requests */}
+                        {isPending && (
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '10px', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleApproveCorrection(req.id)}
+                              disabled={isProcessingCorrection}
+                              style={{
+                                flex: 2,
+                                background: 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)',
+                                color: '#ffffff',
+                                border: 'none',
+                                padding: '9px 12px',
+                                borderRadius: '6px',
+                                fontWeight: 800,
+                                fontSize: '0.82rem',
+                                cursor: isProcessingCorrection ? 'wait' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px'
+                              }}
+                            >
+                              <Check size={15} />
+                              <span>{language === 'ar' ? 'قبول وتطبيق التعديل بالداتابيز' : 'Approve & Apply to DB'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRejectCorrectionModalItem(req);
+                                setRejectCorrectionReason('');
+                              }}
+                              disabled={isProcessingCorrection}
+                              style={{
+                                flex: 1,
+                                background: 'transparent',
+                                border: '1px solid #e74c3c',
+                                color: '#e74c3c',
+                                padding: '9px 12px',
+                                borderRadius: '6px',
+                                fontWeight: 700,
+                                fontSize: '0.82rem',
+                                cursor: isProcessingCorrection ? 'wait' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <X size={15} />
+                              <span>{language === 'ar' ? 'رفض' : 'Reject'}</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Reject Reason Modal */}
+          {rejectCorrectionModalItem && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1rem' }}>
+              <div style={{ background: 'var(--bg-primary, #0f1015)', border: '1px solid #e74c3c', borderRadius: '12px', padding: '1.8rem', maxWidth: '480px', width: '100%', boxShadow: '0 20px 60px rgba(231,76,60,0.25)', direction: language === 'ar' ? 'rtl' : 'ltr' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#ff6b6b', fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <X size={20} />
+                  <span>{language === 'ar' ? 'رفض طلب تصحيح الهوية' : 'Reject Correction Request'}</span>
+                </h3>
+
+                <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', margin: '0 0 1rem 0' }}>
+                  {language === 'ar'
+                    ? `أنت على وشك رفض طلب (${rejectCorrectionModalItem.name}) - كود المرجع: ${rejectCorrectionModalItem.referenceCode}. يرجى توضيح سبب الرفض ليتم إرساله له رسمياً عبر البريد الإلكتروني:`
+                    : `You are rejecting the request from (${rejectCorrectionModalItem.name}). Provide a reason that will be emailed to the member:`}
+                </p>
+
+                <textarea
+                  rows={3}
+                  value={rejectCorrectionReason}
+                  onChange={(e) => setRejectCorrectionReason(e.target.value)}
+                  placeholder={language === 'ar' ? 'مثال: يرجى الحضور لأمانة الكنيسة بالبطاقة الأصلية لمطابقتها مع السجلات الورقية.' : 'e.g. Please bring original ID to church office...'}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    color: '#fff',
+                    fontSize: '0.85rem',
+                    marginBottom: '1.2rem',
+                    boxSizing: 'border-box',
+                    resize: 'vertical'
+                  }}
+                />
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRejectCorrectionModalItem(null);
+                      setRejectCorrectionReason('');
+                    }}
+                    disabled={isProcessingCorrection}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    {language === 'ar' ? 'تراجع' : 'Cancel'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleRejectCorrectionConfirm}
+                    disabled={isProcessingCorrection}
+                    style={{
+                      padding: '8px 20px',
+                      borderRadius: '6px',
+                      background: '#e74c3c',
+                      border: 'none',
+                      color: '#fff',
+                      fontWeight: 800,
+                      cursor: isProcessingCorrection ? 'wait' : 'pointer',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    {isProcessingCorrection ? (language === 'ar' ? 'جاري الرفض...' : 'Rejecting...') : (language === 'ar' ? 'تأكيد الرفض والإشعار' : 'Confirm Rejection')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
+
       {/* Tab: Admin Live Stream Management */}
       {activeTab === 'live' && (
         <div className="dashboard-panel" style={{ maxWidth: '600px', margin: '0 auto' }}>
@@ -6959,17 +7641,60 @@ const initialAddMemberFormState = {
                   </div>
                 )}
 
-                {/* Contact info */}
-                <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div style={{ wordBreak: 'break-all' }}>
-                    ✉️ <a href={`mailto:${u.email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{u.email}</a>
+                {/* Contact info & System Details */}
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                    <div style={{ wordBreak: 'break-all' }}>
+                      ✉️ <a href={`mailto:${u.email}`} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>{u.email}</a>
+                    </div>
+                    <span style={{
+                      fontSize: '0.7rem',
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      fontWeight: 700,
+                      backgroundColor: u.isVerified !== false ? 'rgba(46, 204, 113, 0.12)' : 'rgba(234, 179, 8, 0.12)',
+                      color: u.isVerified !== false ? '#2ecc71' : '#eab308',
+                      border: u.isVerified !== false ? '1px solid rgba(46, 204, 113, 0.3)' : '1px solid rgba(234, 179, 8, 0.3)'
+                    }}>
+                      {u.isVerified !== false ? '✓ موثق' : '⚠️ غير موثق'}
+                    </span>
                   </div>
+
                   {u.phone && (
                     <div>
                       📞 <a href={`tel:${u.phone}`} style={{ color: 'var(--accent-gold)', textDecoration: 'none', fontWeight: 'bold' }}>{u.phone}</a>
                     </div>
                   )}
-                  {u.nationalId && <div>🪪 {u.nationalId}</div>}
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>🪪 {u.nationalId || (language === 'ar' ? 'لا يوجد رقم قومي' : 'No National ID')}</span>
+                    {u.createdAt && (
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                        📅 {new Date(u.createdAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* If user has linked family membership profile */}
+                  {u.familyProfile && (
+                    <div style={{
+                      marginTop: '4px',
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      fontSize: '0.76rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px'
+                    }}>
+                      <div style={{ color: 'var(--accent-gold)', fontWeight: 700 }}>
+                        🏠 {language === 'ar' ? 'استمارة عضوية مسجلة' : 'Registered Family Profile'}
+                      </div>
+                      <div>💼 {u.familyProfile.job || '—'} • 💍 {u.familyProfile.socialStatus || '—'}</div>
+                      {u.familyProfile.street && <div>📍 ش {u.familyProfile.street}، عمارة {u.familyProfile.buildingNumber || '—'}</div>}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -6979,57 +7704,48 @@ const initialAddMemberFormState = {
                   <span style={{ fontSize: '0.75rem', color: '#ff4757', fontWeight: 'bold', textAlign: 'center' }}>
                     💎 {language === 'ar' ? 'مطور النظام (محمي بالكامل)' : 'System Developer (Protected)'}
                   </span>
-                ) : isSelf ? (
-                  <span style={{ fontSize: '0.75rem', color: 'var(--accent-gold)', textAlign: 'center' }}>
-                    👤 {language === 'ar' ? '(حسابك الحالي)' : '(Your Account)'}
-                  </span>
-                ) : !canManage ? (
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
-                    🔒 {language === 'ar' ? 'يتطلب صلاحيات سوبر أدمن لإدارته' : 'Requires Super Admin privileges'}
-                  </span>
                 ) : (
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {/* Edit Roles Button */}
+                  <>
+                    {/* PRIMARY UNRESTRICTED EDIT BUTTON */}
                     <button
                       type="button"
-                      onClick={() => {
-                        setEditingRolesUser(u);
-                        setEditingUserRolesList([...userRolesArray]);
-                      }}
+                      onClick={() => openEditFullDataModal(u)}
                       style={{
-                        flex: 1,
-                        padding: '7px 10px',
+                        width: '100%',
+                        padding: '9px 12px',
                         borderRadius: '6px',
-                        background: 'rgba(52, 152, 219, 0.15)',
-                        border: '1px solid rgba(52, 152, 219, 0.4)',
-                        color: '#3498db',
-                        fontSize: '0.8rem',
-                        fontWeight: 700,
+                        background: 'linear-gradient(135deg, rgba(226, 183, 20, 0.22) 0%, rgba(184, 134, 11, 0.12) 100%)',
+                        border: '1px solid var(--accent-gold)',
+                        color: 'var(--accent-gold)',
+                        fontSize: '0.82rem',
+                        fontWeight: 800,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: '4px'
+                        gap: '6px',
+                        boxShadow: '0 2px 8px rgba(226, 183, 20, 0.15)',
+                        transition: 'all 0.2s ease'
                       }}
                     >
-                      <Edit3 size={13} />
-                      <span>{language === 'ar' ? 'تعديل الرتب' : 'Edit Roles'}</span>
+                      <Edit3 size={14} />
+                      <span>{language === 'ar' ? '✏️ تعديل وتحديث كامل البيانات (بدون قيود)' : 'Edit All User Data (Unrestricted)'}</span>
                     </button>
 
-                    {/* Ban / Unban Button */}
-                    {u.isBanned ? (
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {/* View Details Button */}
                       <button
                         type="button"
-                        onClick={() => handleUnbanUser(u.id)}
+                        onClick={() => setViewingFullUserData(u)}
                         style={{
                           flex: 1,
-                          padding: '7px 10px',
+                          padding: '7px 8px',
                           borderRadius: '6px',
-                          background: 'rgba(46, 204, 113, 0.15)',
-                          border: '1px solid rgba(46, 204, 113, 0.4)',
-                          color: '#2ecc71',
-                          fontSize: '0.8rem',
-                          fontWeight: 700,
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          color: 'var(--text-primary)',
+                          fontSize: '0.78rem',
+                          fontWeight: 600,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
@@ -7037,24 +7753,25 @@ const initialAddMemberFormState = {
                           gap: '4px'
                         }}
                       >
-                        <ShieldCheck size={13} />
-                        <span>{language === 'ar' ? 'إلغاء الحظر' : 'Unban'}</span>
+                        <FileText size={12} />
+                        <span>{language === 'ar' ? 'عرض البيانات' : 'Details'}</span>
                       </button>
-                    ) : (
+
+                      {/* Edit Roles Quick Button */}
                       <button
                         type="button"
                         onClick={() => {
-                          setBanningUser(u);
-                          setBanReasonInput('');
+                          setEditingRolesUser(u);
+                          setEditingUserRolesList([...userRolesArray]);
                         }}
                         style={{
                           flex: 1,
-                          padding: '7px 10px',
+                          padding: '7px 8px',
                           borderRadius: '6px',
-                          background: 'rgba(231, 76, 60, 0.15)',
-                          border: '1px solid rgba(231, 76, 60, 0.4)',
-                          color: '#e74c3c',
-                          fontSize: '0.8rem',
+                          background: 'rgba(52, 152, 219, 0.15)',
+                          border: '1px solid rgba(52, 152, 219, 0.4)',
+                          color: '#3498db',
+                          fontSize: '0.78rem',
                           fontWeight: 700,
                           cursor: 'pointer',
                           display: 'flex',
@@ -7063,11 +7780,62 @@ const initialAddMemberFormState = {
                           gap: '4px'
                         }}
                       >
-                        <Ban size={13} />
-                        <span>{language === 'ar' ? 'حظر الحساب' : 'Ban User'}</span>
+                        <span>{language === 'ar' ? 'الرتب فقط' : 'Roles'}</span>
                       </button>
-                    )}
-                  </div>
+
+                      {/* Ban / Unban Button */}
+                      {u.isBanned ? (
+                        <button
+                          type="button"
+                          onClick={() => handleUnbanUser(u.id)}
+                          style={{
+                            flex: 1,
+                            padding: '7px 8px',
+                            borderRadius: '6px',
+                            background: 'rgba(46, 204, 113, 0.15)',
+                            border: '1px solid rgba(46, 204, 113, 0.4)',
+                            color: '#2ecc71',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <ShieldCheck size={12} />
+                          <span>{language === 'ar' ? 'إلغاء حظر' : 'Unban'}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBanningUser(u);
+                            setBanReasonInput('');
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '7px 8px',
+                            borderRadius: '6px',
+                            background: 'rgba(231, 76, 60, 0.15)',
+                            border: '1px solid rgba(231, 76, 60, 0.4)',
+                            color: '#e74c3c',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <Ban size={12} />
+                          <span>{language === 'ar' ? 'حظر' : 'Ban'}</span>
+                        </button>
+                      )}
+                    </div>
+                  </>
                 )}
 
                 {/* Impersonate button if authorized */}
@@ -7286,29 +8054,164 @@ const initialAddMemberFormState = {
               )}
             </div>
 
-            {/* List of current admin roles */}
+            {/* List of current admin roles and all system users */}
             <div className="dashboard-panel">
-              <h3 style={{ color: 'var(--accent-gold)', marginBottom: '1.2rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-                👥 {language === 'ar' ? 'سجل أصحاب الرتب والمسؤولين' : 'Administrative Roles Directory'}
-              </h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '12px' }}>
+                <h3 style={{ margin: 0, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  👥 {language === 'ar' ? 'سجل أصحاب الرتب والمسؤولين' : 'Administrative Roles Directory'}
+                </h3>
 
-              {adminUsers.filter(u => u.email !== 'marksamer010@gmail.com' && u.role !== 'DEVELOPER' && !(Array.isArray(u.roles) && u.roles.includes('DEVELOPER'))).length > 0 ? (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
-                  gap: '12px',
-                  width: '100%',
-                  boxSizing: 'border-box'
-                }}>
-                  {adminUsers
-                    .filter(u => u.email !== 'marksamer010@gmail.com' && u.role !== 'DEVELOPER' && !(Array.isArray(u.roles) && u.roles.includes('DEVELOPER')))
-                    .map(u => renderUserCard(u))}
+                {/* Mode Switch: Admins vs All Users */}
+                <div style={{ display: 'flex', gap: '6px', background: 'rgba(255, 255, 255, 0.04)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setUsersDirectoryViewMode('ALL')}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: usersDirectoryViewMode === 'ALL' ? 'var(--accent-gold)' : 'transparent',
+                      color: usersDirectoryViewMode === 'ALL' ? '#000' : 'var(--text-secondary)',
+                      fontWeight: 700,
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>🌐 {language === 'ar' ? 'جميع مستخدمي المنصة' : 'All Users'}</span>
+                    <span style={{ fontSize: '0.74rem', background: usersDirectoryViewMode === 'ALL' ? '#000' : 'rgba(255,255,255,0.1)', color: usersDirectoryViewMode === 'ALL' ? '#fff' : 'var(--text-secondary)', padding: '1px 6px', borderRadius: '10px' }}>
+                      {allSystemUsers.filter(u => u.email !== 'marksamer010@gmail.com' && u.role !== 'DEVELOPER').length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setUsersDirectoryViewMode('ADMINS')}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: usersDirectoryViewMode === 'ADMINS' ? 'var(--accent-gold)' : 'transparent',
+                      color: usersDirectoryViewMode === 'ADMINS' ? '#000' : 'var(--text-secondary)',
+                      fontWeight: 700,
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <span>👑 {language === 'ar' ? 'أصحاب الرتب فقط' : 'Roles Only'}</span>
+                    <span style={{ fontSize: '0.74rem', background: usersDirectoryViewMode === 'ADMINS' ? '#000' : 'rgba(255,255,255,0.1)', color: usersDirectoryViewMode === 'ADMINS' ? '#fff' : 'var(--text-secondary)', padding: '1px 6px', borderRadius: '10px' }}>
+                      {adminUsers.filter(u => u.email !== 'marksamer010@gmail.com' && u.role !== 'DEVELOPER').length}
+                    </span>
+                  </button>
                 </div>
-              ) : (
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
-                  {language === 'ar' ? 'لا يوجد أصحاب رتب مسجلين.' : 'No admin roles registered.'}
-                </p>
-              )}
+              </div>
+
+              {/* Instant Search Bar & Role Filters within Directory */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '1.4rem' }}>
+                <input
+                  type="text"
+                  value={userDirectorySearch}
+                  onChange={(e) => setUserDirectorySearch(e.target.value)}
+                  placeholder={language === 'ar' ? '🔍 فلترة فورية بالاسم، البريد، الهاتف، أو الرقم القومي...' : 'Search by name, email, phone, or national ID...'}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    color: '#fff',
+                    fontSize: '0.88rem',
+                    boxSizing: 'border-box'
+                  }}
+                />
+
+                {/* Role Filter Chips */}
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {[
+                    { id: 'ALL', labelAr: 'الكل', labelEn: 'All' },
+                    { id: 'ADMINS', labelAr: 'أدمن ومسؤولين 🛡️', labelEn: 'Admins 🛡️' },
+                    { id: 'CLERGY', labelAr: 'كهنة وأساقفة ⛪', labelEn: 'Clergy ⛪' },
+                    { id: 'SERVANTS', labelAr: 'خدام وسكرتارية 📋', labelEn: 'Servants & Staff' },
+                    { id: 'MEMBER', labelAr: 'شعب وأعضاء 👤', labelEn: 'Members 👤' },
+                    { id: 'BANNED', labelAr: 'المحظورون ⛔', labelEn: 'Banned ⛔' }
+                  ].map(f => {
+                    const isActive = userDirectoryRoleFilter === f.id;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setUserDirectoryRoleFilter(f.id)}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '16px',
+                          border: isActive ? '1px solid var(--accent-gold)' : '1px solid var(--border-color)',
+                          background: isActive ? 'rgba(226, 183, 20, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                          color: isActive ? 'var(--accent-gold)' : 'var(--text-secondary)',
+                          fontSize: '0.78rem',
+                          fontWeight: isActive ? 700 : 500,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {language === 'ar' ? f.labelAr : f.labelEn}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Users Grid */}
+              {(() => {
+                const sourceList = usersDirectoryViewMode === 'ALL' ? allSystemUsers : adminUsers;
+                const safeList = sourceList.filter(u => u.email !== 'marksamer010@gmail.com' && u.role !== 'DEVELOPER' && !(Array.isArray(u.roles) && u.roles.includes('DEVELOPER')));
+
+                const filtered = safeList.filter(u => {
+                  const rolesArray = (u.roles && Array.isArray(u.roles) && u.roles.length > 0) ? u.roles : [u.role || 'MEMBER'];
+
+                  // Role filter
+                  if (userDirectoryRoleFilter === 'ADMINS' && !rolesArray.some((r: string) => ['SUPER_ADMIN', 'CHURCH_ADMIN'].includes(r))) return false;
+                  if (userDirectoryRoleFilter === 'CLERGY' && !rolesArray.some((r: string) => ['PRIEST', 'BISHOP'].includes(r))) return false;
+                  if (userDirectoryRoleFilter === 'SERVANTS' && !rolesArray.some((r: string) => ['SECRETARY', 'TRIP_MANAGER', 'QR_SCANNER'].includes(r))) return false;
+                  if (userDirectoryRoleFilter === 'MEMBER' && !rolesArray.every((r: string) => r === 'MEMBER')) return false;
+                  if (userDirectoryRoleFilter === 'BANNED' && !u.isBanned) return false;
+
+                  // Text search filter
+                  if (userDirectorySearch.trim()) {
+                    const q = userDirectorySearch.trim().toLowerCase();
+                    const nameMatch = u.fullName && u.fullName.toLowerCase().includes(q);
+                    const emailMatch = u.email && u.email.toLowerCase().includes(q);
+                    const phoneMatch = u.phone && u.phone.includes(q);
+                    const natMatch = u.nationalId && u.nationalId.includes(q);
+                    if (!nameMatch && !emailMatch && !phoneMatch && !natMatch) return false;
+                  }
+
+                  return true;
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', textAlign: 'center', padding: '1.5rem 0' }}>
+                      {language === 'ar' ? 'لم يتم العثور على أي مستخدمين يطابقون خيارات البحث والتصفية.' : 'No users match your filters.'}
+                    </p>
+                  );
+                }
+
+                return (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))',
+                    gap: '14px',
+                    width: '100%',
+                    boxSizing: 'border-box'
+                  }}>
+                    {filtered.map(u => renderUserCard(u))}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* ======================================================== */}
@@ -7439,6 +8342,672 @@ const initialAddMemberFormState = {
                       style={{ padding: '8px 20px', borderRadius: '6px', background: '#e74c3c', border: 'none', color: '#fff', fontWeight: 800, cursor: 'pointer', fontSize: '0.85rem' }}
                     >
                       {language === 'ar' ? 'تأكيد الحظر ⛔' : 'Confirm Ban'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* UNRESTRICTED FULL USER DATA EDIT MODAL                   */}
+            {/* ======================================================== */}
+            {editingFullDataUser && (
+              <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 99999,
+                padding: '1.2rem',
+                backdropFilter: 'blur(5px)'
+              }}>
+                <div style={{
+                  backgroundColor: 'var(--bg-primary, #0c0d12)',
+                  border: '1.5px solid var(--accent-gold)',
+                  borderRadius: '14px',
+                  width: '100%',
+                  maxWidth: '780px',
+                  maxHeight: '90vh',
+                  overflowY: 'auto',
+                  padding: '1.8rem',
+                  boxShadow: '0 25px 70px rgba(0, 0, 0, 0.9), 0 0 35px rgba(226, 183, 20, 0.2)',
+                  direction: language === 'ar' ? 'rtl' : 'ltr',
+                  boxSizing: 'border-box'
+                }}>
+                  {/* Modal Header */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderBottom: '1px solid var(--border-color)',
+                    paddingBottom: '12px',
+                    marginBottom: '1.4rem'
+                  }}>
+                    <div>
+                      <h3 style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>✏️</span>
+                        <span>{language === 'ar' ? `تعديل كامل بيانات الحساب: ${editingFullDataUser.fullName}` : `Edit All User Data: ${editingFullDataUser.fullName}`}</span>
+                      </h3>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        {language === 'ar' ? 'تعديل مباشر وشامل بدون قيود على كافة بيانات الحساب، الرتب، وملف العضوية بقاعدة البيانات.' : 'Direct unrestricted update across user credentials, roles, and membership details.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingFullDataUser(null)}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-secondary)',
+                        borderRadius: '50%',
+                        width: '32px',
+                        height: '32px',
+                        cursor: 'pointer',
+                        fontSize: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {fullUserSaveFeedback && (
+                    <div style={{
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      marginBottom: '1.4rem',
+                      fontSize: '0.88rem',
+                      fontWeight: 600,
+                      backgroundColor: fullUserSaveFeedback.type === 'success' ? 'rgba(46, 204, 113, 0.15)' : 'rgba(231, 76, 60, 0.15)',
+                      border: fullUserSaveFeedback.type === 'success' ? '1px solid rgba(46, 204, 113, 0.4)' : '1px solid rgba(231, 76, 60, 0.4)',
+                      color: fullUserSaveFeedback.type === 'success' ? '#2ecc71' : '#e74c3c'
+                    }}>
+                      {fullUserSaveFeedback.text}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSaveFullUserData} style={{ display: 'flex', flexDirection: 'column', gap: '1.4rem' }}>
+                    {/* Section 1: Basic Credentials */}
+                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1.2rem' }}>
+                      <h4 style={{ margin: '0 0 1rem 0', color: 'var(--accent-gold)', fontSize: '0.95rem' }}>
+                        👤 {language === 'ar' ? '1. البيانات الأساسية وتسجيل الدخول' : '1. Core Account & Login Credentials'}
+                      </h4>
+                      <div className="grid-2-col" style={{ gap: '12px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                            {language === 'ar' ? 'الاسم بالكامل *' : 'Full Name *'}
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={editFullDataForm.fullName}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, fullName: e.target.value }))}
+                            className={styles.formInput}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                            {language === 'ar' ? 'البريد الإلكتروني *' : 'Email Address *'}
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            value={editFullDataForm.email}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, email: e.target.value }))}
+                            className={styles.formInput}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                            {language === 'ar' ? 'كلمة المرور الجديدة (اختياري - اتركه فارغاً للإبقاء على الحالية)' : 'New Password (leave empty to keep unchanged)'}
+                          </label>
+                          <input
+                            type="password"
+                            placeholder={language === 'ar' ? '•••••••• (6 أحرف على الأقل)' : '•••••••• (min 6 chars)'}
+                            value={editFullDataForm.password}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, password: e.target.value }))}
+                            className={styles.formInput}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                            {language === 'ar' ? 'رقم الهاتف' : 'Phone Number'}
+                          </label>
+                          <input
+                            type="text"
+                            value={editFullDataForm.phone}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, phone: e.target.value }))}
+                            className={styles.formInput}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', gridColumn: 'span 2' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                            {language === 'ar' ? 'الرقم القومي (14 رقم)' : 'National ID (14 digits)'}
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={14}
+                            value={editFullDataForm.nationalId}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, nationalId: e.target.value }))}
+                            className={styles.formInput}
+                            placeholder="29901010101234"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 2: Roles Multi-Selection */}
+                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1.2rem' }}>
+                      <h4 style={{ margin: '0 0 0.8rem 0', color: 'var(--accent-gold)', fontSize: '0.95rem' }}>
+                        🏷️ {language === 'ar' ? '2. الرتب والأدوار الإدارية (تحديد متعدد)' : '2. Administrative Roles (Multi-Selection)'}
+                      </h4>
+                      <p style={{ margin: '0 0 10px 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        {language === 'ar' ? 'اختر كل الرتب المناسبة لهذا الحساب (يمكن أن يكون كاهن + أدمن كنيسة معاً):' : 'Select all applicable roles:'}
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {assignableRoleOptions.map(opt => {
+                          const isChecked = editFullDataForm.roles.includes(opt.id);
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() => {
+                                if (isChecked) {
+                                  if (editFullDataForm.roles.length > 1) {
+                                    setEditFullDataForm(p => ({ ...p, roles: p.roles.filter(r => r !== opt.id) }));
+                                  } else {
+                                    alert(language === 'ar' ? 'يجب تعيين رتبة واحدة على الأقل للمستخدم.' : 'At least one role is required.');
+                                  }
+                                } else {
+                                  setEditFullDataForm(p => ({ ...p, roles: [...p.roles, opt.id] }));
+                                }
+                              }}
+                              style={{
+                                padding: '7px 14px',
+                                borderRadius: '20px',
+                                border: isChecked ? `2px solid ${opt.color}` : '1px solid var(--border-color)',
+                                background: isChecked ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.02)',
+                                color: isChecked ? opt.color : 'var(--text-secondary)',
+                                fontWeight: isChecked ? 800 : 500,
+                                fontSize: '0.82rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                boxShadow: isChecked ? `0 0 10px ${opt.color}33` : 'none',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              <span>{isChecked ? '✓' : '+'}</span>
+                              <span>{language === 'ar' ? opt.labelAr : opt.labelEn}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Section 3: Status, Verification & Ban */}
+                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1.2rem' }}>
+                      <h4 style={{ margin: '0 0 1rem 0', color: 'var(--accent-gold)', fontSize: '0.95rem' }}>
+                        🛡️ {language === 'ar' ? '3. حالة الحساب، التوثيق، والحظر' : '3. Account Status, Verification & Ban'}
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {/* Verified Toggle */}
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.86rem', color: '#fff' }}>
+                          <input
+                            type="checkbox"
+                            checked={editFullDataForm.isVerified}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, isVerified: e.target.checked }))}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--accent-gold)' }}
+                          />
+                          <span>{language === 'ar' ? 'حساب موثق ومؤكد البريد (Verified Account) ✓' : 'Verified Account ✓'}</span>
+                        </label>
+
+                        {/* Ban Toggle */}
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.86rem', color: editFullDataForm.isBanned ? '#e74c3c' : '#fff' }}>
+                          <input
+                            type="checkbox"
+                            checked={editFullDataForm.isBanned}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, isBanned: e.target.checked }))}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#e74c3c' }}
+                          />
+                          <span>{language === 'ar' ? 'حظر هذا الحساب فوراً من تسجيل الدخول واستخدام المنظومة ⛔' : 'Ban this account from logging in ⛔'}</span>
+                        </label>
+
+                        {editFullDataForm.isBanned && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                            <label style={{ fontSize: '0.8rem', color: '#e74c3c', fontWeight: 'bold' }}>
+                              {language === 'ar' ? 'سبب الحظر (يظهر للمستخدم عند محاولة تسجيل الدخول): *' : 'Ban Reason: *'}
+                            </label>
+                            <input
+                              type="text"
+                              value={editFullDataForm.banReason}
+                              onChange={(e) => setEditFullDataForm(p => ({ ...p, banReason: e.target.value }))}
+                              placeholder={language === 'ar' ? 'مثال: مخالفة شروط استخدام المنظومة / مراجعة الإدارة' : 'Reason for ban...'}
+                              className={styles.formInput}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Section 4: Family Profile & Pastoral Details */}
+                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1.2rem' }}>
+                      <h4 style={{ margin: '0 0 1rem 0', color: 'var(--accent-gold)', fontSize: '0.95rem' }}>
+                        🏠 {language === 'ar' ? '4. بيانات ملف العضوية والرعاية (Family Profile)' : '4. Family Profile & Pastoral Details'}
+                      </h4>
+                      <div className="grid-2-col" style={{ gap: '12px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {language === 'ar' ? 'المهنة / العمل' : 'Job / Profession'}
+                          </label>
+                          <input
+                            type="text"
+                            value={editFullDataForm.job}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, job: e.target.value }))}
+                            className={styles.formInput}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {language === 'ar' ? 'الحالة الاجتماعية' : 'Social Status'}
+                          </label>
+                          <select
+                            value={editFullDataForm.socialStatus}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, socialStatus: e.target.value }))}
+                            className={styles.formInput}
+                          >
+                            <option value="SINGLE">{language === 'ar' ? 'أعزب' : 'Single'}</option>
+                            <option value="MARRIED">{language === 'ar' ? 'متزوج' : 'Married'}</option>
+                            <option value="DIVORCED">{language === 'ar' ? 'مطلق' : 'Divorced'}</option>
+                            <option value="WIDOWED">{language === 'ar' ? 'أرمل' : 'Widowed'}</option>
+                          </select>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {language === 'ar' ? 'الشارع' : 'Street'}
+                          </label>
+                          <input
+                            type="text"
+                            value={editFullDataForm.street}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, street: e.target.value }))}
+                            className={styles.formInput}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {language === 'ar' ? 'رقم العقار' : 'Building No.'}
+                          </label>
+                          <input
+                            type="text"
+                            value={editFullDataForm.buildingNumber}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, buildingNumber: e.target.value }))}
+                            className={styles.formInput}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {language === 'ar' ? 'الطابق' : 'Floor'}
+                          </label>
+                          <input
+                            type="text"
+                            value={editFullDataForm.floor}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, floor: e.target.value }))}
+                            className={styles.formInput}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {language === 'ar' ? 'رقم الشقة' : 'Apartment No.'}
+                          </label>
+                          <input
+                            type="text"
+                            value={editFullDataForm.apartment}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, apartment: e.target.value }))}
+                            className={styles.formInput}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', gridColumn: 'span 2' }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                            {language === 'ar' ? 'ملاحظات رعوية خاصة' : 'Pastoral Notes'}
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={editFullDataForm.notes}
+                            onChange={(e) => setEditFullDataForm(p => ({ ...p, notes: e.target.value }))}
+                            className={styles.formInput}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Modal Actions */}
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      gap: '10px',
+                      borderTop: '1px solid var(--border-color)',
+                      paddingTop: '1rem',
+                      marginTop: '0.5rem'
+                    }}>
+                      <button
+                        type="button"
+                        onClick={() => setEditingFullDataUser(null)}
+                        style={{
+                          padding: '10px 20px',
+                          borderRadius: '8px',
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid var(--border-color)',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '0.88rem'
+                        }}
+                      >
+                        {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                      </button>
+
+                      <button
+                        type="submit"
+                        disabled={isSavingFullUserData}
+                        style={{
+                          padding: '10px 24px',
+                          borderRadius: '8px',
+                          background: 'linear-gradient(135deg, var(--accent-gold) 0%, #b8860b 100%)',
+                          border: 'none',
+                          color: '#000',
+                          fontWeight: 800,
+                          cursor: isSavingFullUserData ? 'not-allowed' : 'pointer',
+                          fontSize: '0.9rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          boxShadow: '0 4px 15px rgba(226, 183, 20, 0.3)'
+                        }}
+                      >
+                        {isSavingFullUserData ? (
+                          <>
+                            <span>⏳</span>
+                            <span>{language === 'ar' ? 'جاري الحفظ والتطبيق...' : 'Saving...'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>💾</span>
+                            <span>{language === 'ar' ? 'حفظ وتحديث كامل البيانات (بدون قيود)' : 'Save & Update All Data'}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* VIEW FULL USER DETAILS MODAL                             */}
+            {/* ======================================================== */}
+            {viewingFullUserData && (
+              <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 99999,
+                padding: '1.2rem',
+                backdropFilter: 'blur(5px)'
+              }}>
+                <div style={{
+                  backgroundColor: 'var(--bg-primary, #0c0d12)',
+                  border: '1.5px solid var(--accent-gold)',
+                  borderRadius: '14px',
+                  width: '100%',
+                  maxWidth: '700px',
+                  maxHeight: '85vh',
+                  overflowY: 'auto',
+                  padding: '1.8rem',
+                  boxShadow: '0 25px 70px rgba(0, 0, 0, 0.9)',
+                  direction: language === 'ar' ? 'rtl' : 'ltr',
+                  boxSizing: 'border-box'
+                }}>
+                  {/* Header */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderBottom: '1px solid var(--border-color)',
+                    paddingBottom: '12px',
+                    marginBottom: '1.4rem'
+                  }}>
+                    <div>
+                      <h3 style={{ margin: 0, color: 'var(--accent-gold)', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>📋</span>
+                        <span>{language === 'ar' ? `تفاصيل الحساب: ${viewingFullUserData.fullName}` : `User Profile: ${viewingFullUserData.fullName}`}</span>
+                      </h3>
+                      <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        ID: {viewingFullUserData.id}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setViewingFullUserData(null)}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-secondary)',
+                        borderRadius: '50%',
+                        width: '32px',
+                        height: '32px',
+                        cursor: 'pointer',
+                        fontSize: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Body Content */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                    {/* Status & Roles Row */}
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      {viewingFullUserData.isBanned ? (
+                        <span style={{ background: '#e74c3c', color: '#fff', padding: '4px 10px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 800 }}>
+                          ⛔ {language === 'ar' ? 'حساب محظور' : 'Banned'}
+                        </span>
+                      ) : (
+                        <span style={{ background: '#2ecc71', color: '#000', padding: '4px 10px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 800 }}>
+                          ✓ {language === 'ar' ? 'حساب نشط' : 'Active'}
+                        </span>
+                      )}
+
+                      {viewingFullUserData.isVerified && (
+                        <span style={{ background: 'rgba(52, 152, 219, 0.2)', border: '1px solid #3498db', color: '#3498db', padding: '3px 10px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: 700 }}>
+                          ✓ {language === 'ar' ? 'موثق' : 'Verified'}
+                        </span>
+                      )}
+
+                      {/* Roles */}
+                      {(() => {
+                        const roles = (viewingFullUserData.roles && Array.isArray(viewingFullUserData.roles) && viewingFullUserData.roles.length > 0)
+                          ? viewingFullUserData.roles
+                          : [viewingFullUserData.role || 'MEMBER'];
+                        return roles.map((r: string) => {
+                          const opt = assignableRoleOptions.find(o => o.id === r);
+                          return (
+                            <span
+                              key={r}
+                              style={{
+                                padding: '3px 10px',
+                                borderRadius: '12px',
+                                border: `1px solid ${opt?.color || 'var(--border-color)'}`,
+                                color: opt?.color || 'var(--text-primary)',
+                                background: 'rgba(255, 255, 255, 0.04)',
+                                fontSize: '0.78rem',
+                                fontWeight: 700
+                              }}
+                            >
+                              {opt ? (language === 'ar' ? opt.labelAr : opt.labelEn) : r}
+                            </span>
+                          );
+                        });
+                      })()}
+                    </div>
+
+                    {/* Information Grid */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                      gap: '12px',
+                      background: 'rgba(255, 255, 255, 0.02)',
+                      padding: '1.2rem',
+                      borderRadius: '10px',
+                      border: '1px solid var(--border-color)'
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم' : 'Name'}</div>
+                        <div style={{ fontSize: '0.9rem', color: '#fff', fontWeight: 700 }}>{viewingFullUserData.fullName}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'البريد الإلكتروني' : 'Email'}</div>
+                        <div style={{ fontSize: '0.9rem', color: '#fff' }}>{viewingFullUserData.email}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'رقم الهاتف' : 'Phone'}</div>
+                        <div style={{ fontSize: '0.9rem', color: '#fff' }}>{viewingFullUserData.phone || language === 'ar' ? 'غير مسجل' : 'N/A'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الرقم القومي' : 'National ID'}</div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--accent-gold)', fontWeight: 700 }}>{viewingFullUserData.nationalId || (language === 'ar' ? 'غير مسجل' : 'N/A')}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{language === 'ar' ? 'تاريخ الإنشاء' : 'Joined'}</div>
+                        <div style={{ fontSize: '0.85rem', color: '#fff' }}>{viewingFullUserData.createdAt ? new Date(viewingFullUserData.createdAt).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US') : '-'}</div>
+                      </div>
+                      {viewingFullUserData.isBanned && (
+                        <div style={{ gridColumn: 'span 2' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#e74c3c' }}>{language === 'ar' ? 'سبب الحظر' : 'Ban Reason'}</div>
+                          <div style={{ fontSize: '0.85rem', color: '#e74c3c', fontWeight: 600 }}>{viewingFullUserData.banReason || '-'}</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Linked Family Profile */}
+                    {viewingFullUserData.familyProfile && (
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        padding: '1.2rem',
+                        borderRadius: '10px',
+                        border: '1px solid var(--border-color)'
+                      }}>
+                        <h4 style={{ margin: '0 0 10px 0', color: 'var(--accent-gold)', fontSize: '0.9rem' }}>
+                          🏠 {language === 'ar' ? 'بيانات ملف العضوية المسجل (Family Head)' : 'Linked Membership Profile'}
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', fontSize: '0.85rem' }}>
+                          <div><strong style={{ color: 'var(--text-secondary)' }}>{language === 'ar' ? 'المهنة: ' : 'Job: '}</strong>{viewingFullUserData.familyProfile.job || '-'}</div>
+                          <div><strong style={{ color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الحالة الاجتماعية: ' : 'Status: '}</strong>{viewingFullUserData.familyProfile.socialStatus || '-'}</div>
+                          <div><strong style={{ color: 'var(--text-secondary)' }}>{language === 'ar' ? 'العنوان: ' : 'Address: '}</strong>{viewingFullUserData.familyProfile.street ? `${viewingFullUserData.familyProfile.street}، عمارة ${viewingFullUserData.familyProfile.buildingNumber || ''}` : '-'}</div>
+                          <div><strong style={{ color: 'var(--text-secondary)' }}>{language === 'ar' ? 'حالة الاعتماد: ' : 'Approval: '}</strong>{viewingFullUserData.familyProfile.status}</div>
+                          {viewingFullUserData.familyProfile.notes && (
+                            <div style={{ gridColumn: 'span 2' }}><strong style={{ color: 'var(--text-secondary)' }}>{language === 'ar' ? 'ملاحظات: ' : 'Notes: '}</strong>{viewingFullUserData.familyProfile.notes}</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Linked Priest Profile */}
+                    {viewingFullUserData.priestProfile && (
+                      <div style={{
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        padding: '1.2rem',
+                        borderRadius: '10px',
+                        border: '1px solid var(--border-color)'
+                      }}>
+                        <h4 style={{ margin: '0 0 10px 0', color: 'var(--accent-gold)', fontSize: '0.9rem' }}>
+                          ⛪ {language === 'ar' ? 'ملف خدمة الكهنوت والاعترافات' : 'Clergy Profile'}
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', fontSize: '0.85rem' }}>
+                          <div><strong style={{ color: 'var(--text-secondary)' }}>{language === 'ar' ? 'الاسم الطقسي: ' : 'Name: '}</strong>{viewingFullUserData.priestProfile.nameAr}</div>
+                          <div><strong style={{ color: 'var(--text-secondary)' }}>{language === 'ar' ? 'اللقب: ' : 'Title: '}</strong>{viewingFullUserData.priestProfile.titleAr}</div>
+                          <div><strong style={{ color: 'var(--text-secondary)' }}>{language === 'ar' ? 'أقصى اعترافات يومياً: ' : 'Max Bookings: '}</strong>{viewingFullUserData.priestProfile.maxBookingsPerDay}</div>
+                          <div><strong style={{ color: 'var(--text-secondary)' }}>{language === 'ar' ? 'مدة الاعتراف: ' : 'Duration: '}</strong>{viewingFullUserData.priestProfile.confessionDuration} دقيقة</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    gap: '10px',
+                    borderTop: '1px solid var(--border-color)',
+                    paddingTop: '1rem',
+                    marginTop: '1.4rem'
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = viewingFullUserData;
+                        setViewingFullUserData(null);
+                        openEditFullDataModal(target);
+                      }}
+                      style={{
+                        padding: '9px 18px',
+                        borderRadius: '8px',
+                        background: 'linear-gradient(135deg, rgba(226, 183, 20, 0.22) 0%, rgba(184, 134, 11, 0.12) 100%)',
+                        border: '1px solid var(--accent-gold)',
+                        color: 'var(--accent-gold)',
+                        cursor: 'pointer',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <Edit3 size={14} />
+                      <span>{language === 'ar' ? 'تعديل هذا المستخدم الآن' : 'Edit This User Now'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setViewingFullUserData(null)}
+                      style={{
+                        padding: '9px 18px',
+                        borderRadius: '8px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid var(--border-color)',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      {language === 'ar' ? 'إغلاق' : 'Close'}
                     </button>
                   </div>
                 </div>

@@ -116,7 +116,7 @@ export default function MemberProfileHub({
       }
 
       // 3. Fetch appointments
-      const bookingsRes = await fetch(`${API_URL}/booking/my-bookings`, {
+      const bookingsRes = await fetch(`${API_URL}/bookings/my-bookings`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (bookingsRes.ok) {

@@ -33,33 +33,12 @@ export function validateRoleAssignment(
   callerRoles: Role[],
   targetRoles: Role[]
 ): { allowed: boolean; errorAr?: string; errorEn?: string } {
-  const isCallerDeveloper = callerRoles.includes(Role.DEVELOPER) || callerEmail.toLowerCase() === DEVELOPER_EMAIL.toLowerCase();
-  const isCallerSuperAdmin = isCallerDeveloper || callerRoles.includes(Role.SUPER_ADMIN);
-  const isCallerAdmin = isCallerSuperAdmin || callerRoles.includes(Role.CHURCH_ADMIN);
-
-  if (!isCallerAdmin) {
-    return {
-      allowed: false,
-      errorAr: 'ليس لديك صلاحية تعيين وإدارة الرتب.',
-      errorEn: 'Insufficient permissions to assign roles.'
-    };
-  }
-
-  // Developer role CANNOT be assigned to or by anyone. Exclusively reserved for marksamer010@gmail.com
-  if (targetRoles.includes(Role.DEVELOPER)) {
+  // Developer role CANNOT be assigned. Exclusively reserved for marksamer010@gmail.com
+  if (targetRoles.includes(Role.DEVELOPER) && callerEmail.toLowerCase() !== DEVELOPER_EMAIL.toLowerCase()) {
     return {
       allowed: false,
       errorAr: 'لا يمكن تعيين رتبة مطور النظام (Developer) لأي حساب؛ هذه الرتبة مخصصة حصرياً لـ marksamer010@gmail.com.',
       errorEn: 'The DEVELOPER role cannot be assigned. It is exclusively reserved for marksamer010@gmail.com.'
-    };
-  }
-
-  // An admin (CHURCH_ADMIN) can assign CHURCH_ADMIN and any role below, but CANNOT assign SUPER_ADMIN
-  if (!isCallerSuperAdmin && targetRoles.includes(Role.SUPER_ADMIN)) {
-    return {
-      allowed: false,
-      errorAr: 'الأدمن لا يمكنه تعيين رتبة أدمن عام (Super Admin). هذه الصلاحية للمشرف العام فقط.',
-      errorEn: 'A Church Admin cannot assign the Super Admin role.'
     };
   }
 
@@ -71,27 +50,15 @@ export function validateUserModification(
   callerRoles: Role[],
   targetUser: { id: string; email: string; role: Role; roles?: Role[] }
 ): { allowed: boolean; errorAr?: string; errorEn?: string } {
-  const isCallerDeveloper = callerRoles.includes(Role.DEVELOPER) || callerEmail.toLowerCase() === DEVELOPER_EMAIL.toLowerCase();
-  const isCallerSuperAdmin = isCallerDeveloper || callerRoles.includes(Role.SUPER_ADMIN);
-
-  // Protected Developer account
+  // Protected Developer account: marksamer010@gmail.com cannot be modified or banned by anyone else
   if (targetUser.email.toLowerCase() === DEVELOPER_EMAIL.toLowerCase() || targetUser.role === Role.DEVELOPER) {
-    return {
-      allowed: false,
-      errorAr: 'لا يمكن تعديل، حظر، أو تغيير رتب حساب مطور النظام الرئيسي.',
-      errorEn: 'Cannot modify or ban the master Developer account.'
-    };
-  }
-
-  const targetRoles = (targetUser.roles && targetUser.roles.length > 0) ? targetUser.roles : [targetUser.role];
-
-  // A Church Admin cannot modify or ban a Super Admin or Developer
-  if (!isCallerSuperAdmin && (targetRoles.includes(Role.SUPER_ADMIN) || targetRoles.includes(Role.DEVELOPER))) {
-    return {
-      allowed: false,
-      errorAr: 'لا يمكن للأدمن تعديل أو حظر حساب يمتلك رتبة أدمن عام (Super Admin).',
-      errorEn: 'Church Admins cannot modify or ban Super Admin accounts.'
-    };
+    if (callerEmail.toLowerCase() !== DEVELOPER_EMAIL.toLowerCase()) {
+      return {
+        allowed: false,
+        errorAr: 'لا يمكن تعديل، حظر، أو تغيير رتب حساب مطور النظام الرئيسي.',
+        errorEn: 'Cannot modify or ban the master Developer account.'
+      };
+    }
   }
 
   return { allowed: true };
@@ -440,6 +407,305 @@ router.post(
     } catch (error) {
       console.error('Error updating user roles:', error);
       return res.status(500).json({ error: 'Server error updating user roles.' });
+    }
+  }
+);
+
+// 4b. Retrieve all system users with their full profile details (Admin unrestricted view)
+router.get(
+  '/all-users',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const users = await prisma.user.findMany({
+        where: {
+          email: { not: 'marksamer010@gmail.com' },
+          role: { not: Role.DEVELOPER },
+          NOT: { roles: { has: Role.DEVELOPER } }
+        },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          role: true,
+          roles: true,
+          phone: true,
+          nationalId: true,
+          isVerified: true,
+          isBanned: true,
+          banReason: true,
+          bannedAt: true,
+          createdAt: true,
+          updatedAt: true,
+          familyProfile: {
+            select: {
+              id: true,
+              fullName: true,
+              nationalId: true,
+              job: true,
+              socialStatus: true,
+              street: true,
+              buildingNumber: true,
+              floor: true,
+              apartment: true,
+              phoneNumbers: true,
+              status: true,
+              wifeName: true,
+              wifeNationalId: true,
+              wifeJob: true,
+              wifePhone: true,
+              wifeEmail: true,
+              childrenJson: true,
+              relativesJson: true,
+              servantsJson: true,
+              notes: true
+            }
+          },
+          priestProfile: {
+            select: {
+              id: true,
+              nameAr: true,
+              nameEn: true,
+              titleAr: true,
+              titleEn: true,
+              avatarUrl: true
+            }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      const formatted = users.map(u => ({
+        ...u,
+        roles: (u.roles && u.roles.length > 0) ? u.roles : [u.role]
+      }));
+
+      return res.status(200).json(formatted);
+    } catch (error) {
+      console.error('Error retrieving all users:', error);
+      return res.status(500).json({ error: 'Server error retrieving all users.' });
+    }
+  }
+);
+
+// 4c. Update any user data with NO restrictions (All data: name, email, password, phone, national ID, roles, verification, ban, family profile)
+router.post(
+  '/update-full-data',
+  requireAuth,
+  requireRoles([Role.SUPER_ADMIN, Role.CHURCH_ADMIN, Role.DEVELOPER]),
+  async (req: AuthRequest, res: Response) => {
+    const {
+      userId,
+      fullName,
+      email,
+      password,
+      phone,
+      nationalId,
+      roles,
+      isVerified,
+      isBanned,
+      banReason,
+      job,
+      socialStatus,
+      street,
+      buildingNumber,
+      floor,
+      apartment,
+      notes
+    } = req.body;
+
+    const caller = req.user!;
+    const callerRoles = (caller.roles && caller.roles.length > 0) ? caller.roles : [caller.role];
+
+    if (!userId) {
+      return res.status(400).json({
+        error: 'userId is required.',
+        errorAr: 'معرف المستخدم مطلوب.'
+      });
+    }
+
+    try {
+      const targetUser = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { familyProfile: true, priestProfile: true }
+      });
+
+      if (!targetUser) {
+        return res.status(404).json({
+          error: 'User not found.',
+          errorAr: 'المستخدم غير موجود.'
+        });
+      }
+
+      // Check modification permissions on target user (protect Master Developer)
+      const modCheck = validateUserModification(caller.email, callerRoles, targetUser);
+      if (!modCheck.allowed) {
+        return res.status(403).json({ error: modCheck.errorEn, errorAr: modCheck.errorAr });
+      }
+
+      // 1. Email uniqueness check if changed
+      const normalizedEmail = email ? String(email).trim().toLowerCase() : undefined;
+      if (normalizedEmail && normalizedEmail !== targetUser.email.toLowerCase()) {
+        const existingEmail = await prisma.user.findUnique({
+          where: { email: normalizedEmail }
+        });
+        if (existingEmail && existingEmail.id !== targetUser.id) {
+          return res.status(400).json({
+            error: 'This email is already in use by another user.',
+            errorAr: 'البريد الإلكتروني المدخل مستخدم بالفعل لحساب آخر.'
+          });
+        }
+      }
+
+      // 2. National ID uniqueness check if changed
+      const cleanNationalId = nationalId !== undefined ? String(nationalId).trim() : undefined;
+      if (cleanNationalId && cleanNationalId !== targetUser.nationalId) {
+        const existingNat = await prisma.user.findFirst({
+          where: { nationalId: cleanNationalId, id: { not: targetUser.id } }
+        });
+        if (existingNat) {
+          return res.status(400).json({
+            error: 'This National ID is already registered to another user.',
+            errorAr: 'هذا الرقم القومي مسجل بالفعل لحساب شخص آخر.'
+          });
+        }
+      }
+
+      // 3. Process Roles if specified
+      let updatedRole = targetUser.role;
+      let updatedRoles = (targetUser.roles && targetUser.roles.length > 0) ? targetUser.roles : [targetUser.role];
+
+      if (Array.isArray(roles) && roles.length > 0) {
+        const targetRoles = roles.map(r => String(r).trim().toUpperCase() as Role).filter(r => Object.values(Role).includes(r));
+        if (targetRoles.length > 0) {
+          const assignCheck = validateRoleAssignment(caller.email, callerRoles, targetRoles);
+          if (!assignCheck.allowed) {
+            return res.status(403).json({ error: assignCheck.errorEn, errorAr: assignCheck.errorAr });
+          }
+          updatedRoles = targetRoles;
+          updatedRole = getPrimaryRole(targetRoles);
+        }
+      }
+
+      // 4. Password hashing if provided
+      let newPasswordHash: string | undefined = undefined;
+      if (password && String(password).trim().length >= 6) {
+        newPasswordHash = await bcrypt.hash(String(password).trim(), 10);
+      }
+
+      // 5. Database Transaction to update User and linked FamilyHead atomically
+      const updatedUser = await prisma.$transaction(async (tx) => {
+        const userUpdateData: any = {};
+        if (fullName !== undefined && String(fullName).trim()) userUpdateData.fullName = String(fullName).trim();
+        if (normalizedEmail) userUpdateData.email = normalizedEmail;
+        if (cleanNationalId !== undefined) userUpdateData.nationalId = cleanNationalId || null;
+        if (phone !== undefined) userUpdateData.phone = String(phone).trim() || null;
+        if (newPasswordHash) userUpdateData.passwordHash = newPasswordHash;
+        if (isVerified !== undefined) userUpdateData.isVerified = Boolean(isVerified);
+
+        userUpdateData.role = updatedRole;
+        userUpdateData.roles = updatedRoles;
+
+        if (isBanned !== undefined) {
+          userUpdateData.isBanned = Boolean(isBanned);
+          if (Boolean(isBanned)) {
+            userUpdateData.banReason = banReason ? String(banReason).trim() : 'حظر من قِبل إدارة الكنيسة';
+            userUpdateData.bannedAt = new Date();
+          } else {
+            userUpdateData.banReason = null;
+            userUpdateData.bannedAt = null;
+          }
+        }
+
+        const userSaved = await tx.user.update({
+          where: { id: userId },
+          data: userUpdateData,
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            phone: true,
+            nationalId: true,
+            role: true,
+            roles: true,
+            isVerified: true,
+            isBanned: true,
+            banReason: true,
+            bannedAt: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        });
+
+        // If target has priest role and no profile, create one
+        if ((updatedRoles.includes(Role.PRIEST) || updatedRoles.includes(Role.BISHOP)) && !targetUser.priestProfile) {
+          const isBishop = updatedRoles.includes(Role.BISHOP);
+          await tx.priestProfile.create({
+            data: {
+              userId: targetUser.id,
+              nameAr: userSaved.fullName,
+              nameEn: userSaved.fullName,
+              titleAr: isBishop ? 'سيدنا' : 'أبونا',
+              titleEn: isBishop ? 'Bishop' : 'Father',
+              maxBookingsPerDay: isBishop ? 3 : 5,
+              bufferMinutes: isBishop ? 20 : 15,
+              availabilityJson: '{}'
+            }
+          });
+        }
+
+        // Synchronize linked familyProfile if exists
+        if (targetUser.familyProfile) {
+          const famUpdateData: any = {};
+          if (userSaved.fullName) famUpdateData.fullName = userSaved.fullName;
+          if (cleanNationalId !== undefined) famUpdateData.nationalId = cleanNationalId;
+          if (userSaved.phone !== undefined) famUpdateData.phoneNumbers = userSaved.phone;
+          if (userSaved.email) famUpdateData.email = userSaved.email;
+          if (job !== undefined) famUpdateData.job = String(job).trim();
+          if (socialStatus !== undefined) famUpdateData.socialStatus = String(socialStatus).trim();
+          if (street !== undefined) famUpdateData.street = String(street).trim();
+          if (buildingNumber !== undefined) famUpdateData.buildingNumber = String(buildingNumber).trim();
+          if (floor !== undefined) famUpdateData.floor = String(floor).trim();
+          if (apartment !== undefined) famUpdateData.apartment = String(apartment).trim();
+          if (notes !== undefined) famUpdateData.notes = String(notes).trim();
+
+          await tx.familyHead.update({
+            where: { id: targetUser.familyProfile.id },
+            data: famUpdateData
+          });
+        }
+
+        if (targetUser.nationalId && cleanNationalId && cleanNationalId !== targetUser.nationalId) {
+          await tx.familyHead.updateMany({
+            where: { wifeNationalId: targetUser.nationalId },
+            data: { wifeNationalId: cleanNationalId }
+          });
+        }
+
+        return userSaved;
+      });
+
+      await logAction(
+        caller.userId,
+        caller.email,
+        caller.fullName,
+        'UPDATE_USER_FULL_DATA',
+        `Admin updated all user data for ${updatedUser.email} (${updatedUser.fullName}, roles: [${updatedUser.roles.join(', ')}])`
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'User data updated successfully with no restrictions.',
+        messageAr: `تم تحديث كافة بيانات المستخدم (${updatedUser.fullName}) بنجاح وبدون أي قيود.`,
+        user: updatedUser
+      });
+    } catch (error: any) {
+      console.error('Error updating full user data:', error);
+      return res.status(500).json({
+        error: error.message || 'Server error updating user data.',
+        errorAr: 'حدث خطأ في الخادم أثناء تحديث بيانات المستخدم.'
+      });
     }
   }
 );

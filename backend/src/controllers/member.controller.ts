@@ -2,10 +2,10 @@ import { Router, Response } from 'express';
 import prisma from '../db';
 import { requireAuth, requireRoles } from '../middleware/auth.middleware';
 import { AuthRequest } from '../types';
-import { sendEmail, sendSMS, sendPushNotification } from '../services/notification.service';
+import { sendEmail, sendSMS, sendPushNotification, formatChurchEmailHtml } from '../services/notification.service';
 import { Role, MembershipStatus } from '@prisma/client';
 import { getCanonicalFamilyMembership } from '../services/familyMembership.service';
-import { validateAndParseEgyptianNationalId, normalizeEgyptianNationalId } from '../utils/nationalId';
+import { validateAndParseEgyptianNationalId, normalizeEgyptianNationalId, maskEgyptianNationalId } from '../utils/nationalId';
 
 const router = Router();
 
@@ -236,6 +236,234 @@ router.get('/all', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN,
     return res.status(500).json({ error: 'Server error fetching profiles.' });
   }
 });
+
+// 4.1 Get All Identity Correction Requests (Admins, Secretaries)
+router.get(
+  '/admin/identity-corrections',
+  requireAuth,
+  requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN, Role.DEVELOPER]),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const requests = await prisma.aiSupportRequest.findMany({
+        where: {
+          OR: [
+            { category: 'IDENTITY_CORRECTION' },
+            { referenceCode: { startsWith: 'CORR-' } }
+          ]
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      const userIds = requests.map(r => r.userId).filter(Boolean) as string[];
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, fullName: true, email: true, phone: true, nationalId: true }
+      });
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      const enhanced = requests.map(r => {
+        let meta: any = {};
+        try {
+          meta = r.notes ? JSON.parse(r.notes) : {};
+        } catch {}
+        const u = r.userId ? userMap.get(r.userId) : null;
+        return {
+          ...r,
+          metadata: meta,
+          currentUser: u ? {
+            fullName: u.fullName,
+            email: u.email,
+            phone: u.phone,
+            nationalId: u.nationalId,
+            maskedNationalId: u.nationalId ? maskEgyptianNationalId(u.nationalId) : null
+          } : null
+        };
+      });
+
+      return res.status(200).json(enhanced);
+    } catch (error) {
+      console.error('Error fetching identity corrections:', error);
+      return res.status(500).json({ error: 'Server error fetching identity correction requests.' });
+    }
+  }
+);
+
+// 4.2 Admin Action on Identity Correction Request (Approve & Apply or Decline)
+router.post(
+  '/admin/identity-corrections/:id/action',
+  requireAuth,
+  requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN, Role.DEVELOPER]),
+  async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { action, adminNotes } = req.body; // 'APPROVE' or 'REJECT'
+
+    if (action !== 'APPROVE' && action !== 'REJECT') {
+      return res.status(400).json({ error: 'Invalid action. Must be APPROVE or REJECT.' });
+    }
+
+    try {
+      const request = await prisma.aiSupportRequest.findUnique({
+        where: { id }
+      });
+
+      if (!request) {
+        return res.status(404).json({ error: 'Identity correction request not found.' });
+      }
+
+      let meta: any = {};
+      try {
+        meta = request.notes ? JSON.parse(request.notes) : {};
+      } catch {}
+
+      const fieldName = meta.fieldName || 'nationalId';
+      const requestedValue = meta.requestedValue ? String(meta.requestedValue).trim() : null;
+
+      if (action === 'APPROVE') {
+        if (!request.userId) {
+          return res.status(400).json({ error: 'Cannot apply correction: missing associated User ID.' });
+        }
+
+        const user = await prisma.user.findUnique({
+          where: { id: request.userId },
+          include: { familyProfile: true }
+        });
+
+        if (!user) {
+          return res.status(404).json({ error: 'Target user account not found.' });
+        }
+
+        if (fieldName === 'nationalId' && requestedValue) {
+          const natIdValidation = validateAndParseEgyptianNationalId(requestedValue);
+          if (!natIdValidation.isValid) {
+            return res.status(400).json({
+              error: `Requested National ID is invalid: ${natIdValidation.error}`,
+              errorAr: `الرقم القومي المطلوب غير صالح: ${natIdValidation.errorAr}`
+            });
+          }
+
+          const existing = await prisma.user.findUnique({
+            where: { nationalId: requestedValue }
+          });
+          if (existing && existing.id !== user.id) {
+            return res.status(400).json({
+              error: 'This National ID is already assigned to another user account.',
+              errorAr: 'هذا الرقم القومي مسجل بالفعل لحساب عضو آخر.'
+            });
+          }
+
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { nationalId: requestedValue }
+          });
+
+          if (user.familyProfile) {
+            await prisma.familyHead.update({
+              where: { id: user.familyProfile.id },
+              data: { nationalId: requestedValue }
+            });
+          }
+
+          await prisma.familyHead.updateMany({
+            where: { wifeNationalId: user.nationalId || '' },
+            data: { wifeNationalId: requestedValue }
+          });
+        } else if (fieldName === 'fullName' && requestedValue) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { fullName: requestedValue }
+          });
+          if (user.familyProfile) {
+            await prisma.familyHead.update({
+              where: { id: user.familyProfile.id },
+              data: { fullName: requestedValue }
+            });
+          }
+        }
+
+        await prisma.aiSupportRequest.update({
+          where: { id: request.id },
+          data: {
+            status: 'RESOLVED',
+            notes: JSON.stringify({
+              ...meta,
+              adminDecision: 'APPROVED',
+              adminNotes: adminNotes || null,
+              resolvedAt: new Date().toISOString()
+            })
+          }
+        });
+
+        const emailHtml = formatChurchEmailHtml({
+          titleAr: 'تمت الموافقة على طلب تصحيح بيانات هويتكم',
+          titleEn: 'Identity Correction Request Approved',
+          badge: 'اعتماد الهوية',
+          badgeColor: '#16a34a',
+          contentHtml: `
+            <p>سلام ونعمة يا <b>${request.name}</b>،</p>
+            <p>نحيطكم علماً بأنه تم فحص ومراجعة طلبكم لتصحيح بيانات الهوية برقم مرجع (<b>${request.referenceCode}</b>) والموافقة عليه واعتماده بنجاح في قاعدة البيانات الرسمية للكنيسة.</p>
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin: 16px 0;">
+              <p style="margin: 4px 0;"><b>الحقل المعدل:</b> ${fieldName}</p>
+              <p style="margin: 4px 0;"><b>القيمة المعتمدة الجديدة:</b> ${requestedValue}</p>
+              ${adminNotes ? `<p style="margin: 4px 0; color: #475569;"><b>ملاحظات الإدارة:</b> ${adminNotes}</p>` : ''}
+            </div>
+            <p style="font-size: 13px; color: #64748b;">يمكنكم مراجعة حسابكم الآن والاطلاع على البيانات المحدثة مباشرة عبر لوحة التحكم.</p>
+          `
+        });
+
+        if (request.email) {
+          sendEmail(request.email, `الموافقة على طلب تصحيح الهوية (${request.referenceCode})`, emailHtml).catch(console.error);
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Correction request approved and applied successfully to database.',
+          messageAr: 'تمت الموافقة على الطلب وتحديث بيانات العضو في قاعدة البيانات بنجاح.'
+        });
+      } else {
+        await prisma.aiSupportRequest.update({
+          where: { id: request.id },
+          data: {
+            status: 'CANCELLED',
+            notes: JSON.stringify({
+              ...meta,
+              adminDecision: 'REJECTED',
+              adminNotes: adminNotes || 'Rejected by church administration',
+              resolvedAt: new Date().toISOString()
+            })
+          }
+        });
+
+        const emailHtml = formatChurchEmailHtml({
+          titleAr: 'بخصوص طلب تصحيح بيانات الهوية',
+          titleEn: 'Regarding Your Identity Correction Request',
+          badge: 'مراجعة الهوية',
+          badgeColor: '#dc2626',
+          contentHtml: `
+            <p>سلام ونعمة يا <b>${request.name}</b>،</p>
+            <p>نحيطكم علماً بأنه تمت مراجعة طلبكم برقم مرجع (<b>${request.referenceCode}</b>) من قِبل إدارة الكنيسة، وتبيّن تعذر اعتماد التعديل للأسباب التالية:</p>
+            <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 14px; margin: 16px 0; color: #991b1b;">
+              <p style="margin: 0;"><b>سبب الرفض:</b> ${adminNotes || 'عدم تطابق المستندات أو عدم استيفاء الشروط الكنسية المطلوبة.'}</p>
+            </div>
+            <p style="font-size: 13px; color: #64748b;">يرجى مراجعة أمانة الكنيسة بالبطاقة الشخصية والمستندات الأصلية لمزيد من الاستفسار.</p>
+          `
+        });
+
+        if (request.email) {
+          sendEmail(request.email, `إشعار بخصوص طلب تصحيح الهوية (${request.referenceCode})`, emailHtml).catch(console.error);
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Correction request rejected.',
+          messageAr: 'تم رفض طلب التصحيح وإشعار العضو بالسبب.'
+        });
+      }
+    } catch (error) {
+      console.error('Error acting on identity correction request:', error);
+      return res.status(500).json({ error: 'Server error processing request.' });
+    }
+  }
+);
 
 // 5. Update Status (Approve/Reject)
 router.patch('/:id/status', requireAuth, requireRoles([Role.SECRETARY, Role.CHURCH_ADMIN, Role.SUPER_ADMIN]), async (req: AuthRequest, res: Response) => {

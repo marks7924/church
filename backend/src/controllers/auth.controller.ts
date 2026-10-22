@@ -908,7 +908,12 @@ router.post('/request-identity-correction', requireAuth, async (req: AuthRequest
 - القيمة الصحيحة المطلوبة: ${cleanRequestedValue}
 - شرح ومبررات العضو: ${cleanReason}`,
         status: 'PENDING',
-        notes: `User ID: ${user.id} | Current National ID: ${user.nationalId ? maskEgyptianNationalId(user.nationalId) : 'N/A'}`
+        notes: JSON.stringify({
+          fieldName: cleanField,
+          requestedValue: cleanRequestedValue,
+          currentNationalId: user.nationalId,
+          reason: cleanReason
+        })
       }
     });
 

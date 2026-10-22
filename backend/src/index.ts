@@ -131,6 +131,7 @@ app.get('/api/health', healthHandler);
 // Routing
 app.use('/api/auth', authRouter);
 app.use('/api/bookings', bookingRouter);
+app.use('/api/booking', bookingRouter); // Alias to prevent 404 for singular route calls
 app.use('/api/members', memberRouter);
 app.use('/api/sermons', sermonRouter);
 app.use('/api/events', eventRouter);
