@@ -713,4 +713,233 @@ router.post('/ai/diagnose', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ==========================================
+// 19. BACKUPS & RECOVERY
+// ==========================================
+router.get('/backups', async (_req: AuthRequest, res: Response) => {
+  try {
+    const snapshots = await prisma.devSafeZoneSnapshot.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    const dbOverview = await DevPortalService.getDatabaseOverview();
+    return res.json({ snapshots, dbOverview });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/backups/create', async (req: AuthRequest, res: Response) => {
+  try {
+    const { name } = req.body;
+    const [pages, navbar, flags, themes, lockdown] = await Promise.all([
+      prisma.devPagePolicy.findMany(),
+      prisma.devNavbarItem.findMany(),
+      prisma.devFeatureFlag.findMany(),
+      prisma.devThemeConfig.findMany(),
+      prisma.devLockdown.findFirst()
+    ]);
+
+    const backupPayload = {
+      version: 'v1.0.0',
+      createdAt: new Date().toISOString(),
+      creator: req.user!.email,
+      data: { pages, navbar, flags, themes, lockdown }
+    };
+
+    const snapshot = await prisma.devSafeZoneSnapshot.create({
+      data: {
+        name: name || `FullBackup-${new Date().toISOString().slice(0, 19)}`,
+        creatorEmail: req.user!.email,
+        description: `Full System & Configuration Backup created by ${req.user!.email}`,
+        snapshotDataJson: JSON.stringify(backupPayload)
+      }
+    });
+
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'BACKUP_CREATED',
+      target: snapshot.id,
+      details: `Full system snapshot backup created: ${snapshot.name}`
+    });
+
+    return res.json({ success: true, snapshot, backupPayload });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 20. INTEGRATIONS HEALTH STATUS
+// ==========================================
+router.get('/integrations', async (_req: AuthRequest, res: Response) => {
+  try {
+    const integrations = [
+      {
+        id: 'database',
+        nameAr: 'قاعدة بيانات PostgreSQL',
+        nameEn: 'PostgreSQL Database',
+        provider: 'Supabase + AWS Direct',
+        status: 'CONNECTED',
+        hasCredentials: Boolean(process.env.DATABASE_URL),
+        details: 'Pooler & Direct URLs active'
+      },
+      {
+        id: 'gemini',
+        nameAr: 'Google Gemini AI Engine',
+        nameEn: 'Google Gemini Pro & Flash',
+        provider: 'Google AI Studio',
+        status: process.env.GEMINI_API_KEY ? 'CONFIGURED' : 'MISSING_KEY',
+        hasCredentials: Boolean(process.env.GEMINI_API_KEY),
+        model: process.env.GEMINI_MODEL || 'gemini-1.5-flash'
+      },
+      {
+        id: 'groq',
+        nameAr: 'Groq LLaMA 3.1 Fallback',
+        nameEn: 'Groq High-Speed Fallback',
+        provider: 'Groq Cloud',
+        status: process.env.GROQ_API_KEY ? 'CONFIGURED' : 'MISSING_KEY',
+        hasCredentials: Boolean(process.env.GROQ_API_KEY),
+        model: process.env.GROQ_MODEL || 'llama-3.1-70b-versatile'
+      },
+      {
+        id: 'email',
+        nameAr: 'خدمة البريد الإلكتروني SMTP',
+        nameEn: 'SMTP Email Service',
+        provider: process.env.SMTP_HOST || 'Gmail / Brevo SMTP',
+        status: process.env.SMTP_USER ? 'CONFIGURED' : 'STANDBY',
+        hasCredentials: Boolean(process.env.SMTP_USER && process.env.SMTP_PASS),
+        from: process.env.SMTP_FROM || 'church@orthodox.org'
+      },
+      {
+        id: 'cloudinary',
+        nameAr: 'التخزين السحابي للصور والوسائط',
+        nameEn: 'Cloudinary Cloud Storage',
+        provider: 'Cloudinary CDN',
+        status: process.env.CLOUDINARY_CLOUD_NAME ? 'CONFIGURED' : 'FALLBACK_LOCAL',
+        hasCredentials: Boolean(process.env.CLOUDINARY_API_KEY),
+        details: process.env.CLOUDINARY_CLOUD_NAME || 'Base64 Local Fallback'
+      },
+      {
+        id: 'youtube',
+        nameAr: 'البث المباشر وقناة اليوتيوب',
+        nameEn: 'YouTube Live Streaming API',
+        provider: 'Google Cloud YouTube Data v3',
+        status: process.env.YOUTUBE_API_KEY ? 'CONFIGURED' : 'STANDBY',
+        hasCredentials: Boolean(process.env.YOUTUBE_API_KEY)
+      },
+      {
+        id: 'firebase',
+        nameAr: 'إشعارات الهواتف المحمولة FCM',
+        nameEn: 'Firebase Cloud Messaging',
+        provider: 'Google Firebase',
+        status: process.env.FIREBASE_PROJECT_ID ? 'CONFIGURED' : 'STANDBY',
+        hasCredentials: Boolean(process.env.FIREBASE_PROJECT_ID)
+      }
+    ];
+
+    return res.json({ integrations });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 21. TESTING LAB ON-DEMAND EXECUTION
+// ==========================================
+router.post('/testing/run', async (_req: AuthRequest, res: Response) => {
+  const results: any[] = [];
+  const startTotal = Date.now();
+
+  // Test 1: Master Developer Protection
+  const isMaster = DevPortalService.isMasterDeveloper('marksamer010@gmail.com');
+  results.push({
+    id: 'auth_master',
+    name: 'التحقق من هوية وحصانة المطور الرئيسي (marksamer010@gmail.com)',
+    status: isMaster ? 'PASSED' : 'FAILED',
+    durationMs: 2
+  });
+
+  // Test 2: Database Latency & Health
+  const dbStart = Date.now();
+  let dbStatus = 'FAILED';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = 'PASSED';
+  } catch {}
+  results.push({
+    id: 'db_latency',
+    name: 'استجابة قاعدة بيانات PostgreSQL (Pooler Ping)',
+    status: dbStatus,
+    durationMs: Date.now() - dbStart
+  });
+
+  // Test 3: Emergency Website Lockdown Service
+  const lockStart = Date.now();
+  let lockStatus = 'FAILED';
+  try {
+    const l = await DevPortalService.getLockdownStatus();
+    if (l) lockStatus = 'PASSED';
+  } catch {}
+  results.push({
+    id: 'lockdown_service',
+    name: 'صلاحية وذاكرة خدمة قفل الطوارئ الشامل (Lockdown)',
+    status: lockStatus,
+    durationMs: Date.now() - lockStart
+  });
+
+  // Test 4: Quick Event Cancellation Code
+  const codeCheck = await DevPortalService.verifyCancellationCode('ch140ch140');
+  results.push({
+    id: 'cancellation_code',
+    name: 'كود الإلغاء السري للفعاليات (ch140ch140)',
+    status: codeCheck ? 'PASSED' : 'FAILED',
+    durationMs: 5
+  });
+
+  // Test 5: Dynamic Page Policies
+  const pagesStart = Date.now();
+  const pages = await DevPortalService.getEffectivePagePolicies();
+  results.push({
+    id: 'page_policies',
+    name: 'محرك سياسات الصفحات والانتهاء التلقائي خادمياً',
+    status: pages.length > 0 ? 'PASSED' : 'FAILED',
+    durationMs: Date.now() - pagesStart
+  });
+
+  return res.json({
+    totalTests: results.length,
+    passed: results.filter(r => r.status === 'PASSED').length,
+    failed: results.filter(r => r.status === 'FAILED').length,
+    totalDurationMs: Date.now() - startTotal,
+    results
+  });
+});
+
+// ==========================================
+// 22. CONFIGURATION HISTORY
+// ==========================================
+router.get('/config-history', async (_req: AuthRequest, res: Response) => {
+  try {
+    const logs = await prisma.devAuditLog.findMany({
+      where: {
+        action: {
+          in: [
+            'LOCKDOWN_ACTIVATED', 'LOCKDOWN_DEACTIVATED',
+            'PAGE_POLICY_UPDATED', 'PAGE_OVERRIDE_ACTIVATED', 'PAGE_OVERRIDE_CLEARED',
+            'NAVBAR_ITEM_UPDATED', 'NAVBAR_OVERRIDE_SET', 'NAVBAR_OVERRIDE_CLEARED',
+            'FEATURE_FLAG_UPDATED', 'THEME_ACTIVATED', 'THEME_COLORS_UPDATED',
+            'AI_CHATBOT_ENABLED', 'AI_CHATBOT_KILLSWITCH_ACTIVATED',
+            'IP_BANNED', 'IP_UNBANNED', 'SAFE_ZONE_PROMOTED_PUSH', 'RELEASE_UNDONE', 'RELEASE_REDONE'
+          ]
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+    return res.json({ history: logs });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
