@@ -66,6 +66,16 @@ router.post('/chat', async (req: Request, res: Response) => {
       });
     }
 
+    // Developer Control: Backend Chatbot Kill Switch Enforcement
+    const aiFlag = await prisma.devFeatureFlag.findUnique({ where: { key: 'ai_chatbot' } });
+    if (aiFlag && !aiFlag.isEnabled) {
+      return res.status(503).json({
+        error: 'AI_CHATBOT_DISABLED',
+        errorAr: 'المساعد الروحي الذكي متوقف حالياً بأمر مطور النظام للصيانة والتحسين.',
+        isKillSwitch: true
+      });
+    }
+
     const { message, history, language, conversationId } = req.body;
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {

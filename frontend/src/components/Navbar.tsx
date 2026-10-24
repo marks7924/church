@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from './ThemeContext';
 import styles from './Navbar.module.css';
-import { Menu, X, Sun, Moon, Languages, Type, LogOut, LayoutDashboard, UserCheck } from 'lucide-react';
+import { Menu, X, Sun, Moon, Languages, Type, LogOut, LayoutDashboard, UserCheck, Terminal } from 'lucide-react';
 import { API_URL } from '../config';
 
 export default function Navbar() {
@@ -125,10 +125,24 @@ export default function Navbar() {
     router.push('/');
   };
 
+  const [dynamicNav, setDynamicNav] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/developer/client/navbar`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.items && Array.isArray(data.items)) {
+          setDynamicNav(data.items);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const isDeveloper = user && (user.role === 'DEVELOPER' || (Array.isArray(user.roles) && user.roles.includes('DEVELOPER')) || user.email === 'marksamer010@gmail.com');
   const isAdmin = user && ['SUPER_ADMIN', 'CHURCH_ADMIN', 'DEVELOPER', 'SECRETARY', 'PRIEST', 'BISHOP'].includes(user.role);
   const showEventsNav = isEventsChannelPublic || isAdmin;
 
-  const navItems = [
+  const defaultNavItems = [
     { name: t('nav_home'), path: '/' },
     { name: t('nav_fy'), path: '/fy' },
     ...(showEventsNav ? [{ name: language === 'ar' ? 'مناسبات' : 'Events', path: '/events' }] : []),
@@ -139,6 +153,25 @@ export default function Navbar() {
     { name: t('nav_donations'), path: '/donations' },
     { name: t('nav_contact'), path: '/contact' },
   ];
+
+  const navItems = dynamicNav
+    ? dynamicNav
+        .filter(item => {
+          const visible = item.hasOverride && item.overrideVisible !== null ? item.overrideVisible : item.isVisible;
+          if (!visible) return false;
+          if (!user && !item.guestVisible) return false;
+          if (user && item.allowedRoles && item.allowedRoles.length > 0) {
+            const userRoles = Array.from(new Set([user.role, ...(user.roles || [])]));
+            if (user.email === 'marksamer010@gmail.com') return true;
+            return userRoles.some(r => item.allowedRoles.includes(r));
+          }
+          return true;
+        })
+        .map(item => ({
+          name: language === 'ar' ? item.nameAr : (item.nameEn || item.nameAr),
+          path: item.path
+        }))
+    : defaultNavItems;
 
   return (
     <nav className={`${styles.header} glass-nav`}>
@@ -215,6 +248,17 @@ export default function Navbar() {
             {/* Profile / Dashboard or Login */}
             {user ? (
               <>
+                {isDeveloper && (
+                  <Link
+                    href="/developer"
+                    className={styles.controlBtn}
+                    style={{ background: 'rgba(168, 85, 247, 0.15)', borderColor: '#a855f7', color: '#c084fc', fontWeight: 'bold' }}
+                    title="بوابة التحكم الفني للمطورين"
+                  >
+                    <Terminal size={15} />
+                    <span>DEV</span>
+                  </Link>
+                )}
                 <Link href="/dashboard" className={styles.controlBtn}>
                   <LayoutDashboard size={16} />
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -301,6 +345,17 @@ export default function Navbar() {
               <div style={{ marginTop: '10px' }}>
                 {user ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {isDeveloper && (
+                      <Link
+                        href="/developer"
+                        className={styles.drawerAuthBtn}
+                        style={{ background: 'rgba(168, 85, 247, 0.15)', borderColor: '#a855f7', color: '#c084fc', fontWeight: 'bold' }}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <Terminal size={18} />
+                        <span>بوابة التحكم الفني (Developer Portal)</span>
+                      </Link>
+                    )}
                     <Link href="/dashboard" className={styles.drawerAuthBtn} onClick={() => setIsMobileMenuOpen(false)}>
                       <LayoutDashboard size={18} />
                       <span>{t('nav_dashboard')} ({(user.role === 'BISHOP' || user.fullName?.startsWith('الأنبا') || user.fullName?.includes('اثناسيوس')) ? (language === 'ar' ? 'سيدنا' : 'Bishop') : user.fullName?.split(' ')[0]})</span>

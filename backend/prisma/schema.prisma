@@ -1110,5 +1110,190 @@ model HistoryServantFruit {
   @@index([categoryKey])
 }
 
+// ==========================================
+// DEVELOPER CONTROL PORTAL MODELS
+// ==========================================
+
+model DevIpBan {
+  id        String    @id @default(uuid())
+  ip        String    @unique
+  reason    String
+  bannedBy  String
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([ip])
+  @@index([expiresAt])
+}
+
+model DevLockdown {
+  id                   String    @id @default(uuid())
+  isActive             Boolean   @default(false)
+  reason               String?
+  customMessage        String?
+  activatedBy          String?
+  activatedAt          DateTime?
+  allowedRoles         Role[]    @default([DEVELOPER])
+  allowlistIps         String[]  @default([])
+  restrictLogin        Boolean   @default(false)
+  restrictRegistration Boolean   @default(false)
+  restrictAiChatbot    Boolean   @default(false)
+  updatedAt            DateTime  @updatedAt
+}
+
+model DevPagePolicy {
+  id                   String    @id @default(uuid())
+  routePath            String    @unique
+  pageTitleAr          String
+  pageTitleEn          String
+  permanentPolicy      String    @default("PUBLIC")
+  allowedRoles         Role[]    @default([])
+  customMessage        String?
+  hasActiveOverride    Boolean   @default(false)
+  overridePolicy       String?
+  overrideAllowedRoles Role[]    @default([])
+  overrideExpiresAt    DateTime?
+  overrideReason       String?
+  overrideCreatedBy    String?
+  overrideCreatedAt    DateTime?
+  updatedAt            DateTime  @updatedAt
+
+  @@index([routePath])
+}
+
+model DevNavbarItem {
+  id                String    @id @default(uuid())
+  path              String    @unique
+  nameAr            String
+  nameEn            String
+  isVisible         Boolean   @default(true)
+  guestVisible      Boolean   @default(true)
+  allowedRoles      Role[]    @default([])
+  sortOrder         Int       @default(0)
+  hasOverride       Boolean   @default(false)
+  overrideVisible   Boolean?
+  overrideExpiresAt DateTime?
+  overrideReason    String?
+  updatedAt         DateTime  @updatedAt
+
+  @@index([path])
+  @@index([sortOrder])
+}
+
+model DevSafeZoneSnapshot {
+  id               String   @id @default(uuid())
+  name             String
+  creatorEmail     String
+  description      String?
+  snapshotDataJson String   @db.Text
+  createdAt        DateTime @default(now())
+}
+
+model DevReleaseRecord {
+  id                String   @id @default(uuid())
+  version           String
+  releaseNumber     Int      @default(autoincrement())
+  developerEmail    String
+  summary           String
+  changeType        String   @default("PUSH")
+  changesJson       String   @db.Text
+  previousStateJson String?  @db.Text
+  targetReleaseId   String?
+  status            String   @default("SUCCESS")
+  createdAt         DateTime @default(now())
+
+  @@index([version])
+  @@index([changeType])
+}
+
+model DevFeatureFlag {
+  id             String   @id @default(uuid())
+  key            String   @unique
+  nameAr         String
+  nameEn         String
+  description    String?
+  isEnabled      Boolean  @default(true)
+  allowedRoles   Role[]   @default([])
+  inSafeZoneOnly Boolean  @default(false)
+  updatedAt      DateTime @updatedAt
+
+  @@index([key])
+}
+
+model DevThemeConfig {
+  id             String    @id @default(uuid())
+  seasonKey      String    @unique
+  nameAr         String
+  nameEn         String
+  isActive       Boolean   @default(false)
+  colorsJson     String    @db.Text
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@index([seasonKey])
+}
+
+model DevAuditLog {
+  id             String   @id @default(uuid())
+  developerEmail String
+  action         String
+  target         String
+  details        String   @db.Text
+  ipAddress      String?
+  userAgent      String?
+  status         String   @default("SUCCESS")
+  createdAt      DateTime @default(now())
+
+  @@index([action])
+  @@index([developerEmail])
+  @@index([createdAt])
+}
+
+model DevIncident {
+  id              String    @id @default(uuid())
+  title           String
+  severity        String
+  status          String    @default("OPEN")
+  affectedModules String[]  @default([])
+  description     String    @db.Text
+  resolutionNotes String?   @db.Text
+  createdByName   String
+  resolvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([severity])
+}
+
+model DevCustomRole {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  description     String?
+  permissionsJson String   @db.Text
+  color           String?
+  isSystem        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model DevAnnouncement {
+  id          String    @id @default(uuid())
+  titleAr     String
+  titleEn     String
+  contentAr   String    @db.Text
+  contentEn   String    @db.Text
+  type        String    @default("INFO")
+  targetRoles Role[]    @default([])
+  isActive    Boolean   @default(true)
+  startsAt    DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([isActive])
+}
+
+
 
 

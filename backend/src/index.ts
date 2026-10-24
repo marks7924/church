@@ -22,6 +22,8 @@ import emailCenterRouter from './controllers/email-center.controller';
 import invitationRouter from './controllers/invitation.controller';
 import fyRouter from './controllers/fy.controller';
 import historyRouter from './controllers/history.controller';
+import developerRouter from './controllers/developer.controller';
+import { enforceIpBan, enforceLockdown } from './middleware/devSecurity.middleware';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -41,6 +43,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Developer Security: Global IP Ban Enforcement
+app.use(enforceIpBan);
+
 // Global API Rate Limiting: 120 requests/min per IP to prevent DoS scraping
 import { enforceRateLimit } from './utils/security';
 app.use('/api', (req: Request, res: Response, next: NextFunction) => {
@@ -59,6 +64,9 @@ app.use('/api', (req: Request, res: Response, next: NextFunction) => {
   }
   next();
 });
+
+// Developer Security: Emergency Website Lockdown Enforcement
+app.use(enforceLockdown);
 
 // Global Middleware & Strict CORS Configuration
 const configuredOrigins = process.env.APP_URL
@@ -147,6 +155,7 @@ app.use('/api/email-center', emailCenterRouter);
 app.use('/api/invitations', invitationRouter);
 app.use('/api/fy', fyRouter);
 app.use('/api/history', historyRouter);
+app.use('/api/developer', developerRouter);
 
 // Error Handling Middleware (Safe against stack and internals leakage)
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
