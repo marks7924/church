@@ -31,6 +31,59 @@ const PORT = process.env.PORT || 4000;
 // Security: Disable X-Powered-By header to obscure technology stack
 app.disable('x-powered-by');
 
+// Global Middleware & Strict CORS Configuration
+const configuredOrigins = process.env.APP_URL
+  ? process.env.APP_URL.split(',').map(url => url.trim().replace(/\/$/, ''))
+  : ['http://localhost:3000', 'https://church-ruby-beta.vercel.app'];
+
+const localhostRegex = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
+const vercelChurchRegex = /^https:\/\/church[a-z0-9-]*\.vercel\.app$/i;
+const trustedChurchDomainRegex = /^https:\/\/church-[a-z0-9-]+-marks7924s-projects\.vercel\.app$/i;
+
+function isOriginAllowed(origin: string): boolean {
+  if (!origin) return true;
+  const cleanOrigin = origin.replace(/\/$/, '');
+  return (
+    configuredOrigins.includes(cleanOrigin) ||
+    cleanOrigin === 'https://church-ruby-beta.vercel.app' ||
+    localhostRegex.test(cleanOrigin) ||
+    vercelChurchRegex.test(cleanOrigin) ||
+    trustedChurchDomainRegex.test(cleanOrigin)
+  );
+}
+
+// 1. Explicit CORS headers middleware (Guarantees headers on all requests and error responses)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin;
+  if (origin && isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  }
+
+  // Preflight OPTIONS fast exit
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
+
+// 2. Standard CORS package
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || isOriginAllowed(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+}));
+app.options('*', cors());
+
 // Security Headers Middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -49,6 +102,8 @@ app.use(enforceIpBan);
 // Global API Rate Limiting: 120 requests/min per IP to prevent DoS scraping
 import { enforceRateLimit } from './utils/security';
 app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  if (req.method === 'OPTIONS') return next();
+
   const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'anonymous';
   const check = enforceRateLimit(`global-api:${clientIp}`, {
     limit: 120,
@@ -67,37 +122,6 @@ app.use('/api', (req: Request, res: Response, next: NextFunction) => {
 
 // Developer Security: Emergency Website Lockdown Enforcement
 app.use(enforceLockdown);
-
-// Global Middleware & Strict CORS Configuration
-const configuredOrigins = process.env.APP_URL
-  ? process.env.APP_URL.split(',').map(url => url.trim().replace(/\/$/, ''))
-  : ['http://localhost:3000', 'https://church-ruby-beta.vercel.app'];
-
-const localhostRegex = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
-const trustedChurchDomainRegex = /^https:\/\/church-[a-z0-9-]+-marks7924s-projects\.vercel\.app$/i;
-
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile native apps, internal microservices, curl)
-    if (!origin) return callback(null, true);
-    
-    const cleanOrigin = origin.replace(/\/$/, '');
-    
-    // Strict origin validation: exact allowed origins, strict localhost dev, or official team preview regex
-    const isAllowed = 
-      configuredOrigins.includes(cleanOrigin) ||
-      cleanOrigin === 'https://church-ruby-beta.vercel.app' ||
-      localhostRegex.test(cleanOrigin) ||
-      trustedChurchDomainRegex.test(cleanOrigin);
-
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      callback(new Error('CORS policy: This origin is not allowed by Access-Control-Allow-Origin.'));
-    }
-  },
-  credentials: true
-}));
 
 // Safe payload limits (prevent memory exhaustion DoS)
 app.use(express.json({ limit: '2mb' }));

@@ -19,6 +19,11 @@ export function getClientIp(req: Request): string {
  * Evaluates whether caller IP is in the active bans table.
  */
 export async function enforceIpBan(req: Request, res: Response, next: NextFunction) {
+  // Always bypass preflight OPTIONS requests for CORS
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
   try {
     const ip = getClientIp(req);
     const bannedIps = await DevPortalService.getActiveBannedIpsSet();
@@ -45,6 +50,11 @@ export async function enforceIpBan(req: Request, res: Response, next: NextFuncti
  * while permitting DEVELOPER role, allowlisted IPs, and allowed roles for safe recovery.
  */
 export async function enforceLockdown(req: Request, res: Response, next: NextFunction) {
+  // Always bypass preflight OPTIONS requests for CORS
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
   try {
     // Bypass health check, developer login and developer portal endpoints
     const url = req.originalUrl || req.url;
