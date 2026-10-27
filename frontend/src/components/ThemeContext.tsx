@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+import { API_URL } from '../config';
+
 type Theme = 'dark' | 'light';
 type Language = 'ar' | 'en';
 
@@ -16,12 +18,12 @@ export const dictionary: TranslationDictionary = {
   // Navigation
   nav_title: { ar: 'كنيستنا القبطية', en: 'Our Coptic Church' },
   nav_home: { ar: 'الرئيسية', en: 'Home' },
-  nav_schedule: { ar: 'مواعيد القداسات', en: 'Mass Schedule' },
+  nav_schedule: { ar: 'المواعيد', en: 'Schedule' },
   nav_live: { ar: 'البث المباشر', en: 'Live Stream' },
   nav_membership: { ar: 'العضوية الكنسية', en: 'Membership' },
   nav_sermons: { ar: 'العظات', en: 'Sermons' },
   nav_ministries: { ar: 'الخدمات الكنسية', en: 'Ministries' },
-  nav_donations: { ar: 'التبرعات والمساندة', en: 'Donations' },
+  nav_donations: { ar: 'التبرعات', en: 'Donations' },
   nav_about: { ar: 'عن الكنيسة', en: 'About' },
   nav_contact: { ar: 'اتصل بنا', en: 'Contact' },
   nav_dashboard: { ar: 'لوحة التحكم', en: 'Dashboard' },
@@ -35,7 +37,7 @@ export const dictionary: TranslationDictionary = {
   history_story_continues: { ar: 'والحكاية مستمرة', en: 'The Story Continues' },
   
   // Hero
-  hero_title: { ar: 'كنيسه الشهيد العظيم ابو سيفين بحدائق القبه', en: 'One Holy Apostolic Coptic Orthodox Church' },
+  hero_title: { ar: 'كنيسه الشهيد العظيم ابو سيفين بحدائق القبه', en: 'Church of the Great Martyr Abu Sifain, Hadayek El-Qubba' },
   hero_subtitle: { ar: 'مرحبًا بكم في البيت الروحي لصلواتنا وخدمتنا وتجمعنا المبارك', en: 'Welcome to the spiritual home of our prayers, services, and blessed assembly' },
   quick_nav: { ar: 'روابط سريعة', en: 'Quick Navigation' },
   book_confession: { ar: 'حجز اعتراف', en: 'Book Confession' },
@@ -139,7 +141,7 @@ export const dictionary: TranslationDictionary = {
   font_scale: { ar: 'حجم الخط', en: 'Font Size' },
 
   // Four Systems Nav & Section Keys
-  nav_fy: { ar: 'لَكَ', en: 'For you' },
+  nav_fy: { ar: 'لكَ', en: 'For You' },
   facebook_news: { ar: 'أخبار ومشاركات فيسبوك', en: 'Facebook Posts & News' },
   email_center: { ar: 'مركز البريد الإلكتروني', en: 'Email Center' },
   events_qr: { ar: 'الدعوات وتأكيد الحضور (QR)', en: 'Invitations & QR Check-in' },
@@ -208,6 +210,40 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.style.fontSize = `${fontSize}px`;
     localStorage.setItem('church-fontsize', fontSize.toString());
   }, [fontSize]);
+
+  // Seasonal Liturgical Theme Sync
+  useEffect(() => {
+    const applySeasonal = (key: string) => {
+      if (!key || key === 'STANDARD') {
+        document.documentElement.removeAttribute('data-seasonal-theme');
+      } else {
+        document.documentElement.setAttribute('data-seasonal-theme', key);
+      }
+    };
+
+    // Check preview override first
+    const preview = typeof window !== 'undefined' ? sessionStorage.getItem('dev-theme-preview') : null;
+    if (preview) {
+      applySeasonal(preview);
+    } else {
+      fetch(`${API_URL}/developer/client/active-theme`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.theme?.seasonKey) {
+            applySeasonal(data.theme.seasonKey);
+          }
+        })
+        .catch(() => {});
+    }
+
+    const handleThemeChange = (e: any) => {
+      if (e.detail?.seasonKey) {
+        applySeasonal(e.detail.seasonKey);
+      }
+    };
+    window.addEventListener('seasonal-theme-change', handleThemeChange);
+    return () => window.removeEventListener('seasonal-theme-change', handleThemeChange);
+  }, []);
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));

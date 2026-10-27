@@ -43,6 +43,76 @@
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
+/* 1. Kiahk Nights (شهر كيهك المبارك) */
+[data-seasonal-theme="kiahk-nights"],
+[data-seasonal-theme="KIAHK"] {
+  --bg-primary: #0b1224;
+  --bg-secondary: #111c35;
+  --bg-card: #162447;
+  --text-primary: #f6f1e5;
+  --text-secondary: #aeb8cc;
+  --accent-gold: #d4b36a;
+  --accent-gold-rgb: 212, 179, 106;
+  --accent-blue: #304b83;
+  --border-color: rgba(212, 179, 106, 0.22);
+}
+
+/* 2. Holy Nativity Season (فترة عيد الميلاد المجيد) */
+[data-seasonal-theme="nativity-season"],
+[data-seasonal-theme="NATIVITY"] {
+  --bg-primary: #121c17;
+  --bg-secondary: #1a2721;
+  --bg-card: #22332c;
+  --text-primary: #faf6ee;
+  --text-secondary: #cbd5e1;
+  --accent-gold: #c9a45c;
+  --accent-gold-rgb: 201, 164, 92;
+  --accent-red: #71343b;
+  --border-color: rgba(201, 164, 92, 0.25);
+}
+
+/* 3. Holy Pascha Week (أسبوع الآلام والبصخة المقدسة) */
+[data-seasonal-theme="holy-week"],
+[data-seasonal-theme="HOLY_WEEK"] {
+  --bg-primary: #171719;
+  --bg-secondary: #222125;
+  --bg-card: #2a2930;
+  --text-primary: #f1eadf;
+  --text-secondary: #b8b2b0;
+  --accent-gold: #743b46;
+  --accent-gold-rgb: 116, 59, 70;
+  --accent-red: #881337;
+  --border-color: rgba(116, 59, 70, 0.35);
+}
+
+/* 4. Resurrection & Holy 50 Days (عيد القيامة المجيد والخماسين) */
+[data-seasonal-theme="resurrection-fifty-days"],
+[data-seasonal-theme="RESURRECTION_50"] {
+  --bg-primary: #0d131f;
+  --bg-secondary: #141c2e;
+  --bg-card: #1c273e;
+  --text-primary: #fffeef;
+  --text-secondary: #cbd5e1;
+  --accent-gold: #fbbf24;
+  --accent-gold-rgb: 251, 191, 36;
+  --accent-blue: #34588b;
+  --border-color: rgba(251, 191, 36, 0.3);
+}
+
+/* 5. St. Philopateer Mercurius Feast (عيد الشهيد العظيم أبي سيفين) */
+[data-seasonal-theme="abu-sefein-feast"],
+[data-seasonal-theme="ABU_SEFEIN"] {
+  --bg-primary: #171b2c;
+  --bg-secondary: #241c27;
+  --bg-card: #381a24;
+  --text-primary: #f6f0e5;
+  --text-secondary: #bdb7b0;
+  --accent-gold: #d1b16a;
+  --accent-gold-rgb: 209, 177, 106;
+  --accent-red: #8b3b48;
+  --border-color: rgba(209, 177, 106, 0.28);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

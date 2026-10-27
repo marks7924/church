@@ -4,6 +4,7 @@ import { ThemeProvider } from "../components/ThemeContext";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import ChurchAiAssistant from "../components/ChurchAiAssistant";
+import AnnouncementBanner from "../components/AnnouncementBanner";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://coptic-church.org');
@@ -121,6 +122,7 @@ export default function RootLayout({
       </head>
       <body style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <ThemeProvider>
+          <AnnouncementBanner />
           <Navbar />
           <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             {children}

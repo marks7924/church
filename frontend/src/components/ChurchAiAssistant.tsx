@@ -170,6 +170,50 @@ export default function ChurchAiAssistant() {
   const [isClosingCountdown, setIsClosingCountdown] = useState(false);
   const [closingSecondsLeft, setClosingSecondsLeft] = useState(5);
 
+  // AI Kill Switch & Developer Access Exemption Check
+  const [isAiEnabledGlobally, setIsAiEnabledGlobally] = useState(true);
+  const [isCurrentUserDev, setIsCurrentUserDev] = useState(false);
+
+  const checkDevAndAiStatus = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const uStr = localStorage.getItem('church-user');
+        if (uStr) {
+          const u = JSON.parse(uStr);
+          const isDev = u.email === 'marksamer010@gmail.com' || u.role === 'DEVELOPER' || (Array.isArray(u.roles) && u.roles.includes('DEVELOPER'));
+          setIsCurrentUserDev(Boolean(isDev));
+        } else {
+          setIsCurrentUserDev(false);
+        }
+      } catch {
+        setIsCurrentUserDev(false);
+      }
+    }
+
+    fetch(`${API_URL}/developer/client/ai-status`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && data.isAiBotEnabled === false) {
+          setIsAiEnabledGlobally(false);
+        } else {
+          setIsAiEnabledGlobally(true);
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    checkDevAndAiStatus();
+    const handleAuthChange = () => checkDevAndAiStatus();
+    const handleAiSwitch = () => checkDevAndAiStatus();
+    window.addEventListener('auth-change', handleAuthChange);
+    window.addEventListener('ai-killswitch-changed', handleAiSwitch);
+    return () => {
+      window.removeEventListener('auth-change', handleAuthChange);
+      window.removeEventListener('ai-killswitch-changed', handleAiSwitch);
+    };
+  }, []);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setUserToken(localStorage.getItem('church-token'));
@@ -991,7 +1035,7 @@ export default function ChurchAiAssistant() {
     });
   };
 
-  if (isDashboardPage) {
+  if (isDashboardPage || (!isAiEnabledGlobally && !isCurrentUserDev)) {
     return null;
   }
 

@@ -78,13 +78,13 @@ async function main() {
   // 4. Seed Navbar Items
   const navItems = [
     { path: '/', nameAr: 'الرئيسية', nameEn: 'Home', sortOrder: 0, isVisible: true, guestVisible: true },
-    { path: '/fy', nameAr: 'الإيمان وأسئلتك', nameEn: 'Faith & Questions', sortOrder: 1, isVisible: true, guestVisible: true },
+    { path: '/fy', nameAr: 'لكَ', nameEn: 'For You', sortOrder: 1, isVisible: true, guestVisible: true },
     { path: '/events', nameAr: 'مناسبات', nameEn: 'Events', sortOrder: 2, isVisible: true, guestVisible: true },
-    { path: '/schedule', nameAr: 'مواعيد الصلوات', nameEn: 'Schedule', sortOrder: 3, isVisible: true, guestVisible: true },
+    { path: '/schedule', nameAr: 'المواعيد', nameEn: 'Schedule', sortOrder: 3, isVisible: true, guestVisible: true },
     { path: '/sermons', nameAr: 'العظات', nameEn: 'Sermons', sortOrder: 4, isVisible: true, guestVisible: true },
     { path: '/ministries', nameAr: 'الخدمات', nameEn: 'Ministries', sortOrder: 5, isVisible: true, guestVisible: true },
     { path: '/history', nameAr: 'تاريخ الكنيسة', nameEn: 'Church History', sortOrder: 6, isVisible: true, guestVisible: true },
-    { path: '/donations', nameAr: 'العطاء', nameEn: 'Donations', sortOrder: 7, isVisible: true, guestVisible: true },
+    { path: '/donations', nameAr: 'التبرعات', nameEn: 'Donations', sortOrder: 7, isVisible: true, guestVisible: true },
     { path: '/contact', nameAr: 'تواصل معنا', nameEn: 'Contact', sortOrder: 8, isVisible: true, guestVisible: true },
   ];
 

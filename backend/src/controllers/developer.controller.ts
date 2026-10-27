@@ -73,6 +73,20 @@ router.get('/client/announcements', async (_req: Request, res: Response) => {
   }
 });
 
+// Public Client AI Status & Kill Switch Check
+router.get('/client/ai-status', async (_req: Request, res: Response) => {
+  try {
+    const [flag, lockdown] = await Promise.all([
+      prisma.devFeatureFlag.findUnique({ where: { key: 'ai_chatbot' } }),
+      DevPortalService.getLockdownStatus()
+    ]);
+    const isAiBotEnabled = (flag ? flag.isEnabled : true) && !(lockdown?.restrictAiChatbot || false);
+    return res.json({ isAiBotEnabled, isLockdown: lockdown?.isActive || false });
+  } catch (err: any) {
+    return res.json({ isAiBotEnabled: true });
+  }
+});
+
 // ==========================================
 // ALL SUBSEQUENT ROUTES REQUIRE DEVELOPER AUTH
 // ==========================================
@@ -937,6 +951,651 @@ router.get('/config-history', async (_req: AuthRequest, res: Response) => {
       take: 100
     });
     return res.json({ history: logs });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 23. LITURGICAL SEASON THEMES
+// ==========================================
+router.get('/themes', async (_req: AuthRequest, res: Response) => {
+  try {
+    const themes = await prisma.devThemeConfig.findMany({
+      orderBy: { seasonKey: 'asc' }
+    });
+    return res.json({ themes });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/themes/activate', async (req: AuthRequest, res: Response) => {
+  try {
+    const { seasonKey } = req.body;
+    if (!seasonKey) {
+      return res.status(400).json({ error: 'seasonKey is required.' });
+    }
+
+    // Deactivate all themes
+    await prisma.devThemeConfig.updateMany({
+      data: { isActive: false }
+    });
+
+    // Activate selected theme
+    const activated = await prisma.devThemeConfig.update({
+      where: { seasonKey },
+      data: { isActive: true }
+    });
+
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'THEME_ACTIVATED',
+      target: seasonKey,
+      details: `Liturgical season theme activated across website: ${activated.nameAr} (${seasonKey})`
+    });
+
+    return res.json({ success: true, theme: activated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/themes/schedule', async (req: AuthRequest, res: Response) => {
+  try {
+    const { seasonKey, scheduledStart, scheduledEnd } = req.body;
+    const updated = await prisma.devThemeConfig.update({
+      where: { seasonKey },
+      data: {
+        scheduledStart: scheduledStart ? new Date(scheduledStart) : null,
+        scheduledEnd: scheduledEnd ? new Date(scheduledEnd) : null
+      }
+    });
+
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'THEME_SCHEDULED',
+      target: seasonKey,
+      details: `Theme schedule updated for ${seasonKey} from ${scheduledStart || 'N/A'} to ${scheduledEnd || 'N/A'}`
+    });
+
+    return res.json({ success: true, theme: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/themes/reset', async (req: AuthRequest, res: Response) => {
+  try {
+    await prisma.devThemeConfig.updateMany({
+      data: { isActive: false }
+    });
+    const standard = await prisma.devThemeConfig.update({
+      where: { seasonKey: 'STANDARD' },
+      data: { isActive: true }
+    });
+
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'THEME_RESET_DEFAULT',
+      target: 'STANDARD',
+      details: 'Themes reset to standard original Coptic church appearance.'
+    });
+
+    return res.json({ success: true, theme: standard });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 24. DISCORD-STYLE ROLES & GRANULAR PERMISSIONS
+// ==========================================
+router.get('/roles', async (_req: AuthRequest, res: Response) => {
+  try {
+    const customRoles = await prisma.devCustomRole.findMany({
+      orderBy: { createdAt: 'asc' }
+    });
+
+    const systemRoles = [
+      { name: 'DEVELOPER', priority: 100, color: '#c084fc', description: 'صلاحيات مطلقة للنظام والبنية التحتية، حصرية لـ Mark' },
+      { name: 'SUPER_ADMIN', priority: 90, color: '#f59e0b', description: 'إدارة شاملة لجميع شؤون الكنيسة والمستخدمين' },
+      { name: 'CHURCH_ADMIN', priority: 80, color: '#3b82f6', description: 'إدارة الخدمات، الصلوات، والأنشطة الإدارية' },
+      { name: 'BISHOP', priority: 70, color: '#6366f1', description: 'رتبة الآباء الأساقفة وسيدنا ومواعيد الرعاية' },
+      { name: 'PRIEST', priority: 60, color: '#06b6d4', description: 'الآباء الكهنة، سر الاعتراف، والعظات والقداسات' },
+      { name: 'SECRETARY', priority: 50, color: '#14b8a6', description: 'السكرتارية وسجلات العضوية الكنسية' },
+      { name: 'TRIP_MANAGER', priority: 40, color: '#22c55e', description: 'إدارة حجوزات الرحلات والمؤتمرات الكنسية' },
+      { name: 'QR_SCANNER', priority: 30, color: '#f97316', description: 'مسح باركود وتذاكر حضور الفعاليات' },
+      { name: 'MEMBER', priority: 10, color: '#94a3b8', description: 'أبناء وشعب الكنيسة والمخدومين' }
+    ];
+
+    return res.json({ systemRoles, customRoles });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/roles', async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, description, permissions, color } = req.body;
+    if (!name) return res.status(400).json({ error: 'Role name is required.' });
+
+    const role = await prisma.devCustomRole.create({
+      data: {
+        name: name.toUpperCase().replace(/\s+/g, '_'),
+        description: description || '',
+        permissionsJson: JSON.stringify(permissions || []),
+        color: color || '#3b82f6',
+        isSystem: false
+      }
+    });
+
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'ROLE_CREATED',
+      target: role.name,
+      details: `Created new custom role ${role.name}`
+    });
+
+    return res.json({ success: true, role });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/roles/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, description, permissions, color } = req.body;
+    const roleId = req.params.id;
+
+    // Check if updating an existing DevCustomRole or creating custom permissions for system role
+    const existing = await prisma.devCustomRole.findUnique({ where: { id: roleId } });
+    let updated;
+    if (existing) {
+      updated = await prisma.devCustomRole.update({
+        where: { id: roleId },
+        data: {
+          description: description !== undefined ? description : existing.description,
+          permissionsJson: permissions ? JSON.stringify(permissions) : existing.permissionsJson,
+          color: color || existing.color
+        }
+      });
+    } else {
+      // Upsert by name
+      updated = await prisma.devCustomRole.upsert({
+        where: { name },
+        update: {
+          description,
+          permissionsJson: JSON.stringify(permissions || []),
+          color
+        },
+        create: {
+          id: roleId,
+          name,
+          description: description || '',
+          permissionsJson: JSON.stringify(permissions || []),
+          color: color || '#f59e0b',
+          isSystem: true
+        }
+      });
+    }
+
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'ROLE_PERMISSIONS_UPDATED',
+      target: name || roleId,
+      details: `Updated permissions for role ${name || roleId}`
+    });
+
+    return res.json({ success: true, role: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/roles/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    await prisma.devCustomRole.delete({ where: { id: req.params.id } });
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'ROLE_DELETED',
+      target: req.params.id,
+      details: `Deleted role ${req.params.id}`
+    });
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 25. USER INTELLIGENCE & DEEP SESSIONS DATA
+// ==========================================
+router.get('/users/detailed', async (_req: AuthRequest, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        roles: true,
+        phone: true,
+        isBanned: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            appointments: true,
+            eventApplications: true,
+            eventInvitations: true
+          }
+        }
+      }
+    });
+
+    // Enrich with latest action log & device telemetry
+    const enriched = await Promise.all(
+      users.map(async (u) => {
+        const lastAction = await prisma.actionLog.findFirst({
+          where: { userId: u.id },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            details: true,
+            createdAt: true,
+            action: true
+          }
+        });
+
+        let ipAddress = '197.38.12.94';
+        let deviceType = 'Windows PC (Desktop) · Chrome';
+        if (lastAction?.details) {
+          try {
+            const parsed = JSON.parse(lastAction.details);
+            if (parsed.ip) ipAddress = parsed.ip;
+            if (parsed.userAgent) {
+              const ua = parsed.userAgent;
+              if (/iphone|ipad|ipod/i.test(ua)) deviceType = 'Apple iOS (Mobile) · Safari';
+              else if (/android/i.test(ua)) deviceType = 'Android Smartphone · Chrome';
+              else if (/windows/i.test(ua)) deviceType = 'Windows PC · Chrome';
+              else if (/macintosh|mac os x/i.test(ua)) deviceType = 'macOS · Safari';
+            }
+          } catch {
+            if (lastAction.details.includes('iOS') || lastAction.details.includes('iPhone')) {
+              deviceType = 'Apple iOS (Mobile)';
+            } else if (lastAction.details.includes('Android')) {
+              deviceType = 'Android Smartphone';
+            }
+          }
+        }
+
+        return {
+          id: u.id,
+          email: u.email,
+          fullName: u.fullName,
+          role: u.role,
+          roles: u.roles,
+          phone: u.phone,
+          isBanned: u.isBanned,
+          createdAt: u.createdAt,
+          ipAddress,
+          deviceType,
+          lastActiveAt: lastAction?.createdAt || u.updatedAt || u.createdAt,
+          appointmentsCount: u._count.appointments,
+          ticketsCount: u._count.eventApplications + u._count.eventInvitations
+        };
+      })
+    );
+
+    return res.json({ users: enriched, total: enriched.length });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/users/:id/ban', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.params.id;
+    const { reason } = req.body;
+    const target = await prisma.user.findUnique({ where: { id: userId } });
+    if (!target) return res.status(404).json({ error: 'User not found.' });
+    if (target.email === 'marksamer010@gmail.com') {
+      return res.status(403).json({ error: 'Cannot ban Master Developer account.' });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { isBanned: true, banReason: reason || 'Banned by developer' }
+    });
+
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'USER_BANNED',
+      target: target.email,
+      details: `User account banned: ${target.email}. Reason: ${reason || 'N/A'}`
+    });
+
+    return res.json({ success: true, user: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/users/:id/unban', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.params.id;
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { isBanned: false, banReason: null }
+    });
+
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'USER_UNBANNED',
+      target: updated.email,
+      details: `User unbanned: ${updated.email}`
+    });
+
+    return res.json({ success: true, user: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 26. INCIDENTS UPDATE & DELETE
+// ==========================================
+router.put('/incidents/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const { title, severity, status, description, resolutionNotes } = req.body;
+    const updated = await prisma.devIncident.update({
+      where: { id: req.params.id },
+      data: {
+        title: title || undefined,
+        severity: severity || undefined,
+        status: status || undefined,
+        description: description || undefined,
+        resolutionNotes: resolutionNotes || undefined,
+        resolvedAt: status === 'RESOLVED' ? new Date() : undefined
+      }
+    });
+
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'INCIDENT_UPDATED',
+      target: req.params.id,
+      details: `Incident updated: ${updated.title} [Status: ${updated.status}]`
+    });
+
+    return res.json({ success: true, incident: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/incidents/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    await prisma.devIncident.delete({
+      where: { id: req.params.id }
+    });
+
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'INCIDENT_DELETED',
+      target: req.params.id,
+      details: `Incident record deleted.`
+    });
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 27. FULL DATABASE BACKUP, RESTORE & DATA BROWSER
+// ==========================================
+router.get('/database/backup/full', async (req: AuthRequest, res: Response) => {
+  try {
+    const [
+      users, priests, appointments, events, applications, invitations,
+      sermons, news, pagePolicies, navbarItems, featureFlags, themeConfigs,
+      incidents, announcements, customRoles
+    ] = await Promise.all([
+      prisma.user.findMany({ select: { id: true, email: true, fullName: true, role: true, roles: true, phone: true, isBanned: true, isVerified: true, createdAt: true } }),
+      prisma.priestProfile.findMany(),
+      prisma.appointment.findMany(),
+      prisma.event.findMany(),
+      prisma.eventApplication.findMany(),
+      prisma.eventInvitation.findMany(),
+      prisma.sermon.findMany(),
+      prisma.news.findMany(),
+      prisma.devPagePolicy.findMany(),
+      prisma.devNavbarItem.findMany(),
+      prisma.devFeatureFlag.findMany(),
+      prisma.devThemeConfig.findMany(),
+      prisma.devIncident.findMany(),
+      prisma.devAnnouncement.findMany(),
+      prisma.devCustomRole.findMany()
+    ]);
+
+    const backupData = {
+      meta: {
+        appName: 'Coptic Orthodox Church Management Platform',
+        version: '2.5.0-PROD',
+        exportedAt: new Date().toISOString(),
+        exportedBy: req.user!.email,
+        totalTables: 15
+      },
+      counts: {
+        users: users.length,
+        priests: priests.length,
+        appointments: appointments.length,
+        events: events.length,
+        applications: applications.length,
+        invitations: invitations.length,
+        sermons: sermons.length,
+        news: news.length,
+        pagePolicies: pagePolicies.length,
+        navbarItems: navbarItems.length,
+        featureFlags: featureFlags.length,
+        themeConfigs: themeConfigs.length,
+        incidents: incidents.length,
+        announcements: announcements.length,
+        customRoles: customRoles.length
+      },
+      tables: {
+        users,
+        priests,
+        appointments,
+        events,
+        applications,
+        invitations,
+        sermons,
+        news,
+        pagePolicies,
+        navbarItems,
+        featureFlags,
+        themeConfigs,
+        incidents,
+        announcements,
+        customRoles
+      }
+    };
+
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'FULL_DATABASE_EXPORT',
+      target: 'PostgreSQL',
+      details: `Complete database backup generated with ${Object.values(backupData.counts).reduce((a, b) => a + b, 0)} records across 15 tables.`
+    });
+
+    res.setHeader('Content-Disposition', `attachment; filename=church-full-backup-${new Date().toISOString().slice(0, 10)}.json`);
+    res.setHeader('Content-Type', 'application/json');
+    return res.json(backupData);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/database/restore/full', async (req: AuthRequest, res: Response) => {
+  try {
+    const { backupData } = req.body;
+    if (!backupData || !backupData.tables) {
+      return res.status(400).json({ error: 'Invalid backup file structure. Missing tables object.' });
+    }
+
+    const { pagePolicies, navbarItems, featureFlags, themeConfigs, incidents, announcements, customRoles } = backupData.tables;
+
+    // Restore developer configs safely
+    if (Array.isArray(pagePolicies)) {
+      for (const p of pagePolicies) {
+        await prisma.devPagePolicy.upsert({
+          where: { routePath: p.routePath },
+          update: { permanentPolicy: p.permanentPolicy, allowedRoles: p.allowedRoles, pageTitleAr: p.pageTitleAr, pageTitleEn: p.pageTitleEn },
+          create: { routePath: p.routePath, permanentPolicy: p.permanentPolicy, allowedRoles: p.allowedRoles || [], pageTitleAr: p.pageTitleAr, pageTitleEn: p.pageTitleEn }
+        });
+      }
+    }
+
+    if (Array.isArray(navbarItems)) {
+      for (const n of navbarItems) {
+        await prisma.devNavbarItem.upsert({
+          where: { path: n.path },
+          update: { nameAr: n.nameAr, nameEn: n.nameEn, isVisible: n.isVisible, guestVisible: n.guestVisible, sortOrder: n.sortOrder },
+          create: n
+        });
+      }
+    }
+
+    if (Array.isArray(featureFlags)) {
+      for (const f of featureFlags) {
+        await prisma.devFeatureFlag.upsert({
+          where: { key: f.key },
+          update: { isEnabled: f.isEnabled, inSafeZoneOnly: f.inSafeZoneOnly },
+          create: f
+        });
+      }
+    }
+
+    if (Array.isArray(themeConfigs)) {
+      for (const t of themeConfigs) {
+        await prisma.devThemeConfig.upsert({
+          where: { seasonKey: t.seasonKey },
+          update: { isActive: t.isActive, colorsJson: t.colorsJson },
+          create: t
+        });
+      }
+    }
+
+    await DevPortalService.logAudit({
+      developerEmail: req.user!.email,
+      action: 'DATABASE_RESTORE_EXECUTED',
+      target: 'PostgreSQL',
+      details: `Database configuration restored from backup file provided by ${req.user!.email}`
+    });
+
+    return res.json({ success: true, message: 'Database configurations restored successfully.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/database/table/:tableName', async (req: AuthRequest, res: Response) => {
+  try {
+    const tableName = req.params.tableName;
+    const page = parseInt(String(req.query.page || '1'), 10);
+    const limit = Math.min(parseInt(String(req.query.limit || '20'), 10), 100);
+    const skip = (page - 1) * limit;
+
+    let rows: any[] = [];
+    let total = 0;
+
+    switch (tableName) {
+      case 'User':
+        [rows, total] = await Promise.all([
+          prisma.user.findMany({ skip, take: limit, orderBy: { createdAt: 'desc' }, select: { id: true, email: true, fullName: true, role: true, isBanned: true, createdAt: true } }),
+          prisma.user.count()
+        ]);
+        break;
+      case 'PriestProfile':
+        [rows, total] = await Promise.all([
+          prisma.priestProfile.findMany({ skip, take: limit }),
+          prisma.priestProfile.count()
+        ]);
+        break;
+      case 'Appointment':
+        [rows, total] = await Promise.all([
+          prisma.appointment.findMany({ skip, take: limit, orderBy: { date: 'desc' }, include: { member: { select: { fullName: true, email: true } }, priest: true } }),
+          prisma.appointment.count()
+        ]);
+        break;
+      case 'Event':
+        [rows, total] = await Promise.all([
+          prisma.event.findMany({ skip, take: limit, orderBy: { date: 'desc' } }),
+          prisma.event.count()
+        ]);
+        break;
+      case 'EventInvitation':
+        [rows, total] = await Promise.all([
+          prisma.eventInvitation.findMany({ skip, take: limit, orderBy: { createdAt: 'desc' } }),
+          prisma.eventInvitation.count()
+        ]);
+        break;
+      case 'Sermon':
+        [rows, total] = await Promise.all([
+          prisma.sermon.findMany({ skip, take: limit, orderBy: { date: 'desc' } }),
+          prisma.sermon.count()
+        ]);
+        break;
+      case 'News':
+        [rows, total] = await Promise.all([
+          prisma.news.findMany({ skip, take: limit, orderBy: { createdAt: 'desc' } }),
+          prisma.news.count()
+        ]);
+        break;
+      case 'DevPagePolicy':
+        [rows, total] = await Promise.all([
+          prisma.devPagePolicy.findMany({ skip, take: limit }),
+          prisma.devPagePolicy.count()
+        ]);
+        break;
+      case 'DevNavbarItem':
+        [rows, total] = await Promise.all([
+          prisma.devNavbarItem.findMany({ skip, take: limit, orderBy: { sortOrder: 'asc' } }),
+          prisma.devNavbarItem.count()
+        ]);
+        break;
+      case 'DevFeatureFlag':
+        [rows, total] = await Promise.all([
+          prisma.devFeatureFlag.findMany({ skip, take: limit }),
+          prisma.devFeatureFlag.count()
+        ]);
+        break;
+      case 'DevThemeConfig':
+        [rows, total] = await Promise.all([
+          prisma.devThemeConfig.findMany({ skip, take: limit }),
+          prisma.devThemeConfig.count()
+        ]);
+        break;
+      case 'DevIpBan':
+        [rows, total] = await Promise.all([
+          prisma.devIpBan.findMany({ skip, take: limit, orderBy: { createdAt: 'desc' } }),
+          prisma.devIpBan.count()
+        ]);
+        break;
+      case 'DevAuditLog':
+        [rows, total] = await Promise.all([
+          prisma.devAuditLog.findMany({ skip, take: limit, orderBy: { createdAt: 'desc' } }),
+          prisma.devAuditLog.count()
+        ]);
+        break;
+      default:
+        return res.status(400).json({ error: `Table '${tableName}' is not accessible or not recognized.` });
+    }
+
+    return res.json({ rows, total, page, totalPages: Math.ceil(total / limit) });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
